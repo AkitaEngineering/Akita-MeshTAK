@@ -46,3 +46,70 @@ The Akita MeshTAK Plugin is an indispensable tool for:
 * **Tactical Teams**: Enhances communication and situational awareness for teams involved in planned operations, allowing for better coordination, faster decision-making, and improved mission outcomes.
 
 ## Project Structure
+
+AkitaMeshTAK/
+├── firmware/ # Firmware for Meshtastic devices (Heltec V3)
+│   ├── src/
+│   │   ├── main.cpp # Main application entry point
+│   │   ├── config.h # Device-specific configurations
+│   │   ├── meshtastic_setup.cpp # Meshtastic library initialization
+│   │   ├── meshtastic_setup.h
+│   │   ├── ble_setup.cpp # Bluetooth setup and handling
+│   │   ├── ble_setup.h
+│   │   ├── serial_bridge.cpp # Serial communication handling
+│   │   ├── serial_bridge.h
+│   │   ├── mqtt_client.cpp # MQTT communication (optional)
+│   │   ├── mqtt_client.h
+│   │   ├── cot_generation.cpp # CoT message generation
+│   │   ├── cot_generation.h
+│   │   ├── display_handler.cpp # Display updates (optional)
+│   │   ├── display_handler.h
+│   │   ├── power_management.cpp # Power saving and battery monitoring
+│   │   ├── power_management.h
+│   │   └── ... # Other modules as needed
+│   ├── lib/ # Libraries used in the firmware
+│   │   ├── Meshtastic-esp32/ # Meshtastic library (submodule)
+│   │   ├── ESPAsyncWebServer/ # (Optional) For web configuration
+│   │   ├── PubSubClient/ # For MQTT
+│   │   └── ... (other libraries)
+│   ├── platformio.ini # PlatformIO build configuration
+│   ├── README.md # Firmware build instructions
+│   └── .gitignore
+├── atak_plugin/ # Code and resources for the ATAK plugin
+│   ├── app/ # Android app/plugin files
+│   │   ├── src/
+│   │   │   ├── main/
+│   │   │   │   ├── AndroidManifest.xml # Plugin manifest
+│   │   │   │   ├── java/
+│   │   │   │   │   └── com/akitaengineering/meshtak/
+│   │   │   │   │       ├── AkitaMeshTAKPlugin.java # Main plugin class
+│   │   │   │   │       ├── services/ # Background services
+│   │   │   │   │       │   ├── BLEService.java # Bluetooth communication
+│   │   │   │   │       │   ├── SerialService.java # Serial communication
+│   │   │   │   │       └── ui/ # User interface components
+│   │   │   │   │           ├── AkitaToolbar.java # Custom toolbar
+│   │   │   │   │           ├── ConnectionStatusOverlay.java # Map overlay
+│   │   │   │   │           ├── SendDataView.java # View for sending data
+│   │   │   │   │           ├── SettingsFragment.java # Plugin settings
+│   │   │   │   ├── res/ # Resources
+│   │   │   │   │   ├── layout/ # Layout files
+│   │   │   │   │   │   ├── akita_toolbar.xml
+│   │   │   │   │   │   └── send_data_view.xml
+│   │   │   │   │   ├── xml/ # Preferences XML
+│   │   │   │   │   │   └── preferences.xml
+│   │   │   │   │   ├── values/ # Resource arrays and strings
+│   │   │   │   │   │   ├── arrays.xml
+│   │   │   │   │   │   ├── strings.xml
+│   │   │   │   │   └── ...
+│   │   ├── build.gradle # Gradle build file
+│   │   └── proguard-rules.pro # (Optional) ProGuard rules
+│   ├── README.md # Plugin build and installation
+│   └── .gitignore
+├── server_scripts/ # Optional scripts for TAK Server or MQTT
+│   └── ...
+├── documentation/ # Project documentation
+│   ├── user_guide.md # User guide
+│   ├── dev_guide.md # Developer guide
+│   └── ...
+├── LICENSE # License file
+└── README.md # Top-level project README
