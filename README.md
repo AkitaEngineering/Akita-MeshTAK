@@ -47,6 +47,7 @@ The Akita MeshTAK Plugin is an indispensable tool for:
 
 ## Project Structure
 
+```
 AkitaMeshTAK/
 ├── firmware/ # Firmware for Meshtastic devices (Heltec V3)
 │   ├── src/
@@ -113,3 +114,4 @@ AkitaMeshTAK/
 │   └── ...
 ├── LICENSE # License file
 └── README.md # Top-level project README
+```
