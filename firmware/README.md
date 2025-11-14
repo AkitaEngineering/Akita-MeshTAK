@@ -1,60 +1,90 @@
-# Akita MeshTAK Firmware
+# Overview
 
-## Overview
+This directory contains the firmware for **Meshtastic devices** (specifically Heltec V3) that are used with the **Akita MeshTAK plugin**.  
+This firmware configures the devices to communicate over Meshtastic and interface with ATAK via **BLE** or **Serial**.
 
-This directory contains the firmware for Meshtastic devices (specifically Heltec V3) that are used with the Akita MeshTAK plugin.  This firmware configures the devices to communicate over Meshtastic and interface with ATAK.
+It is designed to receive commands (like **SOS** or **Battery Status requests**) from the ATAK plugin and send back responses or broadcast alerts.
+
+---
 
 ## Features
+- **Meshtastic integration**  
+- **Bluetooth Low Energy (BLE)** for direct connection to ATAK  
+- **Serial (USB)** communication for tethered connection to ATAK  
+- **Optional MQTT support**  
+- **CoT (Cursor on Target) message generation** (from Meshtastic position packets)  
 
-* Meshtastic integration.
-* Bluetooth Low Energy (BLE) for direct connection to ATAK.
-* Serial (USB) communication for tethered connection to ATAK.
-* Optional MQTT support for integration with Meshtastic networks.
-* CoT (Cursor on Target) message generation.
-* Display handling (for devices with displays).
-* Power management.
+**Command Handling:**
+- Receives `CMD:ALERT:SOS` from ATAK to trigger a high-power Meshtastic broadcast  
+- Receives `CMD:GET_BATT` from ATAK and responds with `STATUS:BATT:XX%`  
+- Real-time battery voltage reading  
+- Display handling (for devices with displays)  
+
+---
 
 ## Hardware
+- **Heltec V3** (or other ESP32-based Meshtastic-compatible devices)  
 
-* Heltec V3 (or other ESP32-based Meshtastic-compatible devices)
+---
 
 ## Software
+- **PlatformIO IDE**  
 
-* PlatformIO IDE
+---
 
-## Installation
+# Installation
 
-1.  **Install PlatformIO:** Follow the instructions on the [PlatformIO website](https://platformio.org/platformio-ide).
-2.  **Clone the Repository:** Clone the Akita MeshTAK repository to your computer.
-3.  **Navigate to the Firmware Directory:** `cd AkitaMeshTAK/firmware`
-4.  **Build and Upload:**
-    * Connect your Heltec V3 to your computer via USB.
-    * In PlatformIO, build the firmware:  `pio run`
-    * Upload the firmware to your device: `pio run -t upload`
+## Install PlatformIO
+Follow the instructions on the PlatformIO website.
 
-## Configuration
+## Clone the Repository
+Clone the Akita MeshTAK repository.
 
-The firmware can be configured by modifying the `config.h` file.  Key settings include:
+## Navigate to the Firmware Directory
+`cd AkitaMeshTAK/firmware`
 
-* `DEVICE_ID`:  A unique identifier for the device.
-* `LORA_REGION`:  The LoRa region for your location (e.g., `US915`, `EU868`).
-* `ENABLE_BLE`:  Enable/disable Bluetooth.
-* `ENABLE_SERIAL`: Enable/disable Serial.
-* `ENABLE_MQTT`: Enable/disable MQTT.
-* `MQTT_SERVER`, `MQTT_PORT`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `MQTT_TOPIC_PREFIX`:  Settings for MQTT (if enabled).
-* `ENABLE_DISPLAY`: Enable/disable display.
-* `BATTERY_CHECK_INTERVAL`:  Interval for checking the battery voltage.
+## Configure
+Open `firmware/src/config.h` and set your BLE UUIDs.  
+These **MUST** match the values you set in the ATAK plugin's `Config.java` file.
 
-## Code Structure
+## Build and Upload
 
-* `src/`: Contains the main application source files.
-* `lib/`:  Contains external libraries.
-* `platformio.ini`:  PlatformIO configuration file.
+1. Connect your Heltec V3 to your computer via USB.
+2. Build the firmware: `pio run`
+3. Upload the firmware: `pio run -t upload`
 
-## Contributing
+---
 
-See the [Developer Guide](https://techdevguide.withgoogle.com/) for information on how to contribute to the firmware.
+# Configuration
 
-## License
+Firmware configuration is done in `firmware/src/config.h`.  
+Key settings include:
 
-The firmware is released under the [MIT License](https://www.dmv.ca.gov/portal/driver-licenses-identification-cards/driver-licenses-dl/).
+- **DEVICE_ID** – A unique identifier for the device  
+- **LORA_REGION** – LoRa region (e.g., `US915`, `EU868`)  
+- **BLE_SERVICE_UUID**, **BLE_COT_CHARACTERISTIC_UUID**, **BLE_WRITE_CHARACTERISTIC_UUID** – Must match the ATAK plugin  
+- **CMD_GET_BATT**, **CMD_ALERT_SOS**, **STATUS_BATT_PREFIX** – Command strings that must match the plugin  
+- **ENABLE_BLE**, **ENABLE_SERIAL**, **ENABLE_MQTT**, **ENABLE_DISPLAY** – Feature toggles
+
+---
+
+# Code Structure
+
+- `src/` – Main application source files  
+- `lib/` – External libraries  
+- `platformio.ini` – PlatformIO configuration file
+
+---
+
+# Contributing
+
+See `documentation/dev_guide.md` for contribution guidelines.
+
+---
+
+# License
+
+Licensed under the **GNU General Public License v3.0**.  
+See the `LICENSE` and `COPYING` files in the project root.
+
+**Copyright (C) 2025 Akita Engineering**
