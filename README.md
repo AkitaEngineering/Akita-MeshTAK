@@ -1,4 +1,3 @@
-```markdown
 # Akita MeshTAK
 
 ## Empowering Off-Grid Communication and Situational Awareness for Critical Operations
