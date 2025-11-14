@@ -1,3 +1,5 @@
+// File: firmware/src/main.cpp
+// Description: Main application loop and setup for Akita MeshTAK firmware.
 #include <Arduino.h>
 #include "config.h"
 #include "meshtastic_setup.h"
@@ -6,6 +8,10 @@
 #include "mqtt_client.h"
 #include "power_management.h"
 #include "display_handler.h"
+
+void setupConfig() {
+    // Placeholder function for config setup (data is read from config.h)
+}
 
 void setup() {
   Serial.begin(115200);
