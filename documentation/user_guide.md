@@ -1,79 +1,118 @@
-# Akita MeshTAK Plugin User Guide
+# Introduction
 
-## Introduction
+The **Akita MeshTAK Plugin** allows your ATAK device to connect to Meshtastic networks, enabling off-grid communication, location tracking, emergency alerts, and device health monitoring.
 
-The Akita MeshTAK Plugin allows you to connect your ATAK device to Meshtastic networks, enabling off-grid communication.
+---
 
-## System Requirements
+# System Requirements
 
-* Android device with ATAK installed
-* Meshtastic-compatible devices (e.g., Heltec V3)
-* Akita MeshTAK Plugin APK file
+- Android device with ATAK installed  
+- Meshtastic-compatible device (e.g., Heltec V3) running the Akita MeshTAK firmware  
+- Akita MeshTAK Plugin (compiled `.apk` file)
 
-## Installation
+---
 
-1.  **Install ATAK:** Ensure that ATAK is installed on your Android device.
-2.  **Install Plugin APK:**
-    * Download the Akita MeshTAK Plugin APK file.
-    * If necessary, enable "Install from unknown sources" in your Android device's settings.
-    * Locate the APK file on your device and install it.
-3.  **Enable Plugin in ATAK:**
-    * Open ATAK.
-    * Go to the plugin manager.
-    * Find the "Akita MeshTAK" plugin and enable it.
+# Installation
 
-## Connecting to Meshtastic
+## 1. Install ATAK
+Ensure ATAK is installed on your Android device.
 
-1.  **Configure Connection Settings:**
-    * Open the ATAK plugin settings.
-    * Select your preferred **Connection Method**:
-        * **BLE:** Ensure your Meshtastic device is powered on and advertising.
-        * **Serial:** Connect your Meshtastic device to your Android device via USB.
-    * Configure the connection parameters:
-        * If using BLE, enter the **BLE Device Name** of your Meshtastic device.
-        * If using Serial, enter the **Serial Port Path** and **Serial Baud Rate**.  (The defaults are usually correct)
-2.  **Connection Status:**
-    * The plugin will attempt to connect automatically.
-    * The connection status is displayed in the ATAK toolbar:
-        * "BLE: Connected" or "Serial: Connected" indicates a successful connection.
-        * "BLE: Disconnected" or "Serial: Disconnected" indicates that the plugin is not connected.
-        * "BLE: Connecting" or "Serial: Connecting" indicates that the plugin is attempting to connect.
-        * "BLE: Error" or "Serial: Error" indicates an error occurred.
-    * The connection status is also shown as an overlay on the map.
+## 2. Install the Plugin APK
+- Obtain the compiled `AkitaMeshTAK.apk` file  
+- If required, enable **Install from unknown sources** in Android settings  
+- Locate the APK on your device and install it  
 
-## Sending Data
+## 3. Enable the Plugin in ATAK
+- Open ATAK  
+- Go to: **Toolbar → Settings → Plugin Manager**  
+- Locate **Akita MeshTAK** and enable it  
 
-1.  **Open the Send Data View:** Access the "Send Data" view from the plugin menu in ATAK.
-2.  **Enter Data:** Type the data you want to send in the text input field.
-3.  **Select Data Format:** Choose the format of your data:
-    * **Plain Text:** Sends the data as plain text.
-    * **JSON:** Sends the data as a JSON string.
-    * **Custom:** Sends the data with a custom prefix.
-4.  **Send:** Tap the "Send" button.
-5.  **Command History:** The sent command will be added to the command history dropdown, allowing you to easily re-send it.
+---
 
-## Receiving Data
+# Connecting to Meshtastic
 
-The plugin automatically receives data from the connected Meshtastic device.
+## Configure Connection Settings
+Open ATAK Plugin Settings:  
+**Toolbar → Settings → Tool Preferences → Akita MeshTAK**
 
-* **CoT Data:** CoT messages (for example, user location) are displayed as markers on the ATAK map.
-* **Other Data:** Future versions of the plugin may display other types of received data.
+Choose your connection method:
 
-## Troubleshooting
+### BLE
+- Ensure your Meshtastic device is powered on  
+- Enter the BLE Device Name (e.g., `AkitaNode01`)
 
-* **Connection Issues:**
-    * Ensure your Meshtastic device is powered on and within range.
-    * Double-check the BLE device name or serial port settings.
-    * Try restarting the ATAK app and the Meshtastic device.
-    * Ensure that the Android device has the necessary permissions (Bluetooth, USB).
-* **Data Not Displaying:**
-    * Verify that the Meshtastic device is sending data in the correct format.
-    * Check the connection status to ensure that the plugin is connected.
-    * Consult the ATAK logs for any error messages.
+### Serial
+- Connect your device using USB  
+- Set Serial Baud Rate (default: **115200**)
 
-## Support
+---
 
-For support, please contact Akita Engineering or visit our website:
+## Connection Status (Toolbar)
 
-* Akita Engineering: [www.akitaengineering.com](www.akitaengineering.com)
-* Email: [info@akitaengineering.com](mailto:info@akitaengineering.com)
+The plugin attempts connection automatically. Status appears in the ATAK toolbar:
+
+- **Method: BLE** or **Method: Serial** — displays selected mode  
+- **Connected** (green) — successful connection  
+- **Connecting** (yellow) — attempting to connect  
+- **Disconnected / Error** (red) — connection failed  
+
+---
+
+# Using the Plugin
+
+## Toolbar Interface
+
+The Akita MeshTAK toolbar provides:
+
+- **Method:** Current connection type (BLE/Serial)  
+- **Status:** Real-time connection state  
+- **BATT: XX%:** Battery level of the connected Heltec  
+  - Green = good  
+  - Yellow = low  
+  - Red = critical  
+- **SOS Button:** Sends a high-priority network-wide emergency alert
+
+---
+
+# Sending Data
+
+1. Open the **Send Data** view (from ATAK overflow menu or toolbar)
+2. Enter the message
+3. Choose a format:
+   - Plain Text  
+   - JSON  
+   - Custom  
+4. Tap **Send**
+5. Command history entries can be reused from the dropdown
+
+---
+
+# Receiving Data
+
+The plugin automatically receives:
+
+- **CoT Location Data:** Other Meshtastic users appear as ATAK map markers  
+- **Battery Reports:** Toolbar battery indicator updates live  
+
+---
+
+# Troubleshooting
+
+## No Connection
+- Ensure the Meshtastic device is running the correct Akita MeshTAK firmware  
+- Confirm all UUIDs/USB IDs were correctly set in `Config.java` **before compilation**  
+- Re-check BLE device name or serial baud rate in plugin settings  
+- Ensure ATAK permissions (Bluetooth, USB) are granted  
+
+## No Battery Status
+- Wait 30–60 seconds after connecting  
+- Verify firmware sends the `STATUS:BATT:` response correctly  
+
+---
+
+# Support
+
+For assistance, contact **Akita Engineering**:
+
+- Website: **www.akitaengineering.com**  
+- Email: **info@akitaengineering.com**
