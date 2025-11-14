@@ -1,15 +1,18 @@
-// firmware/src/ble_setup.cpp
+// File: firmware/src/ble_setup.cpp
+// Description: Implements BLE server, characteristics, and callbacks for ATAK.
+
 #ifdef ENABLE_BLE
 #include "ble_setup.h"
 #include "config.h"
 #include "cot_generation.h"
+#include "power_management.h" // For processIncomingCommand
 
 BLEUUID serviceUUID(BLE_SERVICE_UUID);
 BLEUUID cotCharacteristicUUID(BLE_COT_CHARACTERISTIC_UUID);
-BLEUUID writeCharacteristicUUID(BLE_WRITE_CHARACTERISTIC_UUID); // Add this
+BLEUUID writeCharacteristicUUID(BLE_WRITE_CHARACTERISTIC_UUID);
 BLEServer *pServer = nullptr;
 BLECharacteristic *pCoTCharacteristic = nullptr;
-BLECharacteristic *pWriteCharacteristic = nullptr; // Add this
+BLECharacteristic *pWriteCharacteristic = nullptr;
 
 class ServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -22,6 +25,23 @@ class ServerCallbacks : public BLEServerCallbacks {
     }
 };
 
+// Callback for when ATAK writes a command to us
+class CommandCallback: public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+        std::string value = pCharacteristic->getValue();
+        if (value.length() > 0) {
+            String cmd = "";
+            for (int i = 0; i < value.length(); i++) {
+                cmd += (char)value[i];
+            }
+            cmd.trim(); // Clean up any whitespace
+            Serial.print("Received command via BLE: ");
+            Serial.println(cmd);
+            processIncomingCommand(cmd); // Process the command
+        }
+    }
+};
+
 bool setupBLE() {
   Serial.println("Initializing BLE...");
   BLEDevice::init(DEVICE_ID);
@@ -30,19 +50,20 @@ bool setupBLE() {
 
   BLEService *pService = pServer->createService(serviceUUID);
 
+  // CoT Characteristic (Notifications to ATAK)
   pCoTCharacteristic = pService->createCharacteristic(
                       cotCharacteristicUUID,
-                      BLECharacteristic::PROPERTY_READ |
-                      BLECharacteristic::PROPERTY_WRITE |
                       BLECharacteristic::PROPERTY_NOTIFY
                     );
-  pCoTCharacteristic->setValue("Initial CoT");
+  pCoTCharacteristic->addDescriptor(new BLE2902()); // Standard BLE descriptor
 
-  pWriteCharacteristic = pService->createCharacteristic(          // Add this
+  // Write Characteristic (Commands from ATAK)
+  pWriteCharacteristic = pService->createCharacteristic(
                       writeCharacteristicUUID,
                       BLECharacteristic::PROPERTY_WRITE |
-                      BLECharacteristic::PROPERTY_WRITE_NR // Without Response
+                      BLECharacteristic::PROPERTY_WRITE_NR 
                     );
+  pWriteCharacteristic->setCallbacks(new CommandCallback()); // Set the command callback
 
   pService->start();
 
@@ -55,13 +76,15 @@ bool setupBLE() {
 }
 
 void loopBLE() {
-  delay(100);
+  // Logic for handling BLE loop tasks, if any
+  delay(100); 
 }
 
+// Function to send CoT or Status data to ATAK
 void sendDataBLE(const uint8_t* data, size_t len) {
-  if (pWriteCharacteristic != nullptr && pServer->getConnectedCount() > 0) {
-    pWriteCharacteristic->setValue(data, len);
-    pWriteCharacteristic->notify();
+  if (pCoTCharacteristic != nullptr && pServer->getConnectedCount() > 0) {
+    pCoTCharacteristic->setValue(data, len);
+    pCoTCharacteristic->notify();
     Serial.print("Sent data via BLE: ");
     Serial.write(data, len);
     Serial.println();
