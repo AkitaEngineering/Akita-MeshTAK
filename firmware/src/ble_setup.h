@@ -1,4 +1,5 @@
-// firmware/src/ble_setup.h
+// File: firmware/src/ble_setup.h
+// Description: Declares BLE setup functions and data sender.
 #ifndef BLE_SETUP_H
 #define BLE_SETUP_H
 
@@ -11,14 +12,14 @@
 
   extern BLEUUID serviceUUID;
   extern BLEUUID cotCharacteristicUUID;
-  extern BLEUUID writeCharacteristicUUID; // Add this
+  extern BLEUUID writeCharacteristicUUID;
   extern BLEServer *pServer;
   extern BLECharacteristic *pCoTCharacteristic;
-  extern BLECharacteristic *pWriteCharacteristic; // Add this
+  extern BLECharacteristic *pWriteCharacteristic;
 
   bool setupBLE();
   void loopBLE();
-  void sendDataBLE(const uint8_t* data, size_t len); // Add this
+  void sendDataBLE(const uint8_t* data, size_t len);
 #endif
 
 #endif
