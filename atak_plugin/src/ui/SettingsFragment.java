@@ -1,3 +1,5 @@
+// File: atak_plugin/src/ui/SettingsFragment.java
+// Description: Fragment for handling plugin settings and applying changes to services.
 package com.akitaengineering.meshtak.ui;
 
 import android.content.ComponentName;
@@ -7,11 +9,13 @@ import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
+import androidx.preference.PreferenceManager;
 
 import com.atakmap.android.maps.MapView;
 import com.akitaengineering.meshtak.R;
@@ -73,18 +77,11 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         EditTextPreference serialBaudRatePref = findPreference("serial_baud_rate");
         Preference sendTestMessagePref = findPreference("send_test_message");
 
-        if (connectionMethodPref != null) {
-            connectionMethodPref.setOnPreferenceChangeListener(this);
-        }
-        if (bleDeviceNamePref != null) {
-            bleDeviceNamePref.setOnPreferenceChangeListener(this);
-        }
-        if (serialPortPathPref != null) {
-            serialPortPathPref.setOnPreferenceChangeListener(this);
-        }
-        if (serialBaudRatePref != null) {
-            serialBaudRatePref.setOnPreferenceChangeListener(this);
-        }
+        // Set listeners for preference changes
+        if (connectionMethodPref != null) connectionMethodPref.setOnPreferenceChangeListener(this);
+        if (bleDeviceNamePref != null) bleDeviceNamePref.setOnPreferenceChangeListener(this);
+        if (serialPortPathPref != null) serialPortPathPref.setOnPreferenceChangeListener(this);
+        if (serialBaudRatePref != null) serialBaudRatePref.setOnPreferenceChangeListener(this);
          if (sendTestMessagePref != null) {
             sendTestMessagePref.setOnPreferenceClickListener(preference -> {
                 sendTestMessageToDevice();
@@ -92,7 +89,7 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
             });
         }
 
-        //  Set initial enablement based on default value
+        // Apply initial enablement based on default value
         ListPreference connPref = findPreference("connection_method");
         EditTextPreference blePref = findPreference("ble_device_name");
         EditTextPreference serialPathPref = findPreference("serial_port_path");
@@ -108,21 +105,72 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
 
      private void loadAndApplyPreferences() {
         if (getActivity() != null) {
-            String connectionMethod = androidx.preference.PreferenceManager.getDefaultSharedPreferences(getActivity())
-                    .getString("connection_method", "ble");
-            String bleDeviceName = androidx.preference.PreferenceManager.getDefaultSharedPreferences(getActivity())
+            String bleDeviceName = PreferenceManager.getDefaultSharedPreferences(getActivity())
                     .getString("ble_device_name", "AkitaNode01");
-            //  String serialPortPath = ...; // Services handle their own preference loading now
-            //  String serialBaudRate = ...;
-
+            
+            // Pass settings to the bound services
             if (bleService != null) {
                 bleService.setTargetDeviceName(bleDeviceName);
             }
-            // SerialService loads its preferences directly
+            // SerialService loads its baud rate internally upon connection attempt
         }
     }
+    
+    private void sendTestMessageToDevice() {
+        String testMessage = "ATAK Test Message!";
+        String connectionMethod = PreferenceManager.getDefaultSharedPreferences(getActivity())
+                .getString("connection_method", "ble");
+
+        if (connectionMethod.equals("ble") && bleService != null) {
+            bleService.sendData(testMessage.getBytes());
+            Toast.makeText(getActivity(), "Sent via BLE: " + testMessage, Toast.LENGTH_SHORT).show();
+        } else if (connectionMethod.equals("serial") && serialService != null) {
+            serialService.sendData(testMessage.getBytes());
+            Toast.makeText(getActivity(), "Sent via Serial: " + testMessage, Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(getActivity(), "Not connected or connection method not selected.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
 
     @Override
     public void onStart() {
         super.onStart();
-        if (getActiv
+        if (getActivity() != null) {
+            // Bind services to allow fragment to communicate changes
+            getActivity().bindService(new Intent(getActivity(), BLEService.class), bleConnection, Context.BIND_AUTO_CREATE);
+            getActivity().bindService(new Intent(getActivity(), SerialService.class), serialConnection, Context.BIND_AUTO_CREATE);
+        }
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        if (getActivity() != null) {
+            // Unbind services
+            if (bleService != null) getActivity().unbindService(bleConnection);
+            if (serialService != null) getActivity().unbindService(serialConnection);
+            bleService = null;
+            serialService = null;
+        }
+    }
+
+    @Override
+    public boolean onPreferenceChange(Preference preference, Object newValue) {
+        String key = preference.getKey();
+        if (key.equals("connection_method")) {
+            String selectedMethod = (String) newValue;
+            EditTextPreference blePref = findPreference("ble_device_name");
+            EditTextPreference serialPathPref = findPreference("serial_port_path");
+            EditTextPreference serialBaudPref = findPreference("serial_baud_rate");
+
+            if (blePref != null) blePref.setEnabled(selectedMethod.equals("ble"));
+            if (serialPathPref != null) serialPathPref.setEnabled(selectedMethod.equals("serial"));
+            if (serialBaudPref != null) serialBaudPref.setEnabled(selectedMethod.equals("serial"));
+        } else if (key.equals("ble_device_name") && bleService != null) {
+            bleService.setTargetDeviceName((String) newValue);
+        }
+        // Note: Changes to serial settings will take effect on the next successful connection attempt.
+        return true;
+    }
+}
