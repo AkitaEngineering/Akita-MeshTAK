@@ -1,40 +1,38 @@
+// File: firmware/src/config.h
+// Description: Main configuration and constant definitions for the Heltec V3 firmware.
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define FIRMWARE_VERSION "0.1.0"
+#define FIRMWARE_VERSION "0.2.0" 
 
 // --- Device Identification ---
 #define DEVICE_ID "AkitaNode01"
 
 // --- LoRa Configuration ---
-#define LORA_REGION US915  //  Set this to your region!
+#define LORA_REGION EU868
 
 // --- Connectivity Options ---
 #define ENABLE_BLE true
-#define ENABLE_SERIAL false
-#define ENABLE_MQTT false
+#define ENABLE_SERIAL true 
 
-// --- BLE Configuration ---
+// --- BLE Configuration (UUIDs MUST match Config.java) ---
 #ifdef ENABLE_BLE
-  #define BLE_SERVICE_UUID        "YOUR_SERVICE_UUID"         // Replace
-  #define BLE_COT_CHARACTERISTIC_UUID "YOUR_CHARACTERISTIC_UUID" // Replace
-  #define BLE_WRITE_CHARACTERISTIC_UUID "YOUR_WRITE_CHARACTERISTIC_UUID" // Add this
+  #define BLE_SERVICE_UUID        "YOUR_SERVICE_UUID"
+  #define BLE_COT_CHARACTERISTIC_UUID "YOUR_COT_CHARACTERISTIC_UUID"
+  #define BLE_WRITE_CHARACTERISTIC_UUID "YOUR_WRITE_CHARACTERISTIC_UUID"
 #endif
 
-// --- MQTT Settings (if ENABLE_MQTT is true) ---
-#ifdef ENABLE_MQTT
-  #define MQTT_SERVER "your_mqtt_server.com"      // Replace
-  #define MQTT_PORT 1883
-  #define MQTT_USERNAME "your_username"          // Replace
-  #define MQTT_PASSWORD "your_password"          // Replace
-  #define MQTT_TOPIC_PREFIX "akita/meshtak/"
-#endif
+// --- COMMAND CONSTANTS ---
+#define CMD_GET_BATT "CMD:GET_BATT"
+#define CMD_ALERT_SOS "CMD:ALERT:SOS"
+#define STATUS_BATT_PREFIX "STATUS:BATT:"
 
 // --- Display Enable ---
 #define ENABLE_DISPLAY true
 
 // --- Power Management Settings ---
-#define BATTERY_CHECK_INTERVAL 60000
-// Define pins for battery monitoring if applicable
+#define BATTERY_CHECK_INTERVAL 60000 
+float readBatteryVoltage();
+void processIncomingCommand(const String& cmd);
 
 #endif
