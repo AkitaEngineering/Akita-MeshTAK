@@ -286,28 +286,25 @@ public class BLEService extends Service {
                         boolean notificationsEnabled = gatt.setCharacteristicNotification(cotCharacteristic, true);
                         if (notificationsEnabled) {
                             Log.i(TAG, "Enabled notifications for CoT characteristic.");
-                            // We don't read initial characteristic data to prevent race conditions on notifications
                         } else {
-                            // Error handling on notification failure (too verbose to fully list here, see logic in other places)
+                            // Notification enable failure handling
                         }
                     } 
                 } 
             } else {
-                // Error handling on service discovery failure
+                // Service discovery failure handling
             }
         }
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                // Not used for primary CoT data, but handles initial reads
                 processCotData(new String(characteristic.getValue()));
             }
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            // Main data pipe: process incoming notification
             processCotData(new String(characteristic.getValue()));
         }
 
@@ -326,6 +323,76 @@ public class BLEService extends Service {
         }
     }
 
+    // --- Data Processing (Robustness Fix) ---
+    private void processCotData(String data) {
+        if (mapView == null) {
+            Log.w(TAG, "MapView is not yet set. Cannot process CoT.");
+            return;
+        }
+        
+        // 1. Check for status prefixes (Health Monitoring)
+        if (data.startsWith(Config.STATUS_BATT_PREFIX)) {
+            String status = data.substring(Config.STATUS_BATT_PREFIX.length()).trim();
+            if (akitaToolbar != null) akitaToolbar.setBatteryStatus(status);
+            return;
+        }
+
+        // 2. Validate data framing (Robustness Check)
+        String cleanData = data.trim();
+        if (!cleanData.startsWith("<event") || !cleanData.endsWith("</event>")) {
+            Log.w(TAG, "Received fragmented or non-CoT data (ignoring): " + cleanData);
+            return; 
+        }
+
+        // 3. Process CoT (ATAK Marker Logic)
+        try {
+            CotPoint cotPoint = CotPoint.fromXml(cleanData);
+            if (cotPoint == null) return;
+
+            final String uid = cotPoint.getUid();
+            final String callsign = cotPoint.getDetail().get("contact").get("callsign");
+            final Point2 geoPoint = new Point2(cotPoint.getLongitude(), cotPoint.getLatitude());
+
+            if (uid == null) return;
+
+            MapItem mapItem = mapView.getMapItem(uid);
+
+            if (mapItem == null) {
+                final Marker marker = new Marker(geoPoint);
+                marker.setUid(uid);
+                marker.setTitle(callsign != null ? callsign : uid);
+                marker.setType(cotPoint.getType() != null ? cotPoint.getType() : Config.DEFAULT_COT_TYPE);
+                
+                mapView.getRootGroup().addItem(marker);
+            } else if (mapItem instanceof Marker) {
+                Marker marker = (Marker) mapItem;
+                marker.setGeoPoint(geoPoint);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error processing CoT data: " + e.getMessage(), e);
+        }
+    }
+    
+    // --- Public Service Interface Methods ---
+    
+    public void queryDeviceStatus(String command) {
+        sendData((command + "\n").getBytes());
+    }
+
+    public void sendCriticalAlert() {
+        sendData((Config.CMD_ALERT_SOS + "\n").getBytes());
+    }
+    
+    public void sendData(byte[] data) {
+      if (!bleConnectionStatus.equals("Connected") || bluetoothGatt == null) return;
+      BluetoothGattService service = bluetoothGatt.getService(SERVICE_UUID);
+      if (service == null) return;
+      BluetoothGattCharacteristic writeCharacteristic = service.getCharacteristic(WRITE_CHARACTERISTIC_UUID);
+      if (writeCharacteristic == null) return;
+      writeCharacteristic.setValue(data);
+      bluetoothGatt.writeCharacteristic(writeCharacteristic);
+    }
+    
     // --- External Setters and Getters ---
     public void setAkitaToolbar(AkitaToolbar toolbar) { this.akitaToolbar = toolbar; }
     public void setBleStatusListener(BleStatusListener listener) { this.bleStatusListener = listener; }
