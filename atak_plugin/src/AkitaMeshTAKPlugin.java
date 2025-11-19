@@ -6,8 +6,11 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.os.IBinder;
 import android.util.Log;
+
+import androidx.preference.PreferenceManager;
 
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.plugin.AbstractPlugin;
@@ -27,7 +30,7 @@ import com.akitaengineering.meshtak.ui.SettingsFragment;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AkitaMeshTAKPlugin extends AbstractPlugin {
+public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static final String TAG = "AkitaMeshTAKPlugin";
     private Context pluginContext;
@@ -38,18 +41,17 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin {
     private ConnectionStatusOverlay connectionStatusOverlay;
     private PluginView sendDataPluginView;
 
+    // --- Service Connection Handlers ---
+
     private final ServiceConnection bleConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName className, IBinder service) {
             BLEService.LocalBinder binder = (BLEService.LocalBinder) service;
             bleService = binder.getService();
             bleService.setMapView(mapView);
-            // Pass the toolbar instance so the service can update the UI
             bleService.setAkitaToolbar(akitaToolbar); 
-            // Register for status updates
             bleService.setBleStatusListener(bleStatusListener); 
             
-            // Pass services to the toolbar now that they are bound
             if (akitaToolbar != null) akitaToolbar.setServices(bleService, serialService);
             Log.i(TAG, "BLE Service bound and configured.");
         }
@@ -70,12 +72,9 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin {
             SerialService.LocalBinder binder = (SerialService.LocalBinder) service;
             serialService = binder.getService();
             serialService.setMapView(mapView);
-            // Pass the toolbar instance so the service can update the UI
             serialService.setAkitaToolbar(akitaToolbar); 
-             // Register for status updates
             serialService.setSerialStatusListener(serialStatusListener);
             
-            // Pass services to the toolbar now that they are bound
             if (akitaToolbar != null) akitaToolbar.setServices(bleService, serialService);
             Log.i(TAG, "Serial Service bound and configured.");
         }
@@ -100,6 +99,8 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin {
         if (connectionStatusOverlay != null) connectionStatusOverlay.setSerialStatus(status);
     };
 
+    // --- Plugin Lifecycle ---
+    
     @Override
     public void onCreate(Context context, MapView view) {
         super.onCreate(context, view);
@@ -107,35 +108,66 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin {
         this.mapView = view;
         Log.d(TAG, "Plugin created.");
 
-        // Create UI elements before starting services so they can be referenced immediately
+        // Register for preference changes globally to handle connection method swaps
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .registerOnSharedPreferenceChangeListener(this);
+        
         akitaToolbar = new AkitaToolbar(context);
         connectionStatusOverlay = new ConnectionStatusOverlay(context, view);
-
-        // Start and Bind BLE Service
-        Intent bleServiceIntent = new Intent(pluginContext, BLEService.class);
-        pluginContext.startService(bleServiceIntent);
-        pluginContext.bindService(bleServiceIntent, bleConnection, Context.BIND_AUTO_CREATE);
-
-        // Start and Bind Serial Service
-        Intent serialServiceIntent = new Intent(pluginContext, SerialService.class);
-        pluginContext.startService(serialServiceIntent);
-        pluginContext.bindService(serialServiceIntent, serialConnection, Context.BIND_AUTO_CREATE);
+        
+        // Start services on startup
+        startAndBindServices();
     }
 
     @Override
     public void onDestroy() {
         Log.d(TAG, "Plugin destroyed. Stopping services and unbinding.");
         
-        // Stop and Unbind services
-        if (bleService != null) pluginContext.unbindService(bleConnection);
+        PreferenceManager.getDefaultSharedPreferences(pluginContext)
+                .unregisterOnSharedPreferenceChangeListener(this);
+        
+        stopAndUnbindServices();
+        super.onDestroy();
+    }
+    
+    /** Starts/Binds both services */
+    private void startAndBindServices() {
         Intent bleServiceIntent = new Intent(pluginContext, BLEService.class);
-        pluginContext.stopService(bleServiceIntent);
+        pluginContext.startService(bleServiceIntent);
+        pluginContext.bindService(bleServiceIntent, bleConnection, Context.BIND_AUTO_CREATE);
+
+        Intent serialServiceIntent = new Intent(pluginContext, SerialService.class);
+        pluginContext.startService(serialServiceIntent);
+        pluginContext.bindService(serialServiceIntent, serialConnection, Context.BIND_AUTO_CREATE);
+    }
+    
+    /** Stops/Unbinds both services */
+    private void stopAndUnbindServices() {
+        if (bleService != null) pluginContext.unbindService(bleConnection);
+        pluginContext.stopService(new Intent(pluginContext, BLEService.class));
 
         if (serialService != null) pluginContext.unbindService(serialConnection);
-        Intent serialServiceIntent = new Intent(pluginContext, SerialService.class);
-        pluginContext.stopService(serialServiceIntent);
+        pluginContext.stopService(new Intent(pluginContext, SerialService.class));
+        
+        bleService = null;
+        serialService = null;
+    }
 
-        super.onDestroy();
+    /** Reloads the entire plugin connection state (used when Connection Method is changed) */
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        if (key.equals("connection_method")) {
+            Log.i(TAG, "Connection method preference changed. Reloading connection strategy.");
+            
+            // 1. Unbind/Stop everything cleanly
+            stopAndUnbindServices();
+            
+            // 2. Restart services to force new connection attempts with new settings
+            startAndBindServices();
+            
+            // 3. Update the toolbar display instantly
+            if (akitaToolbar != null) akitaToolbar.updateConnectionMethodDisplay();
+        }
     }
 
     // --- Plugin Interface Methods ---
@@ -157,7 +189,6 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin {
     @Override
     public PluginView onCreateView(String viewId, PluginLayoutInflater inflater) {
         if (viewId.equals("com.akitaengineering.meshtak.send_data_view")) {
-            // Ensure services are passed, even if still binding (they will be updated later)
             return new SendDataView(pluginContext, mapView, bleService, serialService);
         }
         return null;
