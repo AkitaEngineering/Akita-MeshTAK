@@ -282,22 +282,28 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         processCotData(received.trim());
     }
 
-    // --- Data Processing (Full Logic) ---
+    // --- Data Processing (Robustness Fix) ---
 
     private void processCotData(String data) {
         if (mapView == null) return;
         
-        // 1. Check for specific status prefixes first
+        // 1. Check for status prefixes (Health Monitoring)
         if (data.startsWith(Config.STATUS_BATT_PREFIX)) {
             String status = data.substring(Config.STATUS_BATT_PREFIX.length()).trim();
             if (akitaToolbar != null) akitaToolbar.setBatteryStatus(status);
-            Log.d(TAG, "Battery status updated (Serial): " + status);
             return;
         }
 
-        // 2. If not a status, assume it's CoT (Full ATAK Marker Logic)
+        // 2. Validate data framing (Robustness Check)
+        String cleanData = data.trim();
+        if (!cleanData.startsWith("<event") || !cleanData.endsWith("</event>")) {
+            Log.w(TAG, "Received fragmented or non-CoT data (ignoring): " + cleanData);
+            return; 
+        }
+
+        // 3. Process CoT (ATAK Marker Logic)
         try {
-            CotPoint cotPoint = CotPoint.fromXml(data);
+            CotPoint cotPoint = CotPoint.fromXml(cleanData);
             if (cotPoint == null) return;
 
             final String uid = cotPoint.getUid();
@@ -315,11 +321,9 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                 marker.setType(cotPoint.getType() != null ? cotPoint.getType() : Config.DEFAULT_COT_TYPE);
                 
                 mapView.getRootGroup().addItem(marker);
-                Log.d(TAG, "ATAK: Created new marker: " + marker.getTitle());
             } else if (mapItem instanceof Marker) {
                 Marker marker = (Marker) mapItem;
                 marker.setGeoPoint(geoPoint);
-                Log.d(TAG, "ATAK: Updated existing marker: " + marker.getTitle());
             }
         } catch (Exception e) {
             Log.e(TAG, "Error parsing CoT data from serial: " + e.getMessage(), e);
@@ -334,7 +338,6 @@ public class SerialService extends Service implements SerialInputOutputManager.L
 
     public void sendCriticalAlert() {
         sendData((Config.CMD_ALERT_SOS + "\n").getBytes());
-        Log.i(TAG, "Critical SOS Alert Sent via Serial.");
     }
     
     public void sendData(byte[] data) {
