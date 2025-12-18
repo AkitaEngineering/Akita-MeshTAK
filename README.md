@@ -61,58 +61,6 @@ The Akita MeshTAK Plugin is an indispensable tool for:
 
 ---
 
-### Project Structure
-```
-AkitaMeshTAK/
-├── firmware/ # Firmware for Meshtastic devices (Heltec V3)
-│   ├── src/
-│   │   ├── config.h # CRITICAL: Set UUIDs and commands here
-│   │   ├── main.cpp
-│   │   ├── meshtastic_setup.h/.cpp
-│   │   ├── ble_setup.h/.cpp
-│   │   ├── serial_bridge.h/.cpp
-│   │   ├── power_management.h/.cpp # Handles battery & command logic
-│   │   └── ...
-│   ├── platformio.ini
-│   └── README.md
-├── atak_plugin/ # Code and resources for the ATAK plugin
-│   ├── app/
-│   │   ├── src/
-│   │   │   ├── main/
-│   │   │   │   ├── AndroidManifest.xml
-│   │   │   │   ├── java/
-│   │   │   │   │   └── com/akitaengineering/meshtak/
-│   │   │   │   │       ├── Config.java # CRITICAL: Set UUIDs/VIDs here
-│   │   │   │   │       ├── AkitaMeshTAKPlugin.java
-│   │   │   │   │       ├── services/
-│   │   │   │   │       │   ├── BLEService.java
-│   │   │   │   │       │   └── SerialService.java
-│   │   │   │   │       └── ui/
-│   │   │   │   │           ├── AkitaToolbar.java # Contains SOS/Battery logic
-│   │   │   │   │           ├── ConnectionStatusOverlay.java
-│   │   │   │   │           ├── SendDataView.java
-│   │   │   │   │           └── SettingsFragment.java
-│   │   │   │   ├── res/
-│   │   │   │   │   ├── layout/
-│   │   │   │   │   │   ├── akita_toolbar.xml # Contains SOS/Battery UI
-│   │   │   │   │   │   └── send_data_view.xml
-│   │   │   │   │   ├── xml/
-│   │   │   │   │   │   └── preferences.xml
-│   │   │   │   │   └── ...
-│   │   ├── build.gradle
-│   │   └── ...
-│   └── README.md
-├── documentation/
-│   ├── user_guide.md
-│   ├── dev_guide.md
-│   └── ...
-├── LICENSE     # GPLv3 License
-├── COPYING     # Full GPLv3 License Text
-└── README.md   # This file
-```
-
----
-
 ### Contributing
 We welcome contributions! This project is designed to be contributor-friendly. Please see the `documentation/dev_guide.md` for details on how to get started, the command protocol, and our coding standards.  
 
