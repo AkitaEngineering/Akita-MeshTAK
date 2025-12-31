@@ -42,6 +42,12 @@ public final class Config {
     /** Prefix expected in the response string when receiving battery status. */
     public static final String STATUS_BATT_PREFIX = "STATUS:BATT:";
     
+    /** Command prefix sent to the firmware to request version. */
+    public static final String CMD_GET_VERSION = "CMD:GET_VERSION";
+    
+    /** Prefix expected in the response string when receiving version. */
+    public static final String STATUS_VERSION_PREFIX = "STATUS:VERSION:";
+    
     // --- ATAK Rendering Defaults ---
     
     /** Default CoT Type to use for rendering Meshtastic nodes if type data is missing. */

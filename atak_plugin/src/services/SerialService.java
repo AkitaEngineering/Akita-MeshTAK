@@ -27,6 +27,8 @@ import com.hoho.android.usbserial.driver.UsbSerialProber;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.Config;
+import com.akitaengineering.meshtak.AuditLogger;
+import com.akitaengineering.meshtak.SecurityManager;
 
 import java.io.IOException;
 import java.util.List;
@@ -46,6 +48,8 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     private AkitaToolbar akitaToolbar;
     private SerialStatusListener serialStatusListener;
     private String serialConnectionStatus = "Idle";
+    private SecurityManager securityManager;
+    private AuditLogger auditLogger;
 
     // Constants read from Config.java
     private static final int HELTEC_VENDOR_ID = Config.HELTEC_VENDOR_ID; 
@@ -97,7 +101,13 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                     stopIoManager();
                     closeSerialPort();
                     updateStatus("Disconnected");
-                    reconnectAttemptCount = 0; 
+                    reconnectAttemptCount = 0;
+                    
+                    // Audit log disconnection
+                    if (auditLogger != null) {
+                        auditLogger.log(AuditLogger.EventType.DISCONNECTION, AuditLogger.Severity.INFO,
+                                       "Serial", "USB device detached", true);
+                    } 
                     handler.postDelayed(SerialService.this::findAndOpenHeltecSerialPortWithRetry, RECONNECT_DELAY);
                 }
             }
@@ -108,13 +118,34 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     @Override
     public void onCreate() {
         super.onCreate();
+        
+        // Initialize security and audit logging
+        securityManager = SecurityManager.getInstance();
+        auditLogger = AuditLogger.getInstance();
+        auditLogger.initialize(getApplicationContext());
+        
+        // Generate keys if not already initialized (in production, use secure provisioning)
+        if (!securityManager.isInitialized()) {
+            if (!securityManager.generateKeys()) {
+                Log.e(TAG, "Failed to initialize security manager");
+                auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
+                               "SerialService", "Security initialization failed", false);
+            } else {
+                auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
+                               "SerialService", "Security initialized", true);
+            }
+        }
+        
         usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(usbReceiver, filter);
         loadPreferences();
         findAndOpenHeltecSerialPortWithRetry();
-        handler.post(healthCheckRunnable); 
+        handler.post(healthCheckRunnable);
+        
+        auditLogger.log(AuditLogger.EventType.CONNECTION, AuditLogger.Severity.INFO,
+                       "SerialService", "Service created", true);
     }
 
     @Override
@@ -225,9 +256,15 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             serialPort.open(connection);
             serialPort.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
             startIoManager();
-            Log.i(TAG, "Serial port opened for Heltec V3");
+                    Log.i(TAG, "Serial port opened for Heltec V3");
             updateStatus("Connected");
             reconnectAttemptCount = 0; // Success! Reset count
+            
+            // Audit log connection
+            if (auditLogger != null) {
+                auditLogger.log(AuditLogger.EventType.CONNECTION, AuditLogger.Severity.INFO,
+                               "Serial", "Serial port connected", true);
+            }
         } catch (IOException e) {
             Log.e(TAG, "Error opening serial port: " + e.getMessage(), e);
             closeSerialPort();
@@ -277,8 +314,34 @@ public class SerialService extends Service implements SerialInputOutputManager.L
 
     @Override
     public void onNewData(byte[] data) {
-        String received = new String(data);
+        if (data == null || data.length == 0) {
+            return;
+        }
+        
+        // Optional: Decrypt if security is enabled
+        byte[] dataToProcess = data;
+        if (securityManager != null && securityManager.isInitialized()) {
+            byte[] decrypted = securityManager.decrypt(data);
+            if (decrypted != null) {
+                dataToProcess = decrypted;
+            } else {
+                Log.w(TAG, "Decryption failed, processing as plaintext");
+                if (auditLogger != null) {
+                    auditLogger.log(AuditLogger.EventType.AUTHENTICATION_FAILURE, AuditLogger.Severity.WARNING,
+                                   "Serial", "Decryption failed", false);
+                }
+            }
+        }
+        
+        String received = new String(dataToProcess);
         Log.i(TAG, "Received from serial: " + received.trim());
+        
+        // Audit log data reception
+        if (auditLogger != null) {
+            auditLogger.log(AuditLogger.EventType.DATA_RECEIVED, AuditLogger.Severity.INFO,
+                           "Serial", "Data received, len: " + data.length, true);
+        }
+        
         processCotData(received.trim());
     }
 
@@ -341,21 +404,56 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     }
     
     public void sendData(byte[] data) {
-        if (serialPort != null && serialPort.isOpen()) {
-            try {
-                byte[] dataWithNewline = new byte[data.length + 1];
-                System.arraycopy(data, 0, dataWithNewline, 0, data.length);
-                dataWithNewline[data.length] = '\n'; 
-
-                serialPort.write(dataWithNewline, 500); 
-                Log.i(TAG, "Data sent via serial: " + new String(data));
-            } catch (IOException e) {
-                Log.e(TAG, "Error sending data via serial: " + e.getMessage(), e);
-                updateStatus("Error sending data: " + e.getMessage());
-            }
-        } else {
+        if (serialPort == null || !serialPort.isOpen()) {
             Log.w(TAG, "Serial port not open, cannot send data.");
             updateStatus("Error: Serial port not open");
+            if (auditLogger != null) {
+                auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.WARNING,
+                               "Serial", "Send failed - port not open", false);
+            }
+            return;
+        }
+        
+        // Input validation
+        if (data == null || data.length == 0 || data.length > 512) {
+            if (auditLogger != null) {
+                auditLogger.log(AuditLogger.EventType.SECURITY_VIOLATION, AuditLogger.Severity.WARNING,
+                               "Serial", "Invalid data length: " + (data != null ? data.length : 0), false);
+            }
+            return;
+        }
+        
+        // Optional: Encrypt data if security is enabled
+        byte[] dataToSend = data;
+        if (securityManager != null && securityManager.isInitialized()) {
+            byte[] encrypted = securityManager.encrypt(data);
+            if (encrypted != null) {
+                dataToSend = encrypted;
+            } else {
+                Log.w(TAG, "Encryption failed, sending plaintext");
+            }
+        }
+        
+        try {
+            byte[] dataWithNewline = new byte[dataToSend.length + 1];
+            System.arraycopy(dataToSend, 0, dataWithNewline, 0, dataToSend.length);
+            dataWithNewline[dataToSend.length] = '\n'; 
+
+            serialPort.write(dataWithNewline, 500); 
+            Log.i(TAG, "Data sent via serial: " + new String(data));
+            
+            // Audit log data send
+            if (auditLogger != null) {
+                auditLogger.log(AuditLogger.EventType.DATA_SENT, AuditLogger.Severity.INFO,
+                               "Serial", "Data sent, len: " + data.length, true);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error sending data via serial: " + e.getMessage(), e);
+            updateStatus("Error sending data: " + e.getMessage());
+            if (auditLogger != null) {
+                auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
+                               "Serial", "Send error: " + e.getMessage(), false);
+            }
         }
     }
     

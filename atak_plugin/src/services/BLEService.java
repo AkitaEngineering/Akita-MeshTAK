@@ -19,6 +19,8 @@ import com.atakmap.api.map.MapItem;
 import com.atakmap.api.map.Marker;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.Config;
+import com.akitaengineering.meshtak.AuditLogger;
+import com.akitaengineering.meshtak.SecurityManager;
 
 import java.util.UUID;
 import java.lang.Math;
@@ -38,6 +40,8 @@ public class BLEService extends Service {
     private AkitaToolbar akitaToolbar;
     private BleStatusListener bleStatusListener;
     private String bleConnectionStatus = "Idle";
+    private SecurityManager securityManager;
+    private AuditLogger auditLogger;
 
     // Constants read from Config.java
     private static final UUID SERVICE_UUID = Config.BLE_SERVICE_UUID; 
@@ -78,10 +82,31 @@ public class BLEService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        
+        // Initialize security and audit logging
+        securityManager = SecurityManager.getInstance();
+        auditLogger = AuditLogger.getInstance();
+        auditLogger.initialize(getApplicationContext());
+        
+        // Generate keys if not already initialized (in production, use secure provisioning)
+        if (!securityManager.isInitialized()) {
+            if (!securityManager.generateKeys()) {
+                Log.e(TAG, "Failed to initialize security manager");
+                auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
+                               "BLEService", "Security initialization failed", false);
+            } else {
+                auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
+                               "BLEService", "Security initialized", true);
+            }
+        }
+        
         initialize();
         loadPreferences();
         startScan();
         handler.post(healthCheckRunnable);
+        
+        auditLogger.log(AuditLogger.EventType.CONNECTION, AuditLogger.Severity.INFO,
+                       "BLEService", "Service created", true);
     }
 
     @Override
@@ -242,12 +267,26 @@ public class BLEService extends Service {
                 bleConnectionStatus = "Connected";
                 if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
                 if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Connected to " + gatt.getDevice().getAddress());
+                
+                // Audit log connection
+                if (auditLogger != null) {
+                    auditLogger.log(AuditLogger.EventType.CONNECTION, AuditLogger.Severity.INFO,
+                                   "BLE", "Connected to " + gatt.getDevice().getAddress(), true);
+                }
+                
                 bluetoothGatt.discoverServices();
             } else if (newState == android.bluetooth.BluetoothProfile.STATE_DISCONNECTED) {
                 Log.i(TAG, "onConnectionStateChange: Disconnected from GATT server for device " + gatt.getDevice().getAddress() + ", status: " + status);
                 bleConnectionStatus = "Disconnected";
                 if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
                 if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Disconnected");
+                
+                // Audit log disconnection
+                if (auditLogger != null) {
+                    auditLogger.log(AuditLogger.EventType.DISCONNECTION, AuditLogger.Severity.INFO,
+                                   "BLE", "Disconnected from " + gatt.getDevice().getAddress(), true);
+                }
+                
                 close();
                 if (connectionRetryCount <= MAX_RETRY_ATTEMPTS) {
                     long delay = CONNECT_RETRY_DELAY * (long) Math.pow(2, connectionRetryCount - 1);
@@ -305,7 +344,33 @@ public class BLEService extends Service {
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            processCotData(new String(characteristic.getValue()));
+            byte[] rawData = characteristic.getValue();
+            if (rawData == null || rawData.length == 0) {
+                return;
+            }
+            
+            // Optional: Decrypt if security is enabled
+            byte[] dataToProcess = rawData;
+            if (securityManager != null && securityManager.isInitialized()) {
+                byte[] decrypted = securityManager.decrypt(rawData);
+                if (decrypted != null) {
+                    dataToProcess = decrypted;
+                } else {
+                    Log.w(TAG, "Decryption failed, processing as plaintext");
+                    if (auditLogger != null) {
+                        auditLogger.log(AuditLogger.EventType.AUTHENTICATION_FAILURE, AuditLogger.Severity.WARNING,
+                                       "BLE", "Decryption failed", false);
+                    }
+                }
+            }
+            
+            // Audit log data reception
+            if (auditLogger != null) {
+                auditLogger.log(AuditLogger.EventType.DATA_RECEIVED, AuditLogger.Severity.INFO,
+                               "BLE", "Data received, len: " + rawData.length, true);
+            }
+            
+            processCotData(new String(dataToProcess));
         }
 
         @Override public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {}
@@ -384,13 +449,60 @@ public class BLEService extends Service {
     }
     
     public void sendData(byte[] data) {
-      if (!bleConnectionStatus.equals("Connected") || bluetoothGatt == null) return;
+      if (!bleConnectionStatus.equals("Connected") || bluetoothGatt == null) {
+          if (auditLogger != null) {
+              auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.WARNING,
+                             "BLE", "Send failed - not connected", false);
+          }
+          return;
+      }
+      
+      // Input validation
+      if (data == null || data.length == 0 || data.length > 512) {
+          if (auditLogger != null) {
+              auditLogger.log(AuditLogger.EventType.SECURITY_VIOLATION, AuditLogger.Severity.WARNING,
+                             "BLE", "Invalid data length: " + (data != null ? data.length : 0), false);
+          }
+          return;
+      }
+      
+      // Optional: Encrypt data if security is enabled
+      byte[] dataToSend = data;
+      if (securityManager != null && securityManager.isInitialized()) {
+          byte[] encrypted = securityManager.encrypt(data);
+          if (encrypted != null) {
+              dataToSend = encrypted;
+          } else {
+              Log.w(TAG, "Encryption failed, sending plaintext");
+          }
+      }
+      
       BluetoothGattService service = bluetoothGatt.getService(SERVICE_UUID);
-      if (service == null) return;
+      if (service == null) {
+          if (auditLogger != null) {
+              auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
+                             "BLE", "Service not found", false);
+          }
+          return;
+      }
+      
       BluetoothGattCharacteristic writeCharacteristic = service.getCharacteristic(WRITE_CHARACTERISTIC_UUID);
-      if (writeCharacteristic == null) return;
-      writeCharacteristic.setValue(data);
-      bluetoothGatt.writeCharacteristic(writeCharacteristic);
+      if (writeCharacteristic == null) {
+          if (auditLogger != null) {
+              auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
+                             "BLE", "Characteristic not found", false);
+          }
+          return;
+      }
+      
+      writeCharacteristic.setValue(dataToSend);
+      boolean success = bluetoothGatt.writeCharacteristic(writeCharacteristic);
+      
+      // Audit log data send
+      if (auditLogger != null) {
+          auditLogger.log(AuditLogger.EventType.DATA_SENT, AuditLogger.Severity.INFO,
+                         "BLE", "Data sent, len: " + data.length, success);
+      }
     }
     
     // --- External Setters and Getters ---

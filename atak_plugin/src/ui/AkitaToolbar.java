@@ -14,6 +14,7 @@ import com.atakmap.android.plugin.ui.PluginToolbar;
 import com.akitaengineering.meshtak.R;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
+import com.akitaengineering.meshtak.AuditLogger;
 
 import androidx.preference.PreferenceManager;
 
@@ -86,6 +87,13 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
     private void triggerSosAlert() {
         String method = PreferenceManager.getDefaultSharedPreferences(context)
                 .getString("connection_method", "ble");
+        
+        // CRITICAL: Log SOS trigger for accountability
+        AuditLogger.getInstance().log(AuditLogger.EventType.SOS_TRIGGERED, 
+                                    AuditLogger.Severity.CRITICAL,
+                                    "AkitaToolbar", 
+                                    "SOS alert triggered via " + method.toUpperCase(), 
+                                    true);
                 
         if (method.equals("ble") && bleService != null) {
             bleService.sendCriticalAlert();
@@ -95,6 +103,11 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
             Toast.makeText(context, "ALERT: SOS sent via Serial!", Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(context, "Cannot send SOS: Device disconnected.", Toast.LENGTH_SHORT).show();
+            AuditLogger.getInstance().log(AuditLogger.EventType.ERROR, 
+                                        AuditLogger.Severity.ERROR,
+                                        "AkitaToolbar", 
+                                        "SOS send failed - device disconnected", 
+                                        false);
         }
     }
     

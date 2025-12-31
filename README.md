@@ -61,6 +61,17 @@ The Akita MeshTAK Plugin is an indispensable tool for:
 
 ---
 
+### Documentation
+Comprehensive MILSPEC documentation is available in the `documentation/` directory:
+
+- **Technical Manual (TM)**: Complete technical documentation for installation, configuration, operation, and maintenance
+- **Operator's Manual (OM)**: User-friendly guide for field operators
+- **System Specification (SS)**: Detailed system requirements and specifications
+- **Security Guide**: Comprehensive security documentation
+- **Developer Guide**: Information for developers and contributors
+
+---
+
 ### Contributing
 We welcome contributions! This project is designed to be contributor-friendly. Please see the `documentation/dev_guide.md` for details on how to get started, the command protocol, and our coding standards.  
 
@@ -79,4 +90,6 @@ See the LICENSE and COPYING files for the full license text.
 
 ### Contact
 - **Website**: [www.akitaengineering.com](http://www.akitaengineering.com)
+- **Support**: support@akitaengineering.com
+- **Security**: security@akitaengineering.com
 ```
