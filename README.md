@@ -17,7 +17,6 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 ---
 
 ### IMPORTANT: READ BEFORE COMPILING
-This project is ready for functional testing, but it requires configuration before it will work.
 
 - **Firmware**: You must set the correct UUIDs in `firmware/src/config.h`.  
 - **ATAK Plugin**: You must edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java` and fill in the placeholder UUIDs and USB IDs to match your firmware and hardware.  
