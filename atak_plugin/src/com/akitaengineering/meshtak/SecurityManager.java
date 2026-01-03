@@ -29,6 +29,8 @@ public class SecurityManager {
     private SecretKey aesKey;
     private SecretKey hmacKey;
     private boolean initialized = false;
+    // Default to false to avoid breaking compatibility until a secure handshake/key exchange exists
+    private boolean encryptionEnabled = false;
     
     // Security statistics
     private long messagesEncrypted = 0;
@@ -107,6 +109,12 @@ public class SecurityManager {
             Log.e(TAG, "Security not initialized or null plaintext");
             return null;
         }
+
+        // Compatibility: if encryption is not enabled, return plaintext copy
+        if (!encryptionEnabled) {
+            byte[] copy = Arrays.copyOf(plaintext, plaintext.length);
+            return copy;
+        }
         
         try {
             Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
@@ -135,6 +143,12 @@ public class SecurityManager {
         if (!initialized || ciphertext == null || ciphertext.length < IV_SIZE) {
             Log.e(TAG, "Security not initialized or invalid ciphertext");
             return null;
+        }
+
+        // Compatibility: if encryption is not enabled, return ciphertext copy
+        if (!encryptionEnabled) {
+            byte[] copy = Arrays.copyOf(ciphertext, ciphertext.length);
+            return copy;
         }
         
         try {
@@ -226,6 +240,15 @@ public class SecurityManager {
     
     public boolean isInitialized() {
         return initialized;
+    }
+    
+    public boolean isEncryptionEnabled() {
+        return encryptionEnabled;
+    }
+
+    public void setEncryptionEnabled(boolean enabled) {
+        this.encryptionEnabled = enabled;
+        Log.i(TAG, "Encryption enabled set to: " + enabled);
     }
     
     public long getMessagesEncrypted() {

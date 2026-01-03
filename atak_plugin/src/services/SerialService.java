@@ -133,6 +133,8 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             } else {
                 auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
                                "SerialService", "Security initialized", true);
+                // Leave encryption disabled by default to maintain compatibility until a secure handshake is implemented
+                securityManager.setEncryptionEnabled(false);
             }
         }
         
@@ -318,9 +320,9 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             return;
         }
         
-        // Optional: Decrypt if security is enabled
+        // Optional: Decrypt if security is enabled; default is plaintext for compatibility
         byte[] dataToProcess = data;
-        if (securityManager != null && securityManager.isInitialized()) {
+        if (securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
             byte[] decrypted = securityManager.decrypt(data);
             if (decrypted != null) {
                 dataToProcess = decrypted;
@@ -423,9 +425,9 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             return;
         }
         
-        // Optional: Encrypt data if security is enabled
+        // Optional: Encrypt data if security is enabled; default is plaintext for compatibility
         byte[] dataToSend = data;
-        if (securityManager != null && securityManager.isInitialized()) {
+        if (securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
             byte[] encrypted = securityManager.encrypt(data);
             if (encrypted != null) {
                 dataToSend = encrypted;

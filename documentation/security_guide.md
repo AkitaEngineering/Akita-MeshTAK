@@ -12,6 +12,11 @@ This document outlines the security features implemented in Akita MeshTAK for mi
 - **HMAC-SHA256**: Message integrity verification using HMAC-SHA256
 - **Secure Key Management**: Keys should be provisioned securely (NOT hardcoded)
 
+#### Encryption Activation (Current Behavior)
+- **Default State**: Encryption is **disabled by default** to maintain compatibility until a secure key exchange/handshake is in place.
+- **Enablement Requirement**: Turn on encryption only after provisioning matching keys on firmware and plugin and establishing a secure exchange procedure.
+- **Behavior**: When disabled, traffic is plaintext. When enabled, BLE/Serial paths encrypt/decrypt with configured keys.
+
 #### Implementation
 - Firmware: `firmware/src/security.h` and `security.cpp`
 - Android Plugin: `atak_plugin/src/com/akitaengineering/meshtak/SecurityManager.java`
@@ -22,6 +27,7 @@ This document outlines the security features implemented in Akita MeshTAK for mi
 - Implement key rotation policies
 - Never hardcode keys in source code
 - Use secure key exchange protocols
+- After provisioning, explicitly enable encryption in the plugin; otherwise, plaintext is used.
 
 ### 2. Input Validation
 - **Command Validation**: All incoming commands are validated before processing

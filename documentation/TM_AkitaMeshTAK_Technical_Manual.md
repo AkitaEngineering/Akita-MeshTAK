@@ -484,6 +484,11 @@ Configure via ATAK settings:
 2. Store keys in Android Keystore
 3. Implement key rotation policy
 
+**Encryption Activation (Current Behavior)**:
+- Default: Encryption is **disabled** to preserve compatibility until a secure handshake/key exchange exists.
+- Enable only after keys are provisioned and an exchange method is established.
+- When disabled: traffic is plaintext; when enabled: BLE/Serial are encrypted/decrypted with provisioned keys.
+
 #### 6.3.2 Encryption Configuration
 - **Algorithm**: AES-256-CBC (default)
 - **Mode**: SECURITY_MODE_AES256_HMAC (recommended)

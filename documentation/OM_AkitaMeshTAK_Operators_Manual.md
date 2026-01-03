@@ -353,6 +353,7 @@ The Akita MeshTAK toolbar shows:
 - **Encryption Keys**: Never share encryption keys with unauthorized personnel
 - **Audit Logs**: Audit logs may contain sensitive information. Secure storage required.
 - **Device Security**: Secure devices physically. Report lost or stolen devices immediately.
+- **Encryption Default**: Encryption is off by default for compatibility. Enable only after keys are provisioned and a secure exchange method is in place; otherwise traffic is plaintext.
 
 #### CAUTIONS
 - **Network Security**: Be aware of network security implications
