@@ -2,7 +2,9 @@
 #ifndef DISPLAY_HANDLER_H
 #define DISPLAY_HANDLER_H
 
-#ifdef ENABLE_DISPLAY
+#include "config.h"
+
+#if defined(ENABLE_DISPLAY) && ENABLE_DISPLAY
   #include <heltec.h>
 
   bool setupDisplay();

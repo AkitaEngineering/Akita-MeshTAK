@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/connection_method_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Method: BLE"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/ble_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="BLE: Idle" />
+
+    <TextView
+        android:id="@+id/serial_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Serial: Idle" />
+
+    <TextView
+        android:id="@+id/battery_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="BATT: --%" />
+
+    <Button
+        android:id="@+id/sos_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Send SOS" />
+</LinearLayout>

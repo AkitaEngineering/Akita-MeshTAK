@@ -1,9 +1,9 @@
 // File: firmware/src/ble_setup.cpp
 // Description: Implements BLE server, characteristics, and callbacks for ATAK.
 
-#ifdef ENABLE_BLE
-#include "ble_setup.h"
 #include "config.h"
+#if defined(ENABLE_BLE) && ENABLE_BLE
+#include "ble_setup.h"
 #include "cot_generation.h"
 #include "power_management.h" // For processIncomingCommand
 #include "audit_log.h"        // For audit logging
@@ -112,17 +112,15 @@ void sendDataBLE(const uint8_t* data, size_t len) {
     return;
   }
   
-  pCoTCharacteristic->setValue(data, len);
-  bool notified = pCoTCharacteristic->notify();
+  pCoTCharacteristic->setValue(const_cast<uint8_t*>(data), len);
+  pCoTCharacteristic->notify();
   
-  if (notified) {
+  {
     Serial.print("Sent data via BLE: ");
     Serial.write(data, len < 64 ? len : 64); // Limit serial output
     Serial.println();
     logAuditEvent(AUDIT_EVENT_DATA_SENT, 0, "BLE", 
                  String("Data sent, len: " + String(len)).c_str(), true);
-  } else {
-    logAuditEvent(AUDIT_EVENT_ERROR, 1, "BLE", "BLE notify failed", false);
   }
 }
 #endif

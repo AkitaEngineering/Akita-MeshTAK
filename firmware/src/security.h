@@ -8,7 +8,7 @@
 #include <Arduino.h>
 #include <mbedtls/aes.h>
 #include <mbedtls/sha256.h>
-#include <mbedtls/md5.h>
+#include <mbedtls/md.h>
 
 // Security configuration
 #define AES_KEY_SIZE 32          // 256-bit AES key

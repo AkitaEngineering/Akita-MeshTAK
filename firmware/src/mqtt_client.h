@@ -2,7 +2,7 @@
 #ifndef MQTT_CLIENT_H
 #define MQTT_CLIENT_H
 
-#ifdef ENABLE_MQTT
+#if defined(ENABLE_MQTT) && ENABLE_MQTT
   #include <WiFi.h>
   #include <PubSubClient.h>
 

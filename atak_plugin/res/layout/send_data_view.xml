@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <Spinner
+        android:id="@+id/data_format_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <EditText
+        android:id="@+id/data_to_send"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Enter data"
+        android:minLines="3"
+        android:inputType="textMultiLine" />
+
+    <Button
+        android:id="@+id/send_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Send" />
+
+    <Spinner
+        android:id="@+id/command_history_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+</LinearLayout>

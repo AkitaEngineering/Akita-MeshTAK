@@ -33,6 +33,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private List<String> commandHistory = new ArrayList<>();
     private ArrayAdapter<String> historyAdapter;
     private Context context;
+    private static final int MAX_HISTORY = 20;
+    private static final int MAX_PAYLOAD_BYTES = 512;
 
     public SendDataView(Context context, MapView mapView, BLEService bleService, SerialService serialService) {
         super(context);
@@ -50,6 +52,10 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         sendButton = findViewById(R.id.send_button);
         commandHistorySpinner = findViewById(R.id.command_history_spinner);
 
+        dataToSendEditText.setHint("Enter CoT XML, JSON, or command");
+        dataToSendEditText.setMaxLines(6);
+        dataToSendEditText.setSingleLine(false);
+
         ArrayAdapter<CharSequence> formatAdapter = ArrayAdapter.createFromResource(context, R.array.data_formats, android.R.layout.simple_spinner_item);
         formatAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         dataFormatSpinner.setAdapter(formatAdapter);
@@ -62,6 +68,10 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
             if (!data.isEmpty()) {
                 String selectedFormat = dataFormatSpinner.getSelectedItem().toString();
                 byte[] formattedData = formatData(selectedFormat, data);
+                if (formattedData.length > MAX_PAYLOAD_BYTES) {
+                    Toast.makeText(context, "Payload too large (max " + MAX_PAYLOAD_BYTES + " bytes).", Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 sendDataToDevice(formattedData);
                 addToCommandHistory(data);
                 dataToSendEditText.getText().clear();
@@ -136,10 +146,12 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     }
 
     private void addToCommandHistory(String command) {
-        if (!commandHistory.contains(command)) {
-            commandHistory.add(command);
-            historyAdapter.notifyDataSetChanged();
-            //  Optionally, you could persist this history
+        if (command == null || command.trim().isEmpty()) return;
+        commandHistory.remove(command);
+        commandHistory.add(0, command);
+        while (commandHistory.size() > MAX_HISTORY) {
+            commandHistory.remove(commandHistory.size() - 1);
         }
+        historyAdapter.notifyDataSetChanged();
     }
 }

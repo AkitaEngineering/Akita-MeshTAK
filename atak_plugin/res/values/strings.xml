@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Akita MeshTAK</string>
+    <string name="connection_method_title">Connection Method</string>
+    <string name="ble_device_name_title">BLE Device Name</string>
+    <string name="serial_port_path_title">Serial Port Path</string>
+    <string name="serial_baud_rate_title">Serial Baud Rate</string>
+    <string name="send_test_message_title">Send Test Message</string>
+</resources>

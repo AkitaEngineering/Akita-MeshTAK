@@ -166,14 +166,13 @@ public class AuditLogger {
             synchronized (entries) {
                 for (AuditEntry entry : entries) {
                     String line = String.format(Locale.US,
-                        "%d|%s|%s|%s|%s|%s|%s\n",
+                        "%d|%s|%s|%s|%s|%s\n",
                         entry.timestamp,
                         entry.eventType,
                         entry.severity,
                         entry.source,
                         entry.details,
-                        entry.success ? "OK" : "FAIL",
-                        "\n");
+                        entry.success ? "OK" : "FAIL");
                     fos.write(line.getBytes());
                 }
             }

@@ -1,0 +1,34 @@
+# Build outputs
+build/
+*.apk
+*.aab
+*.dex
+*.class
+
+# Gradle
+.gradle/
+atak_plugin/.gradle/
+atak_plugin/build/
+atak_plugin/gradle-8.6-bin.zip
+atak_plugin/gradle-8.6/
+
+# Local properties (contains SDK path, etc.)
+local.properties
+atak_plugin/local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# PlatformIO
+.pio/
+firmware/.pio/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large binaries
+*.jar
+!atak_plugin/libs/*.jar

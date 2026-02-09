@@ -70,7 +70,7 @@ void processIncomingCommand(const String& cmd) {
         String sosMessage = "SOS: Critical Alert from " + String(DEVICE_ID);
         // sendData(payload, len, channel, wantAck, hopLimit, txPower)
         // Using max power (20), default hop limit, on primary channel
-        bool sent = Meshtastic.sendText(sosMessage.c_str(), 0, true, 3, 20);
+        bool sent = mt_send_text(sosMessage.c_str(), BROADCAST_ADDR, 0);
         
         logAuditEvent(AUDIT_EVENT_COMMAND_EXECUTED, sent ? 0 : 2, DEVICE_ID,
                      sent ? "SOS broadcast successful" : "SOS broadcast failed", sent);
@@ -85,10 +85,10 @@ void processIncomingCommand(const String& cmd) {
         String response = String(STATUS_BATT_PREFIX) + percent + "%";
         
         // Send response back over all enabled interfaces
-        #ifdef ENABLE_SERIAL
+        #if defined(ENABLE_SERIAL) && ENABLE_SERIAL
         sendDataSerial((const uint8_t*)response.c_str(), response.length());
         #endif
-        #ifdef ENABLE_BLE
+        #if defined(ENABLE_BLE) && ENABLE_BLE
         sendDataBLE((const uint8_t*)response.c_str(), response.length());
         #endif
         
@@ -98,10 +98,10 @@ void processIncomingCommand(const String& cmd) {
         String response = String(STATUS_VERSION_PREFIX) + FIRMWARE_VERSION;
         
         // Send response back over all enabled interfaces
-        #ifdef ENABLE_SERIAL
+        #if defined(ENABLE_SERIAL) && ENABLE_SERIAL
         sendDataSerial((const uint8_t*)response.c_str(), response.length());
         #endif
-        #ifdef ENABLE_BLE
+        #if defined(ENABLE_BLE) && ENABLE_BLE
         sendDataBLE((const uint8_t*)response.c_str(), response.length());
         #endif
         

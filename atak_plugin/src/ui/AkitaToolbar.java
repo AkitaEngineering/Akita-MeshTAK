@@ -79,7 +79,16 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
         if (connectionMethodStatusTextView != null && context != null) {
             String method = PreferenceManager.getDefaultSharedPreferences(context)
                     .getString("connection_method", "ble");
-            String displayMethod = method.equalsIgnoreCase("ble") ? "Method: BLE" : "Method: Serial";
+            String displayMethod;
+            if (method.equalsIgnoreCase("ble")) {
+                String deviceName = PreferenceManager.getDefaultSharedPreferences(context)
+                        .getString("ble_device_name", "AkitaNode01");
+                displayMethod = "Method: BLE (Device: " + deviceName + ")";
+            } else {
+                String baudRate = PreferenceManager.getDefaultSharedPreferences(context)
+                        .getString("serial_baud_rate", "115200");
+                displayMethod = "Method: Serial (Baud: " + baudRate + ")";
+            }
             connectionMethodStatusTextView.setText(displayMethod);
         }
     }
@@ -114,20 +123,24 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
     public void setBatteryStatus(final String status) {
         if (batteryStatusTextView != null) {
             batteryStatusTextView.post(() -> {
-                batteryStatusTextView.setText("BATT: " + status);
+                String label = "";
                 
                 try {
                     int percent = Integer.parseInt(status.replace("%", "").trim());
                     if (percent <= 20) {
+                        label = " (Low)";
                         batteryStatusTextView.setTextColor(Color.RED);
                     } else if (percent <= 50) {
+                        label = " (Medium)";
                         batteryStatusTextView.setTextColor(Color.YELLOW);
                     } else {
+                        label = " (Good)";
                         batteryStatusTextView.setTextColor(Color.GREEN);
                     }
                 } catch (NumberFormatException e) {
                     batteryStatusTextView.setTextColor(Color.WHITE);
                 }
+                batteryStatusTextView.setText("BATT: " + status + label);
             });
         }
     }

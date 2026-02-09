@@ -372,7 +372,10 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             if (cotPoint == null) return;
 
             final String uid = cotPoint.getUid();
-            final String callsign = cotPoint.getDetail().get("contact").get("callsign");
+            String callsign = null;
+            if (cotPoint.getDetail() != null && cotPoint.getDetail().get("contact") != null) {
+                callsign = cotPoint.getDetail().get("contact").get("callsign");
+            }
             final Point2 geoPoint = new Point2(cotPoint.getLongitude(), cotPoint.getLatitude());
 
             if (uid == null) return;

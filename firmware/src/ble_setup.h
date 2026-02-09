@@ -3,12 +3,15 @@
 #ifndef BLE_SETUP_H
 #define BLE_SETUP_H
 
-#ifdef ENABLE_BLE
+#include "config.h"
+
+#if defined(ENABLE_BLE) && ENABLE_BLE
   #include <BLEServer.h>
   #include <BLEUtils.h>
   #include <BLEDevice.h>
   #include <BLECharacteristic.h>
   #include <BLEDescriptor.h>
+  #include <BLE2902.h>
 
   extern BLEUUID serviceUUID;
   extern BLEUUID cotCharacteristicUUID;

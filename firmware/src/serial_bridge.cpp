@@ -1,17 +1,18 @@
 // File: firmware/src/serial_bridge.cpp
 // Description: Implements Serial data handling to and from ATAK.
 
-#ifdef ENABLE_SERIAL
-#include "serial_bridge.h"
 #include "config.h"
+#if defined(ENABLE_SERIAL) && ENABLE_SERIAL
+#include "serial_bridge.h"
 #include "cot_generation.h"
 #include "power_management.h" // For processIncomingCommand
 #include "audit_log.h"        // For audit logging
 #include "input_validation.h" // For input validation
 
-void setupSerialBridge() {
+bool setupSerialBridge() {
   Serial.println("Initializing Serial Bridge...");
   Serial.println("Serial bridge ready.");
+  return true;
 }
 
 void loopSerialBridge() {

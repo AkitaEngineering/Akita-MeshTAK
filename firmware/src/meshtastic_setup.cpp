@@ -1,18 +1,3 @@
-// File: firmware/src/meshtastic_setup.h
-// Description: Declares Meshtastic setup functions and the global Meshtastic object.
-#ifndef MESHTASTIC_SETUP_H
-#define MESHTASTIC_SETUP_H
-
-#include <Meshtastic.h>
-
-extern MeshtasticClass Meshtastic; // <-- ADDED THIS LINE
-
-bool setupMeshtastic();
-void loopMeshtastic();
-String getNodeId(const uint8_t *from);
-
-#endif
-// -----------------------------------------------------------------
 // File: firmware/src/meshtastic_setup.cpp
 // Description: Implements Meshtastic setup, receive callback, and loop.
 
@@ -21,60 +6,67 @@ String getNodeId(const uint8_t *from);
 #include "cot_generation.h"
 #include "serial_bridge.h" // For sending CoT out
 #include "ble_setup.h"     // For sending CoT out
+#include "input_validation.h"
+#include "audit_log.h"
 
-MeshtasticClass Meshtastic; // Definition of the global object
+// Callback for when a Meshtastic text message is received
+static void onTextMessage(uint32_t from, uint32_t to, uint8_t channel, const char *text) {
+  (void)to;
+  Serial.print("Received message from: ");
+  Serial.print(getNodeId(from));
+  Serial.print(", channel: ");
+  Serial.print(channel);
+  Serial.print(", payload: ");
+  Serial.println(text ? text : "");
 
-// Callback for when a Meshtastic packet is received
-void onReceive(const uint8_t *from, const rx_t &rxInfo, const uint8_t *payload, size_t len) {
-    Serial.print("Received message from: ");
-    Serial.print(getNodeId(from).toString());
-    Serial.print(", channel: ");
-    Serial.print(rxInfo.channel);
-    Serial.print(", RSSI: ");
-    Serial.print(rxInfo.rssi);
-    Serial.print(", payload: ");
-    for (int i = 0; i < len; i++) {
-        Serial.printf("%02X", payload[i]);
-    }
-    Serial.println();
+  if (text == nullptr || text[0] == '\0') {
+    return;
+  }
 
-    // TODO: Process incoming Meshtastic packets
-    // 1. Check if it's a position packet
-    // 2. If yes, generate a CoT message
-    // String cotMessage = generateLocationCoT(...);
-    
-    // 3. Send CoT over Serial and BLE
-    // #ifdef ENABLE_SERIAL
-    // sendDataSerial((const uint8_t*)cotMessage.c_str(), cotMessage.length());
-    // #endif
-    // #ifdef ENABLE_BLE
-    // sendDataBLE((const uint8_t*)cotMessage.c_str(), cotMessage.length());
-    // #endif
+  String payloadStr = String(text);
+  payloadStr.trim();
+  if (payloadStr.length() == 0) {
+    return;
+  }
+
+  // If the payload is already a CoT XML, forward it to ATAK interfaces
+  ValidationResult validation = validateCoTXml(payloadStr);
+  if (validation == VALIDATION_OK) {
+    logAuditEvent(AUDIT_EVENT_DATA_RECEIVED, 0, "MESH", "CoT payload forwarded", true);
+#if defined(ENABLE_SERIAL) && ENABLE_SERIAL
+    sendDataSerial((const uint8_t*)payloadStr.c_str(), payloadStr.length());
+#endif
+#if defined(ENABLE_BLE) && ENABLE_BLE
+    sendDataBLE((const uint8_t*)payloadStr.c_str(), payloadStr.length());
+#endif
+    return;
+  }
+
+  logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 1, "MESH", "Invalid CoT payload", false);
 }
 
 
 bool setupMeshtastic() {
   Serial.println("Initializing Meshtastic...");
-  Meshtastic.begin();
 
-  if (Meshtastic.isStarted()) {
-    Serial.print("Meshtastic Started. My Node ID: ");
-    Serial.println(Meshtastic.getNodeId().toString());
-    Meshtastic.setOwner(DEVICE_ID);
+  // Initialize Meshtastic serial bridge (host mode)
+  mt_set_debug(false);
+  mt_serial_init(MESH_SERIAL_RX_PIN, MESH_SERIAL_TX_PIN, MESH_SERIAL_BAUD);
+  set_text_message_callback(onTextMessage);
 
-    Meshtastic.addReceiveCallback(onReceive);
-
-    return true;
-  } else {
-    Serial.println("Failed to start Meshtastic.");
-    return false;
-  }
+  return true;
 }
 
 void loopMeshtastic() {
-  Meshtastic.loop();
+  mt_loop(millis());
 }
 
-String getNodeId(const uint8_t *from) {
-    return Meshtastic.getNodeId(from).toString();
+String getNodeId(uint32_t from) {
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%08lX", (unsigned long)from);
+    return String(buf);
+}
+
+String getLocalNodeId() {
+    return getNodeId(my_node_num);
 }

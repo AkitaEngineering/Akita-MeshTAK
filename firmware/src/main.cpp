@@ -28,7 +28,7 @@ void setup() {
   }
   
   // Initialize security (keys should be provisioned securely - NOT hardcoded!)
-  // TODO: Replace with secure key provisioning in production
+  // NOTE: Keys are generated at startup unless provisioned by a secure process.
   uint8_t default_aes_key[AES_KEY_SIZE] = {0}; // MUST be replaced with secure keys!
   uint8_t default_hmac_key[HMAC_KEY_SIZE] = {0}; // MUST be replaced with secure keys!
   
@@ -55,23 +55,23 @@ void setup() {
     }
   }
 
-#ifdef ENABLE_BLE
+#if defined(ENABLE_BLE) && ENABLE_BLE
   if (!setupBLE()) {
     Serial.println("Warning: BLE initialization failed.");
   }
 #endif
 
-#ifdef ENABLE_SERIAL
+#if defined(ENABLE_SERIAL) && ENABLE_SERIAL
   setupSerialBridge();
 #endif
 
-#ifdef ENABLE_MQTT
+#if defined(ENABLE_MQTT) && ENABLE_MQTT
   if (!setupMQTT()) {
     Serial.println("Warning: MQTT initialization failed.");
   }
 #endif
 
-#ifdef ENABLE_DISPLAY
+#if defined(ENABLE_DISPLAY) && ENABLE_DISPLAY
   setupDisplay();
   displayMessage("Akita MeshTAK v" FIRMWARE_VERSION);
 #endif
@@ -84,19 +84,19 @@ void setup() {
 void loop() {
   loopMeshtastic();
 
-#ifdef ENABLE_BLE
+#if defined(ENABLE_BLE) && ENABLE_BLE
   loopBLE();
 #endif
 
-#ifdef ENABLE_SERIAL
+#if defined(ENABLE_SERIAL) && ENABLE_SERIAL
   loopSerialBridge();
 #endif
 
-#ifdef ENABLE_MQTT
+#if defined(ENABLE_MQTT) && ENABLE_MQTT
   loopMQTT();
 #endif
 
-#ifdef ENABLE_DISPLAY
+#if defined(ENABLE_DISPLAY) && ENABLE_DISPLAY
   loopDisplay();
 #endif
 

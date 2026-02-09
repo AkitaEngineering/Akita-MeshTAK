@@ -3,7 +3,9 @@
 #ifndef SERIAL_BRIDGE_H
 #define SERIAL_BRIDGE_H
 
-#ifdef ENABLE_SERIAL
+#include "config.h"
+
+#if defined(ENABLE_SERIAL) && ENABLE_SERIAL
   #include <Arduino.h> // Include for size_t
   bool setupSerialBridge();
   void loopSerialBridge();

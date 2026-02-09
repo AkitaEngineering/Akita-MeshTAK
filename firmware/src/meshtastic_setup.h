@@ -5,10 +5,9 @@
 
 #include <Meshtastic.h>
 
-extern MeshtasticClass Meshtastic; // <-- ADDED THIS LINE
-
 bool setupMeshtastic();
 void loopMeshtastic();
-String getNodeId(const uint8_t *from);
+String getNodeId(uint32_t from);
+String getLocalNodeId();
 
 #endif

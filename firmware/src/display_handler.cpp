@@ -1,7 +1,8 @@
 // firmware/src/display_handler.cpp
-#ifdef ENABLE_DISPLAY
-#include "display_handler.h"
 #include "config.h"
+#if defined(ENABLE_DISPLAY) && ENABLE_DISPLAY
+#include "display_handler.h"
+#include "meshtastic_setup.h"
 
 bool setupDisplay() {
   Serial.println("Initializing Display...");
@@ -17,7 +18,7 @@ void loopDisplay() {
   //  Update the display
   static unsigned long lastDisplayUpdate = 0;
   if (millis() - lastDisplayUpdate > 5000) {
-    String displayInfo = "Nodes: " + String(Meshtastic.getNumNodes());
+    String displayInfo = "Node: " + getLocalNodeId();
     displayMessage(displayInfo);
     lastDisplayUpdate = millis();
   }

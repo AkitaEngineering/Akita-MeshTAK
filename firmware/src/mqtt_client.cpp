@@ -1,5 +1,5 @@
 // firmware/src/mqtt_client.cpp
-#ifdef ENABLE_MQTT
+#if defined(ENABLE_MQTT) && ENABLE_MQTT
 #include "mqtt_client.h"
 #include "config.h"
 #include "cot_generation.h"
@@ -114,7 +114,7 @@ void loopMQTT() {
   static unsigned long lastPublishTime = 0;
   if (millis() - lastPublishTime > 5000) {
     String currentCot = generateLocationCoT(DEVICE_ID, 0.0, 0.0, 0.0); // Replace with actual data
-    publishMQTT(MQTT_TOPIC_PREFIX "cot", currentCot.c_str());
+    publishMQTT("cot", currentCot.c_str());
     lastPublishTime = millis();
   }
 }

@@ -12,6 +12,8 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 
+import androidx.preference.PreferenceManager;
+
 import com.atakmap.android.maps.MapView;
 import com.atakmap.api.CotPoint;
 import com.atakmap.api.Point2;
@@ -47,6 +49,7 @@ public class BLEService extends Service {
     private static final UUID SERVICE_UUID = Config.BLE_SERVICE_UUID; 
     private static final UUID COT_CHARACTERISTIC_UUID = Config.COT_CHARACTERISTIC_UUID; 
     private static final UUID WRITE_CHARACTERISTIC_UUID = Config.WRITE_CHARACTERISTIC_UUID;
+    private static final UUID CLIENT_CHARACTERISTIC_CONFIG = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
     private static final long SCAN_PERIOD = 10000;
     private static final long CONNECT_RETRY_DELAY = 5000;
@@ -57,6 +60,11 @@ public class BLEService extends Service {
     private static final long HEALTH_CHECK_INTERVAL = 30000;
 
     private Runnable connectionTimeoutRunnable;
+    private boolean scanReschedulePending = false;
+    private final Runnable rescanRunnable = () -> {
+        scanReschedulePending = false;
+        startScan();
+    };
 
     public interface BleStatusListener {
         void onBleStatusChanged(String status);
@@ -127,6 +135,7 @@ public class BLEService extends Service {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(healthCheckRunnable);
+        handler.removeCallbacks(rescanRunnable);
         disconnect();
         close();
         stopScan();
@@ -152,7 +161,11 @@ public class BLEService extends Service {
     }
 
     private void loadPreferences() {
-        // NOTE: In a real app, preferences would be loaded from SharedPreferences
+        String prefName = PreferenceManager.getDefaultSharedPreferences(this)
+                .getString("ble_device_name", targetDeviceName);
+        if (prefName != null && !prefName.trim().isEmpty()) {
+            targetDeviceName = prefName.trim();
+        }
     }
 
     private boolean scanning;
@@ -163,6 +176,7 @@ public class BLEService extends Service {
         if (!scanning && bluetoothAdapter != null && bluetoothAdapter.isEnabled() && bluetoothLeScanner != null) {
             Log.d(TAG, "Starting BLE scan.");
             scanning = true;
+            scanReschedulePending = false;
             bluetoothLeScanner.startScan(leScanCallback);
             handler.postDelayed(this::stopScan, SCAN_PERIOD);
         }
@@ -173,6 +187,11 @@ public class BLEService extends Service {
             Log.d(TAG, "Stopping BLE scan.");
             scanning = false;
             bluetoothLeScanner.stopScan(leScanCallback);
+        }
+
+        if (!bleConnectionStatus.equals("Connected") && !scanReschedulePending) {
+            scanReschedulePending = true;
+            handler.postDelayed(rescanRunnable, RE_SCAN_DELAY);
         }
     }
 
@@ -327,6 +346,13 @@ public class BLEService extends Service {
                         boolean notificationsEnabled = gatt.setCharacteristicNotification(cotCharacteristic, true);
                         if (notificationsEnabled) {
                             Log.i(TAG, "Enabled notifications for CoT characteristic.");
+                            BluetoothGattDescriptor cccd = cotCharacteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG);
+                            if (cccd != null) {
+                                cccd.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                                gatt.writeDescriptor(cccd);
+                            } else {
+                                Log.w(TAG, "CCCD descriptor not found for CoT characteristic");
+                            }
                         } else {
                             // Notification enable failure handling
                         }
@@ -417,7 +443,10 @@ public class BLEService extends Service {
             if (cotPoint == null) return;
 
             final String uid = cotPoint.getUid();
-            final String callsign = cotPoint.getDetail().get("contact").get("callsign");
+            String callsign = null;
+            if (cotPoint.getDetail() != null && cotPoint.getDetail().get("contact") != null) {
+                callsign = cotPoint.getDetail().get("contact").get("callsign");
+            }
             final Point2 geoPoint = new Point2(cotPoint.getLongitude(), cotPoint.getLatitude());
 
             if (uid == null) return;

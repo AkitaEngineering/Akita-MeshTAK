@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <ListPreference
+        android:key="connection_method"
+        android:title="@string/connection_method_title"
+        android:entries="@array/connection_method_entries"
+        android:entryValues="@array/connection_method_values"
+        android:defaultValue="ble" />
+
+    <EditTextPreference
+        android:key="ble_device_name"
+        android:title="@string/ble_device_name_title"
+        android:defaultValue="AkitaNode01" />
+
+    <EditTextPreference
+        android:key="serial_port_path"
+        android:title="@string/serial_port_path_title"
+        android:defaultValue="/dev/ttyUSB0" />
+
+    <EditTextPreference
+        android:key="serial_baud_rate"
+        android:title="@string/serial_baud_rate_title"
+        android:defaultValue="115200" />
+
+    <Preference
+        android:key="send_test_message"
+        android:title="@string/send_test_message_title" />
+
+</PreferenceScreen>
