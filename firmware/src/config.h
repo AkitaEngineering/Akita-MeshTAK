@@ -10,6 +10,13 @@
 // --- Device Identification ---
 #define DEVICE_ID "AkitaNode01"
 
+// --- Security Provisioning ---
+// Replace this secret during provisioning. Keep firmware/plugin values aligned.
+#define PROVISIONING_SECRET "REPLACE_WITH_DEPLOYMENT_SECRET"
+#define ENCRYPTED_PAYLOAD_PREFIX "ENC:"
+#define ENCRYPTED_PAYLOAD_VERSION "v1"
+#define ENCRYPTED_KEY_ID "k1"
+
 // --- LoRa Configuration ---
 #define LORA_REGION EU868
 

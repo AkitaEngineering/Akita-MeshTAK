@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.nio.charset.StandardCharsets;
 
 public class SerialService extends Service implements SerialInputOutputManager.Listener {
 
@@ -118,23 +119,26 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     @Override
     public void onCreate() {
         super.onCreate();
+
+        loadPreferences();
         
         // Initialize security and audit logging
         securityManager = SecurityManager.getInstance();
         auditLogger = AuditLogger.getInstance();
         auditLogger.initialize(getApplicationContext());
         
-        // Generate keys if not already initialized (in production, use secure provisioning)
+        // Initialize deterministic keys from provisioning material.
         if (!securityManager.isInitialized()) {
-            if (!securityManager.generateKeys()) {
+            String deviceId = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                    .getString("ble_device_name", "AkitaNode01");
+            if (!securityManager.initializeFromProvisioning(deviceId, Config.PROVISIONING_SECRET)) {
                 Log.e(TAG, "Failed to initialize security manager");
                 auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
                                "SerialService", "Security initialization failed", false);
             } else {
                 auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
                                "SerialService", "Security initialized", true);
-                // Leave encryption disabled by default to maintain compatibility until a secure handshake is implemented
-                securityManager.setEncryptionEnabled(false);
+                securityManager.setEncryptionEnabled(true);
             }
         }
         
@@ -142,7 +146,6 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(usbReceiver, filter);
-        loadPreferences();
         findAndOpenHeltecSerialPortWithRetry();
         handler.post(healthCheckRunnable);
         
@@ -169,8 +172,14 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     
     private void loadPreferences() {
         // Loads baud rate from preferences, needed before connection attempts
-        baudRate = Integer.parseInt(androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-                .getString("serial_baud_rate", "115200"));
+        String configuredBaud = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .getString("serial_baud_rate", "115200");
+        try {
+            baudRate = Integer.parseInt(configuredBaud);
+        } catch (NumberFormatException e) {
+            Log.w(TAG, "Invalid serial_baud_rate preference: " + configuredBaud + ", falling back to 115200");
+            baudRate = 115200;
+        }
         Log.i(TAG, "Using baud rate: " + baudRate);
     }
     
@@ -320,22 +329,16 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             return;
         }
         
-        // Optional: Decrypt if security is enabled; default is plaintext for compatibility
-        byte[] dataToProcess = data;
-        if (securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
-            byte[] decrypted = securityManager.decrypt(data);
-            if (decrypted != null) {
-                dataToProcess = decrypted;
-            } else {
-                Log.w(TAG, "Decryption failed, processing as plaintext");
-                if (auditLogger != null) {
-                    auditLogger.log(AuditLogger.EventType.AUTHENTICATION_FAILURE, AuditLogger.Severity.WARNING,
-                                   "Serial", "Decryption failed", false);
-                }
+        String received = new String(data, StandardCharsets.UTF_8);
+        String decodedPayload = decodePayload(received.trim());
+        if (decodedPayload == null) {
+            if (auditLogger != null) {
+                auditLogger.log(AuditLogger.EventType.AUTHENTICATION_FAILURE, AuditLogger.Severity.WARNING,
+                               "Serial", "Failed to decode encrypted payload", false);
             }
+            return;
         }
-        
-        String received = new String(dataToProcess);
+
         Log.i(TAG, "Received from serial: " + received.trim());
         
         // Audit log data reception
@@ -344,7 +347,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                            "Serial", "Data received, len: " + data.length, true);
         }
         
-        processCotData(received.trim());
+        processCotData(decodedPayload);
     }
 
     // --- Data Processing (Robustness Fix) ---
@@ -431,11 +434,12 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         // Optional: Encrypt data if security is enabled; default is plaintext for compatibility
         byte[] dataToSend = data;
         if (securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
-            byte[] encrypted = securityManager.encrypt(data);
-            if (encrypted != null) {
-                dataToSend = encrypted;
+            String encryptedEnvelope = encodeEncryptedPayload(data);
+            if (encryptedEnvelope != null) {
+                dataToSend = encryptedEnvelope.getBytes(StandardCharsets.UTF_8);
             } else {
-                Log.w(TAG, "Encryption failed, sending plaintext");
+                Log.w(TAG, "Encryption failed, aborting send");
+                return;
             }
         }
         
@@ -463,11 +467,76 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     }
     
     // --- Setter/Getter Interface ---
-    public class AppBinder extends Binder {
+    public class LocalBinder extends Binder {
         public SerialService getService() { return SerialService.this; }
     }
     public void setAkitaToolbar(AkitaToolbar toolbar) { this.akitaToolbar = toolbar; }
     public void setSerialStatusListener(SerialStatusListener listener) { this.serialStatusListener = listener; }
     public String getConnectionStatus() { return serialConnectionStatus; }
     public void setMapView(MapView view) { this.mapView = view; }
+
+    private String encodeEncryptedPayload(byte[] plaintext) {
+        if (securityManager == null || !securityManager.isInitialized()) {
+            return null;
+        }
+        byte[] encrypted = securityManager.encrypt(plaintext);
+        if (encrypted == null || encrypted.length == 0) {
+            return null;
+        }
+
+        StringBuilder hex = new StringBuilder(encrypted.length * 2);
+        for (byte b : encrypted) {
+            hex.append(String.format("%02x", b & 0xFF));
+        }
+        return Config.ENCRYPTED_PAYLOAD_PREFIX + Config.ENCRYPTED_PAYLOAD_VERSION + ":" +
+            Config.ENCRYPTED_KEY_ID + ":" + hex;
+    }
+
+    private String decodePayload(String payload) {
+        if (payload == null || payload.isEmpty()) {
+            return null;
+        }
+
+        if (!payload.startsWith(Config.ENCRYPTED_PAYLOAD_PREFIX)) {
+            return payload;
+        }
+
+        if (securityManager == null || !securityManager.isInitialized() || !securityManager.isEncryptionEnabled()) {
+            return null;
+        }
+
+        String headerAndHex = payload.substring(Config.ENCRYPTED_PAYLOAD_PREFIX.length());
+        int firstSep = headerAndHex.indexOf(':');
+        int secondSep = headerAndHex.indexOf(':', firstSep + 1);
+        if (firstSep <= 0 || secondSep <= firstSep + 1) {
+            return null;
+        }
+
+        String version = headerAndHex.substring(0, firstSep);
+        String keyId = headerAndHex.substring(firstSep + 1, secondSep);
+        if (!Config.ENCRYPTED_PAYLOAD_VERSION.equals(version) || !Config.ENCRYPTED_KEY_ID.equals(keyId)) {
+            return null;
+        }
+
+        String hex = headerAndHex.substring(secondSep + 1);
+        if ((hex.length() % 2) != 0) {
+            return null;
+        }
+
+        byte[] encrypted = new byte[hex.length() / 2];
+        for (int i = 0; i < encrypted.length; i++) {
+            int idx = i * 2;
+            try {
+                encrypted[i] = (byte) Integer.parseInt(hex.substring(idx, idx + 2), 16);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+
+        byte[] decrypted = securityManager.decrypt(encrypted);
+        if (decrypted == null) {
+            return null;
+        }
+        return new String(decrypted, StandardCharsets.UTF_8).trim();
+    }
 }

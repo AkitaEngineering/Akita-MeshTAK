@@ -12,6 +12,20 @@ import java.util.UUID;
  */
 public final class Config {
 
+    // --- Security Provisioning ---
+
+    /** Replace with deployment-specific shared secret. Must match firmware PROVISIONING_SECRET. */
+    public static final String PROVISIONING_SECRET = "REPLACE_WITH_DEPLOYMENT_SECRET";
+
+    /** Prefix for encrypted payload envelopes exchanged over BLE/Serial. */
+    public static final String ENCRYPTED_PAYLOAD_PREFIX = "ENC:";
+
+    /** Envelope protocol version used for encrypted payloads. */
+    public static final String ENCRYPTED_PAYLOAD_VERSION = "v1";
+
+    /** Active key identifier for payload encryption; rotate on reprovisioning. */
+    public static final String ENCRYPTED_KEY_ID = "k1";
+
     // --- BLE (Bluetooth Low Energy) Configuration ---
     
     /** UUID of the primary BLE Service provided by the Akita MeshTAK firmware. (REPLACE ME) */

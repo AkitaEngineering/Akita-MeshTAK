@@ -8,10 +8,11 @@ import android.util.Log;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
@@ -20,10 +21,11 @@ import java.util.Arrays;
  */
 public class SecurityManager {
     private static final String TAG = "SecurityManager";
-    private static final String AES_ALGORITHM = "AES/CBC/PKCS5Padding";
+    private static final String AES_ALGORITHM = "AES/GCM/NoPadding";
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final int AES_KEY_SIZE = 256;
-    private static final int IV_SIZE = 16;
+    private static final int IV_SIZE = 12;
+    private static final int GCM_TAG_BITS = 128;
     private static final int HMAC_SIZE = 32;
     
     private SecretKey aesKey;
@@ -100,9 +102,34 @@ public class SecurityManager {
             return false;
         }
     }
+
+    /**
+     * Derive deterministic AES/HMAC keys from provisioning material.
+     */
+    public boolean initializeFromProvisioning(String deviceId, String sharedSecret) {
+        if (deviceId == null || deviceId.isEmpty() || sharedSecret == null || sharedSecret.isEmpty()) {
+            Log.e(TAG, "Provisioning material is missing");
+            return false;
+        }
+
+        try {
+            byte[] aesKeyBytes = deriveKeyMaterial(deviceId, sharedSecret, "aes");
+            byte[] hmacKeyBytes = deriveKeyMaterial(deviceId, sharedSecret, "hmac");
+            return initialize(aesKeyBytes, hmacKeyBytes);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize keys from provisioning", e);
+            return false;
+        }
+    }
+
+    private byte[] deriveKeyMaterial(String deviceId, String sharedSecret, String purpose) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        String input = sharedSecret + ":" + deviceId + ":" + purpose;
+        return digest.digest(input.getBytes(StandardCharsets.UTF_8));
+    }
     
     /**
-     * Encrypt data with AES-256-CBC.
+     * Encrypt data with AES-256-GCM.
      */
     public byte[] encrypt(byte[] plaintext) {
         if (!initialized || plaintext == null) {
@@ -117,10 +144,13 @@ public class SecurityManager {
         }
         
         try {
+            byte[] iv = new byte[IV_SIZE];
+            new SecureRandom().nextBytes(iv);
+
             Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
-            cipher.init(Cipher.ENCRYPT_MODE, aesKey);
-            
-            byte[] iv = cipher.getIV();
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_BITS, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, aesKey, gcmSpec);
+
             byte[] ciphertext = cipher.doFinal(plaintext);
             
             // Prepend IV to ciphertext
@@ -137,7 +167,7 @@ public class SecurityManager {
     }
     
     /**
-     * Decrypt data with AES-256-CBC.
+     * Decrypt data with AES-256-GCM.
      */
     public byte[] decrypt(byte[] ciphertext) {
         if (!initialized || ciphertext == null || ciphertext.length < IV_SIZE) {
@@ -157,7 +187,8 @@ public class SecurityManager {
             byte[] encryptedData = Arrays.copyOfRange(ciphertext, IV_SIZE, ciphertext.length);
             
             Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
-            cipher.init(Cipher.DECRYPT_MODE, aesKey, new IvParameterSpec(iv));
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_BITS, iv);
+            cipher.init(Cipher.DECRYPT_MODE, aesKey, gcmSpec);
             
             byte[] plaintext = cipher.doFinal(encryptedData);
             messagesDecrypted++;

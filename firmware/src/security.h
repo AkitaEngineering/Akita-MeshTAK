@@ -6,14 +6,15 @@
 #define SECURITY_H
 
 #include <Arduino.h>
-#include <mbedtls/aes.h>
+#include <mbedtls/gcm.h>
 #include <mbedtls/sha256.h>
 #include <mbedtls/md.h>
 
 // Security configuration
 #define AES_KEY_SIZE 32          // 256-bit AES key
 #define HMAC_KEY_SIZE 32         // 256-bit HMAC key
-#define IV_SIZE 16               // AES IV size
+#define IV_SIZE 12               // AES-GCM nonce size
+#define GCM_TAG_SIZE 16          // AES-GCM authentication tag size
 #define MAX_MESSAGE_SIZE 512     // Maximum encrypted message size
 #define AUTH_TOKEN_SIZE 16       // Authentication token size
 
@@ -37,13 +38,13 @@ typedef struct {
 // Keys should be provisioned securely during device setup
 bool initSecurity(const uint8_t* aes_key, const uint8_t* hmac_key, uint8_t security_mode);
 
-// Encrypt data with AES-256-CBC
+// Encrypt data with AES-256-GCM
 // Returns encrypted data length, or 0 on error
 size_t encryptData(const uint8_t* plaintext, size_t plaintext_len, 
                    uint8_t* ciphertext, size_t ciphertext_max_len,
                    uint8_t* iv_out);
 
-// Decrypt data with AES-256-CBC
+// Decrypt data with AES-256-GCM
 // Returns decrypted data length, or 0 on error
 size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
                    const uint8_t* iv, uint8_t* plaintext, size_t plaintext_max_len);

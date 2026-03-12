@@ -36,8 +36,8 @@ public class VersionManager {
         int maxLength = Math.max(parts1.length, parts2.length);
         
         for (int i = 0; i < maxLength; i++) {
-            int part1 = (i < parts1.length) ? Integer.parseInt(parts1[i]) : 0;
-            int part2 = (i < parts2.length) ? Integer.parseInt(parts2[i]) : 0;
+            int part1 = (i < parts1.length) ? parseVersionPart(parts1[i]) : 0;
+            int part2 = (i < parts2.length) ? parseVersionPart(parts2[i]) : 0;
             
             if (part1 < part2) {
                 return -1;
@@ -47,6 +47,18 @@ public class VersionManager {
         }
         
         return 0;
+    }
+
+    private static int parseVersionPart(String part) {
+        if (part == null) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(part.trim());
+        } catch (NumberFormatException e) {
+            Log.w(TAG, "Invalid version segment: " + part + ", treating as 0");
+            return 0;
+        }
     }
     
     /**

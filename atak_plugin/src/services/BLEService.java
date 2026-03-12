@@ -26,6 +26,7 @@ import com.akitaengineering.meshtak.SecurityManager;
 
 import java.util.UUID;
 import java.lang.Math;
+import java.nio.charset.StandardCharsets;
 
 public class BLEService extends Service {
 
@@ -90,28 +91,28 @@ public class BLEService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+
+        loadPreferences();
         
         // Initialize security and audit logging
         securityManager = SecurityManager.getInstance();
         auditLogger = AuditLogger.getInstance();
         auditLogger.initialize(getApplicationContext());
         
-        // Generate keys if not already initialized (in production, use secure provisioning)
+        // Initialize deterministic keys from provisioning material.
         if (!securityManager.isInitialized()) {
-            if (!securityManager.generateKeys()) {
+            if (!securityManager.initializeFromProvisioning(targetDeviceName, Config.PROVISIONING_SECRET)) {
                 Log.e(TAG, "Failed to initialize security manager");
                 auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
                                "BLEService", "Security initialization failed", false);
             } else {
                 auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
                                "BLEService", "Security initialized", true);
-                // Leave encryption disabled by default to maintain compatibility until a secure handshake is implemented
-                securityManager.setEncryptionEnabled(false);
+                securityManager.setEncryptionEnabled(true);
             }
         }
         
         initialize();
-        loadPreferences();
         startScan();
         handler.post(healthCheckRunnable);
         
@@ -376,20 +377,15 @@ public class BLEService extends Service {
             if (rawData == null || rawData.length == 0) {
                 return;
             }
-            
-            // Optional: Decrypt if security is enabled; default is plaintext for compatibility
-            byte[] dataToProcess = rawData;
-            if (securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
-                byte[] decrypted = securityManager.decrypt(rawData);
-                if (decrypted != null) {
-                    dataToProcess = decrypted;
-                } else {
-                    Log.w(TAG, "Decryption failed, processing as plaintext");
-                    if (auditLogger != null) {
-                        auditLogger.log(AuditLogger.EventType.AUTHENTICATION_FAILURE, AuditLogger.Severity.WARNING,
-                                       "BLE", "Decryption failed", false);
-                    }
+
+            String payload = new String(rawData, StandardCharsets.UTF_8).trim();
+            String decodedPayload = decodePayload(payload);
+            if (decodedPayload == null) {
+                if (auditLogger != null) {
+                    auditLogger.log(AuditLogger.EventType.AUTHENTICATION_FAILURE, AuditLogger.Severity.WARNING,
+                                   "BLE", "Failed to decode encrypted payload", false);
                 }
+                return;
             }
             
             // Audit log data reception
@@ -398,7 +394,7 @@ public class BLEService extends Service {
                                "BLE", "Data received, len: " + rawData.length, true);
             }
             
-            processCotData(new String(dataToProcess));
+            processCotData(decodedPayload);
         }
 
         @Override public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {}
@@ -500,11 +496,12 @@ public class BLEService extends Service {
       // Optional: Encrypt data if security is enabled; default is plaintext for compatibility
       byte[] dataToSend = data;
       if (securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
-          byte[] encrypted = securityManager.encrypt(data);
-          if (encrypted != null) {
-              dataToSend = encrypted;
+          String encryptedEnvelope = encodeEncryptedPayload(data);
+          if (encryptedEnvelope != null) {
+              dataToSend = encryptedEnvelope.getBytes(StandardCharsets.UTF_8);
           } else {
-              Log.w(TAG, "Encryption failed, sending plaintext");
+              Log.w(TAG, "Encryption failed, aborting send");
+              return;
           }
       }
       
@@ -543,4 +540,69 @@ public class BLEService extends Service {
     public String getConnectedDeviceAddress() { return bluetoothDeviceAddress; }
     public void setMapView(MapView view) { this.mapView = view; }
     public void setTargetDeviceName(String name) { this.targetDeviceName = name; }
+
+    private String encodeEncryptedPayload(byte[] plaintext) {
+        if (securityManager == null || !securityManager.isInitialized()) {
+            return null;
+        }
+        byte[] encrypted = securityManager.encrypt(plaintext);
+        if (encrypted == null || encrypted.length == 0) {
+            return null;
+        }
+
+        StringBuilder hex = new StringBuilder(encrypted.length * 2);
+        for (byte b : encrypted) {
+            hex.append(String.format("%02x", b & 0xFF));
+        }
+        return Config.ENCRYPTED_PAYLOAD_PREFIX + Config.ENCRYPTED_PAYLOAD_VERSION + ":" +
+            Config.ENCRYPTED_KEY_ID + ":" + hex;
+    }
+
+    private String decodePayload(String payload) {
+        if (payload == null || payload.isEmpty()) {
+            return null;
+        }
+
+        if (!payload.startsWith(Config.ENCRYPTED_PAYLOAD_PREFIX)) {
+            return payload;
+        }
+
+        if (securityManager == null || !securityManager.isInitialized() || !securityManager.isEncryptionEnabled()) {
+            return null;
+        }
+
+        String headerAndHex = payload.substring(Config.ENCRYPTED_PAYLOAD_PREFIX.length());
+        int firstSep = headerAndHex.indexOf(':');
+        int secondSep = headerAndHex.indexOf(':', firstSep + 1);
+        if (firstSep <= 0 || secondSep <= firstSep + 1) {
+            return null;
+        }
+
+        String version = headerAndHex.substring(0, firstSep);
+        String keyId = headerAndHex.substring(firstSep + 1, secondSep);
+        if (!Config.ENCRYPTED_PAYLOAD_VERSION.equals(version) || !Config.ENCRYPTED_KEY_ID.equals(keyId)) {
+            return null;
+        }
+
+        String hex = headerAndHex.substring(secondSep + 1);
+        if ((hex.length() % 2) != 0) {
+            return null;
+        }
+
+        byte[] encrypted = new byte[hex.length() / 2];
+        for (int i = 0; i < encrypted.length; i++) {
+            int idx = i * 2;
+            try {
+                encrypted[i] = (byte) Integer.parseInt(hex.substring(idx, idx + 2), 16);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+
+        byte[] decrypted = securityManager.decrypt(encrypted);
+        if (decrypted == null) {
+            return null;
+        }
+        return new String(decrypted, StandardCharsets.UTF_8).trim();
+    }
 }

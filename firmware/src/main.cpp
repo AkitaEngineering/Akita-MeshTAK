@@ -10,9 +10,18 @@
 #include "display_handler.h"
 #include "audit_log.h"        // For audit logging
 #include "security.h"         // For security initialization
+#include <mbedtls/sha256.h>
+#include <string.h>
 
 void setupConfig() {
     // Placeholder function for config setup (data is read from config.h)
+}
+
+static void deriveProvisionedKey(const char* purpose, uint8_t* outKey, size_t outLen) {
+  String material = String(PROVISIONING_SECRET) + ":" + String(DEVICE_ID) + ":" + String(purpose);
+  uint8_t hash[32] = {0};
+  mbedtls_sha256(reinterpret_cast<const unsigned char*>(material.c_str()), material.length(), hash, 0);
+  memcpy(outKey, hash, outLen);
 }
 
 void setup() {
@@ -27,18 +36,11 @@ void setup() {
     Serial.println("WARNING: Audit log initialization failed.");
   }
   
-  // Initialize security (keys should be provisioned securely - NOT hardcoded!)
-  // NOTE: Keys are generated at startup unless provisioned by a secure process.
-  uint8_t default_aes_key[AES_KEY_SIZE] = {0}; // MUST be replaced with secure keys!
-  uint8_t default_hmac_key[HMAC_KEY_SIZE] = {0}; // MUST be replaced with secure keys!
-  
-  // For now, generate random keys (in production, use secure provisioning)
-  for (int i = 0; i < AES_KEY_SIZE; i++) {
-    default_aes_key[i] = (uint8_t)esp_random();
-  }
-  for (int i = 0; i < HMAC_KEY_SIZE; i++) {
-    default_hmac_key[i] = (uint8_t)esp_random();
-  }
+  // Initialize security from deterministic provisioning material.
+  uint8_t default_aes_key[AES_KEY_SIZE] = {0};
+  uint8_t default_hmac_key[HMAC_KEY_SIZE] = {0};
+  deriveProvisionedKey("aes", default_aes_key, AES_KEY_SIZE);
+  deriveProvisionedKey("hmac", default_hmac_key, HMAC_KEY_SIZE);
   
   if (!initSecurity(default_aes_key, default_hmac_key, SECURITY_MODE_AES256_HMAC)) {
     Serial.println("WARNING: Security initialization failed.");

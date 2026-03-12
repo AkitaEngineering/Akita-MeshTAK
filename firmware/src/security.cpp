@@ -42,44 +42,37 @@ size_t encryptData(const uint8_t* plaintext, size_t plaintext_len,
         return 0;
     }
     
-    if (plaintext_len == 0 || ciphertext_max_len < plaintext_len + IV_SIZE + 16) {
-        return 0; // Need space for IV and padding
+    if (plaintext_len == 0 || iv_out == nullptr || ciphertext_max_len < plaintext_len + GCM_TAG_SIZE) {
+        return 0;
     }
     
     // Generate random IV
     secureRandom(iv_out, IV_SIZE);
     memcpy(g_iv, iv_out, IV_SIZE);
     
-    // Initialize AES context
-    mbedtls_aes_context aes;
-    mbedtls_aes_init(&aes);
-    
-    // Set encryption key
-    if (mbedtls_aes_setkey_enc(&aes, g_aes_key, 256) != 0) {
-        mbedtls_aes_free(&aes);
+    mbedtls_gcm_context gcm;
+    mbedtls_gcm_init(&gcm);
+
+    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, g_aes_key, 256) != 0) {
+        mbedtls_gcm_free(&gcm);
         return 0;
     }
-    
-    // Calculate padding
-    size_t padding = 16 - (plaintext_len % 16);
-    size_t padded_len = plaintext_len + padding;
-    
-    // Prepare padded plaintext
-    uint8_t padded_plaintext[padded_len];
-    memcpy(padded_plaintext, plaintext, plaintext_len);
-    memset(padded_plaintext + plaintext_len, padding, padding);
-    
-    // Encrypt
-    if (mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, padded_len, 
-                               g_iv, padded_plaintext, ciphertext) != 0) {
-        mbedtls_aes_free(&aes);
+
+    uint8_t tag[GCM_TAG_SIZE] = {0};
+    if (mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, plaintext_len,
+                                  g_iv, IV_SIZE,
+                                  nullptr, 0,
+                                  plaintext, ciphertext,
+                                  GCM_TAG_SIZE, tag) != 0) {
+        mbedtls_gcm_free(&gcm);
         return 0;
     }
-    
-    mbedtls_aes_free(&aes);
+
+    memcpy(ciphertext + plaintext_len, tag, GCM_TAG_SIZE);
+    mbedtls_gcm_free(&gcm);
     g_security_status.messages_encrypted++;
     
-    return padded_len;
+    return plaintext_len + GCM_TAG_SIZE;
 }
 
 size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
@@ -88,45 +81,35 @@ size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
         return 0;
     }
     
-    if (ciphertext_len == 0 || ciphertext_len % 16 != 0 || plaintext_max_len < ciphertext_len) {
+    if (ciphertext_len <= GCM_TAG_SIZE || plaintext_max_len < (ciphertext_len - GCM_TAG_SIZE)) {
         return 0;
     }
-    
-    // Initialize AES context
-    mbedtls_aes_context aes;
-    mbedtls_aes_init(&aes);
-    
-    // Set decryption key
-    if (mbedtls_aes_setkey_dec(&aes, g_aes_key, 256) != 0) {
-        mbedtls_aes_free(&aes);
+
+    mbedtls_gcm_context gcm;
+    mbedtls_gcm_init(&gcm);
+
+    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, g_aes_key, 256) != 0) {
+        mbedtls_gcm_free(&gcm);
         return 0;
     }
-    
-    // Copy IV
-    uint8_t iv_copy[IV_SIZE];
-    memcpy(iv_copy, iv, IV_SIZE);
-    
-    // Decrypt
-    if (mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, ciphertext_len,
-                               iv_copy, ciphertext, plaintext) != 0) {
-        mbedtls_aes_free(&aes);
+
+    size_t dataLen = ciphertext_len - GCM_TAG_SIZE;
+    const uint8_t* tag = ciphertext + dataLen;
+
+    if (mbedtls_gcm_auth_decrypt(&gcm, dataLen,
+                                 iv, IV_SIZE,
+                                 nullptr, 0,
+                                 tag, GCM_TAG_SIZE,
+                                 ciphertext, plaintext) != 0) {
+        mbedtls_gcm_free(&gcm);
         g_security_status.auth_failures++;
         return 0;
     }
-    
-    // Remove padding
-    uint8_t padding = plaintext[ciphertext_len - 1];
-    if (padding > 16 || padding == 0) {
-        mbedtls_aes_free(&aes);
-        g_security_status.integrity_failures++;
-        return 0;
-    }
-    
-    size_t plaintext_len = ciphertext_len - padding;
-    mbedtls_aes_free(&aes);
+
+    mbedtls_gcm_free(&gcm);
     g_security_status.messages_decrypted++;
     
-    return plaintext_len;
+    return dataLen;
 }
 
 void generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out) {
