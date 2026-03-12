@@ -316,9 +316,11 @@ This specification is organized into functional areas:
 **REQUIREMENT SEC-ENC-001**: The system SHALL encrypt all sensitive communications.
 
 **Specifications**:
-- Algorithm: AES-256-CBC
+- Algorithm: AES-256-GCM
 - Key Size: 256 bits
-- IV: 128 bits (random per message)
+- Nonce: 96 bits (random per message)
+- Authentication Tag: 128 bits
+- Envelope Format: `ENC:<version>:<key-id>:<hex-payload>`
 - Key Storage: Secure storage (Android Keystore, ESP32 NVS)
 
 **Compliance**: Implemented in SecurityManager.java and security.cpp.
@@ -340,9 +342,8 @@ This specification is organized into functional areas:
 **REQUIREMENT SEC-INT-001**: The system SHALL verify message integrity.
 
 **Specifications**:
-- Algorithm: HMAC-SHA256
-- Key Size: 256 bits
-- Output Size: 256 bits
+- Algorithm: AES-GCM authentication tag validation (AEAD)
+- Tag Size: 128 bits
 - Verification: Required for all messages
 - Failure Handling: Message rejected, event logged
 
@@ -592,7 +593,7 @@ This specification is organized into functional areas:
 - NIST SP 800-175B: Guideline for Using Cryptographic Standards
 - AES-256: FIPS 197 approved
 
-**Compliance**: AES-256-CBC implementation.
+**Compliance**: AES-256-GCM implementation with versioned envelope metadata.
 
 #### 10.1.2 Security Controls
 **REQUIREMENT COMPL-SEC-002**: The system SHALL implement security controls.

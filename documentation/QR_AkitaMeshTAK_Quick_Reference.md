@@ -94,6 +94,15 @@
 
 ---
 
+## SECURITY QUICK CHECK
+
+- ☐ Confirm secure provisioning secret is configured for this deployment
+- ☐ Confirm firmware/plugin encrypted metadata match (`v1`, `k1`)
+- ☐ Confirm encrypted transport operational (envelope format: `ENC:v1:k1:<hex>`)
+- ☐ If encrypted payloads are rejected, verify version/key-id alignment before field use
+
+---
+
 ## CONTACT INFORMATION
 
 **Support**: support@akitaengineering.com  

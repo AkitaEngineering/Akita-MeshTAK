@@ -170,14 +170,16 @@ The Akita MeshTAK System is a secure communication and situational awareness pla
 ### 3.4 Security Architecture
 
 #### 3.4.1 Encryption
-- **Algorithm**: AES-256-CBC
+- **Algorithm**: AES-256-GCM
 - **Key Size**: 256 bits
-- **Initialization Vector**: 128 bits (random per message)
+- **Nonce**: 96 bits (random per message)
+- **Authentication Tag**: 128 bits
+- **Envelope Format**: `ENC:v1:k1:<hex>`
 
 #### 3.4.2 Integrity
-- **Algorithm**: HMAC-SHA256
-- **Key Size**: 256 bits
-- **Output Size**: 256 bits
+- **Transport Integrity**: AES-GCM authentication tag verification
+- **Tag Size**: 128 bits
+- **Additional Utility**: HMAC-SHA256 helper functions available for non-transport integrity workflows
 
 #### 3.4.3 Authentication
 - Device ID validation
@@ -270,16 +272,17 @@ The Akita MeshTAK System is a secure communication and situational awareness pla
 ### 4.3 Security Specifications
 
 #### 4.3.1 Encryption Specifications
-- **Algorithm**: AES-256-CBC
-- **Key Derivation**: Secure random generation
+- **Algorithm**: AES-256-GCM
+- **Key Derivation**: Deterministic derivation from provisioning secret + device identity metadata
 - **Key Storage**: Secure storage required (Android Keystore, ESP32 NVS)
 - **Key Rotation**: Recommended every 90 days
-- **IV Generation**: Cryptographically secure random
+- **Nonce Generation**: Cryptographically secure random (96-bit)
+- **Envelope Metadata**: Version (`v1`) and key-id (`k1`) included in encrypted payload header
 
 #### 4.3.2 Integrity Specifications
-- **Algorithm**: HMAC-SHA256
-- **Key Size**: 256 bits
-- **Verification**: Required for all messages
+- **Primary Algorithm**: AES-GCM authentication tag verification
+- **Tag Size**: 128 bits
+- **Verification**: Required for encrypted transport messages
 - **Failure Handling**: Message rejected, event logged
 
 #### 4.3.3 Audit Log Specifications
@@ -475,25 +478,25 @@ Configure via ATAK settings:
 **WARNING**: Keys must be provisioned securely. Never hardcode keys in source code.
 
 **Firmware**:
-1. Generate secure keys using cryptographically secure random number generator
+1. Configure deployment provisioning secret and active key-id metadata
 2. Store keys in ESP32 NVS (Non-Volatile Storage) with encryption
 3. Implement key rotation policy (recommended: 90 days)
 
 **Android Plugin**:
-1. Generate secure keys using Android KeyGenerator
+1. Use matching provisioning secret and key-id metadata
 2. Store keys in Android Keystore
 3. Implement key rotation policy
 
 **Encryption Activation (Current Behavior)**:
-- Default: Encryption is **disabled** to preserve compatibility until a secure handshake/key exchange exists.
-- Enable only after keys are provisioned and an exchange method is established.
-- When disabled: traffic is plaintext; when enabled: BLE/Serial are encrypted/decrypted with provisioned keys.
+- Default: Encryption is enabled when provisioning metadata is valid.
+- Firmware and plugin must share matching provisioning secret, envelope version, and key-id.
+- Encrypted payloads with unknown version/key-id are rejected and logged.
 
 #### 6.3.2 Encryption Configuration
-- **Algorithm**: AES-256-CBC (default)
+- **Algorithm**: AES-256-GCM (default)
 - **Mode**: SECURITY_MODE_AES256_HMAC (recommended)
 - **Key Size**: 256 bits
-- **HMAC Key Size**: 256 bits
+- **Tag Size**: 128 bits
 
 #### 6.3.3 Audit Log Configuration
 - **Firmware**: 1000 entries (fixed)
@@ -711,13 +714,15 @@ Maintain maintenance log with:
 **Possible Causes**:
 1. Encryption keys mismatch
 2. Key corruption
-3. IV generation failure
+3. Nonce generation failure
+4. Envelope version/key-id mismatch
 
 **Corrective Actions**:
 1. Verify keys match between devices
 2. Regenerate and provision new keys
 3. Check key storage integrity
-4. Review security configuration
+4. Verify envelope metadata (`v1`, `k1`) matches on firmware and plugin
+5. Review security configuration
 
 #### 9.3.2 Integrity Failures
 **Symptoms**: Audit log shows integrity failures

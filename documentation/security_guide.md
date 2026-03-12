@@ -8,14 +8,15 @@ This document outlines the security features implemented in Akita MeshTAK for mi
 ## Security Features
 
 ### 1. Encryption
-- **AES-256-CBC Encryption**: All sensitive communications are encrypted using AES-256
-- **HMAC-SHA256**: Message integrity verification using HMAC-SHA256
+- **AES-256-GCM Encryption**: Sensitive BLE/Serial communications are encrypted using authenticated encryption
+- **Authenticated Integrity**: AES-GCM authentication tag verification is required during decryption
 - **Secure Key Management**: Keys should be provisioned securely (NOT hardcoded)
+- **Versioned Envelope**: Encrypted payloads use `ENC:v1:k1:<hex>` format for protocol versioning and key-id rotation
 
 #### Encryption Activation (Current Behavior)
-- **Default State**: Encryption is **disabled by default** to maintain compatibility until a secure key exchange/handshake is in place.
-- **Enablement Requirement**: Turn on encryption only after provisioning matching keys on firmware and plugin and establishing a secure exchange procedure.
-- **Behavior**: When disabled, traffic is plaintext. When enabled, BLE/Serial paths encrypt/decrypt with configured keys.
+- **Default State**: Encryption is enabled by default when provisioning succeeds.
+- **Enablement Requirement**: Firmware and plugin must use matching provisioning secret, version, and key-id metadata.
+- **Behavior**: Encrypted traffic uses AES-GCM with per-message nonce and authentication tag; malformed or mismatched encrypted envelopes are rejected.
 
 #### Implementation
 - Firmware: `firmware/src/security.h` and `security.cpp`
@@ -27,7 +28,7 @@ This document outlines the security features implemented in Akita MeshTAK for mi
 - Implement key rotation policies
 - Never hardcode keys in source code
 - Use secure key exchange protocols
-- After provisioning, explicitly enable encryption in the plugin; otherwise, plaintext is used.
+- Rotate key-id values in controlled deployments (for example, `k1` -> `k2`) and update both firmware/plugin configuration together.
 
 ### 2. Input Validation
 - **Command Validation**: All incoming commands are validated before processing
@@ -61,8 +62,8 @@ This document outlines the security features implemented in Akita MeshTAK for mi
 - Errors
 
 ### 4. Message Integrity
-- **HMAC Verification**: All messages include HMAC for integrity checking
-- **Tamper Detection**: Invalid HMAC indicates tampering
+- **AEAD Verification**: AES-GCM tag verification provides built-in integrity protection
+- **Tamper Detection**: Invalid tags or malformed encrypted envelopes are rejected and logged
 - **Replay Protection**: Timestamps and nonces prevent replay attacks (to be enhanced)
 
 ### 5. Authentication
@@ -160,7 +161,7 @@ In `atak_plugin/src/com/akitaengineering/meshtak/Config.java`:
 The system logs the following as security violations:
 - Invalid command formats
 - Injection pattern detection
-- HMAC verification failures
+- AES-GCM authentication failures
 - Decryption failures
 - Unauthorized access attempts
 - Data length violations
@@ -204,8 +205,8 @@ If you discover a security vulnerability:
 ## Version History
 
 - **v0.2.0**: Initial security implementation
-  - AES-256 encryption
-  - HMAC integrity checking
+   - AES-256-GCM encrypted transport with authenticated integrity
+   - Versioned/key-id encrypted envelope format (`ENC:v1:k1:<hex>`)
   - Input validation
   - Audit logging
   - Error handling improvements

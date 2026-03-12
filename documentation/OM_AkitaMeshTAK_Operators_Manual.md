@@ -353,11 +353,12 @@ The Akita MeshTAK toolbar shows:
 - **Encryption Keys**: Never share encryption keys with unauthorized personnel
 - **Audit Logs**: Audit logs may contain sensitive information. Secure storage required.
 - **Device Security**: Secure devices physically. Report lost or stolen devices immediately.
-- **Encryption Default**: Encryption is off by default for compatibility. Enable only after keys are provisioned and a secure exchange method is in place; otherwise traffic is plaintext.
+- **Encryption Default**: Encrypted transport is enabled when provisioning metadata is configured correctly.
+- **Metadata Match Required**: Firmware and plugin must use matching provisioning secret and encrypted envelope metadata (`version`, `key-id`).
 
 #### CAUTIONS
 - **Network Security**: Be aware of network security implications
-- **Data Transmission**: Sensitive data may be transmitted. Verify encryption is enabled.
+- **Data Transmission**: Sensitive data is transmitted via AES-256-GCM envelopes (`ENC:v1:k1:<hex>`). If metadata mismatches, payloads are rejected.
 
 ### 7.3 Physical Safety
 

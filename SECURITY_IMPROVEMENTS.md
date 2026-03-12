@@ -10,8 +10,9 @@ This document summarizes the comprehensive security, accountability, encryption,
 ### 1. Encryption Layer ✅
 **Status**: Implemented
 
-- **AES-256-CBC Encryption**: Full encryption support for BLE and Serial communications
-- **HMAC-SHA256**: Message integrity verification
+- **AES-256-GCM Encryption**: Authenticated encryption for BLE and Serial communications
+- **Versioned Envelope**: `ENC:v1:k1:<hex>` transport format with protocol version and key-id metadata
+- **Authenticated Integrity**: AES-GCM authentication tag verification during decrypt
 - **Secure Key Management**: Framework for secure key provisioning
 - **Files Added**:
   - `firmware/src/security.h` / `security.cpp`
@@ -58,9 +59,9 @@ This document summarizes the comprehensive security, accountability, encryption,
 ### 4. Message Integrity & Authentication ✅
 **Status**: Implemented
 
-- **HMAC Verification**: All messages include HMAC for integrity
+- **GCM Tag Verification**: All encrypted messages require valid authentication tag
 - **Authentication Tokens**: Token-based authentication framework
-- **Tamper Detection**: Invalid HMAC indicates tampering
+- **Tamper Detection**: Invalid GCM tag indicates tampering
 - **Files Modified**:
   - Integrated into security modules
   - Used in BLE and Serial services
@@ -189,13 +190,13 @@ This document summarizes the comprehensive security, accountability, encryption,
 ## Security Considerations
 
 ### ⚠️ CRITICAL: Key Provisioning
-**Current Implementation**: Keys are generated randomly on first run.
+**Current Implementation**: Keys are deterministically derived from provisioning secret + device identity metadata.
 
 **Production Requirements**:
 1. Keys MUST be provisioned securely (not hardcoded)
 2. Use Android Keystore for Android
 3. Use ESP32 NVS with encryption for firmware
-4. Implement key rotation policies
+4. Implement key-id rotation policies (for example `k1` to `k2`) with coordinated firmware/plugin rollout
 5. Use secure key exchange protocols
 
 ### ⚠️ CRITICAL: Credential Storage
@@ -283,7 +284,7 @@ The system is designed to meet requirements for:
 
 ## Summary
 
-✅ **Encryption**: AES-256-CBC with HMAC-SHA256
+✅ **Encryption**: AES-256-GCM with authenticated integrity
 ✅ **Audit Logging**: Comprehensive event logging
 ✅ **Input Validation**: All inputs validated and sanitized
 ✅ **Error Handling**: Robust error recovery
@@ -296,6 +297,10 @@ The system is designed to meet requirements for:
 **Total Files Modified**: 10
 **Security Features Added**: 8 major features
 **Lines of Code Added**: ~3000+
+
+Protocol update note:
+- Encrypted transport format: `ENC:v1:k1:<hex>`
+- Crypto mode: AES-256-GCM (nonce + auth tag)
 
 ---
 
