@@ -3,8 +3,8 @@
 ## OPERATOR'S MANUAL
 
 **Document Number:** OM-AKITA-MESHTAK-001  
-**Revision:** 1.0  
-**Date:** 2025-12-31  
+**Revision:** 1.1  
+**Date:** 2026-03-12  
 **Classification:** UNCLASSIFIED  
 **Prepared By:** Akita Engineering  
 **Approved By:** [Approval Authority]
@@ -17,8 +17,8 @@
 |------|-------------|
 | Document Title | Akita MeshTAK System Operator's Manual |
 | Document Number | OM-AKITA-MESHTAK-001 |
-| Revision | 1.0 |
-| Date | 2025-01-XX |
+| Revision | 1.1 |
+| Date | 2026-03-12 |
 | Classification | UNCLASSIFIED |
 | Distribution | As Required |
 | Supersedes | None |
@@ -426,6 +426,7 @@ The Akita MeshTAK toolbar shows:
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
+| 1.1 | 2026-03-12 | Updated operator security guidance for AES-256-GCM, versioned encrypted envelopes, and key-id alignment checks | Akita Engineering |
 | 1.0 | 2025-12-31 | Initial release | Akita Engineering |
 
 ---

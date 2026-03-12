@@ -3,8 +3,8 @@
 ## QUICK REFERENCE CARD
 
 **Document Number:** QR-AKITA-MESHTAK-001  
-**Revision:** 1.0  
-**Date:** 2025-12-31  
+**Revision:** 1.1  
+**Date:** 2026-03-12  
 **Classification:** UNCLASSIFIED
 
 ---
@@ -114,7 +114,7 @@
 
 **Firmware**: 0.2.0  
 **Plugin**: 0.2.0  
-**Document**: QR-AKITA-MESHTAK-001 Rev 1.0
+**Document**: QR-AKITA-MESHTAK-001 Rev 1.1
 
 ---
 

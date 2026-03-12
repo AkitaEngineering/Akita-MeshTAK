@@ -3,8 +3,8 @@
 ## TECHNICAL MANUAL
 
 **Document Number:** TM-AKITA-MESHTAK-001  
-**Revision:** 1.0  
-**Date:** 2025-12-31  
+**Revision:** 1.1  
+**Date:** 2026-03-12  
 **Classification:** UNCLASSIFIED  
 **Prepared By:** Akita Engineering  
 **Approved By:** [Approval Authority]
@@ -17,8 +17,8 @@
 |------|-------------|
 | Document Title | Akita MeshTAK System Technical Manual |
 | Document Number | TM-AKITA-MESHTAK-001 |
-| Revision | 1.0 |
-| Date | 2025-01-XX |
+| Revision | 1.1 |
+| Date | 2026-03-12 |
 | Classification | UNCLASSIFIED |
 | Distribution | As Required |
 | Supersedes | None |
@@ -982,6 +982,7 @@ See Section 6 for configuration examples.
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
+| 1.1 | 2026-03-12 | Updated security architecture/specifications to AES-256-GCM and versioned key-id encrypted envelope model | Akita Engineering |
 | 1.0 | 2025-12-31 | Initial release | Akita Engineering |
 
 ---
