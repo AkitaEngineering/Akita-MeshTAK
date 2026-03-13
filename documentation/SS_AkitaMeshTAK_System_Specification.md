@@ -3,8 +3,8 @@
 ## SYSTEM SPECIFICATION
 
 **Document Number:** SS-AKITA-MESHTAK-001  
-**Revision:** 1.1  
-**Date:** 2026-03-12  
+**Revision:** 1.2  
+**Date:** 2026-03-13  
 **Classification:** UNCLASSIFIED  
 **Prepared By:** Akita Engineering  
 **Approved By:** [Approval Authority]
@@ -17,8 +17,8 @@
 |------|-------------|
 | Document Title | Akita MeshTAK System Specification |
 | Document Number | SS-AKITA-MESHTAK-001 |
-| Revision | 1.1 |
-| Date | 2026-03-12 |
+| Revision | 1.2 |
+| Date | 2026-03-13 |
 | Classification | UNCLASSIFIED |
 | Distribution | As Required |
 | Supersedes | None |
@@ -92,7 +92,7 @@ This specification is organized into functional areas:
 - Storage: 50 MB available space
 - Display: Touchscreen, minimum 4" diagonal
 
-**Compliance**: Tested on Android 7.0 through Android 14.
+**Compliance**: Tested on Android 7.0 through Android 15.
 
 ### 2.2 Software Requirements
 
@@ -112,7 +112,7 @@ This specification is organized into functional areas:
 - Platform: Android
 - Build System: Gradle/Android Studio
 - Minimum SDK: API 24 (Android 7.0)
-- Target SDK: API 34 (Android 14)
+- Target SDK: API 35 (Android 15)
 - Minimum Version: 0.2.0
 
 #### 2.2.3 ATAK Application
@@ -163,7 +163,7 @@ This specification is organized into functional areas:
 - Range: 1-10 km (terrain dependent)
 - Network: Self-healing mesh
 
-**Compliance**: Implemented via Meshtastic library integration.
+**Compliance**: Implemented via Meshtastic Arduino library (v0.0.7).
 
 ### 3.2 Data Functions
 
@@ -322,6 +322,8 @@ This specification is organized into functional areas:
 - Authentication Tag: 128 bits
 - Envelope Format: `ENC:<version>:<key-id>:<hex-payload>`
 - Key Storage: Secure storage (Android Keystore, ESP32 NVS)
+
+**Note on Default State**: Firmware enables encryption by default (SECURITY_MODE_AES256_HMAC). The Android plugin initializes with encryption disabled for backward compatibility; encryption must be explicitly enabled after key provisioning succeeds (see Security Guide for provisioning workflow).
 
 **Compliance**: Implemented in SecurityManager.java and security.cpp.
 
@@ -640,6 +642,7 @@ See Technical Manual: TM-AKITA-MESHTAK-001, Appendix A
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
+| 1.2 | 2026-03-13 | Updated Target SDK to API 35 (Android 15); clarified encryption default state across firmware/plugin; added Meshtastic library version | Akita Engineering |
 | 1.1 | 2026-03-12 | Updated security requirements/compliance for AES-256-GCM and versioned key-id encrypted envelope metadata | Akita Engineering |
 | 1.0 | 2025-12-31 | Initial release | Akita Engineering |
 
@@ -647,5 +650,5 @@ See Technical Manual: TM-AKITA-MESHTAK-001, Appendix A
 
 **END OF DOCUMENT**
 
-**Copyright (C) 2025 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
 

@@ -7,8 +7,9 @@ The **Akita MeshTAK Plugin** allows your ATAK device to connect to Meshtastic ne
 # System Requirements
 
 - Android device with ATAK installed  
-- Meshtastic-compatible device (e.g., Heltec V3) running the Akita MeshTAK firmware  
-- Akita MeshTAK Plugin (compiled `.apk` file)
+- Meshtastic-compatible device (e.g., Heltec V3) running the Akita MeshTAK firmware (v0.2.0)  
+- Meshtastic Arduino library v0.0.7 on the firmware device  
+- Akita MeshTAK Plugin (compiled `.apk` file, v0.2.0)
 
 ---
 
@@ -96,6 +97,12 @@ The plugin automatically receives:
 
 ---
 
+# Security
+
+The plugin supports AES-256-GCM encrypted communication between the firmware and plugin. Encryption must be enabled after key provisioning — see the **Security Guide** for setup instructions. When encryption is active, all BLE and serial traffic is protected with authenticated encryption.
+
+---
+
 # Troubleshooting
 
 ## No Connection
@@ -115,4 +122,4 @@ The plugin automatically receives:
 For assistance, contact **Akita Engineering**:
 
 - Website: **www.akitaengineering.com**  
-- Email: **info@akitaengineering.com**
+- Email: **support@akitaengineering.com**

@@ -20,24 +20,38 @@ The Akita MeshTAK system consists of two main components:
 AkitaMeshTAK/
 ├── firmware/ # Firmware for Meshtastic devices
 │ ├── src/
+│ │ ├── main.cpp # Application entry point
 │ │ ├── config.h # CRITICAL: UUIDs / Commands
-│ │ ├── power_management.h/.cpp
-│ │ └── ...
-│ └── platformio.ini
+│ │ ├── ble_setup.h/.cpp # BLE peripheral setup
+│ │ ├── meshtastic_setup.h/.cpp # Meshtastic mesh integration
+│ │ ├── serial_bridge.h/.cpp # Serial/USB communication
+│ │ ├── mqtt_client.h/.cpp # Optional MQTT client
+│ │ ├── cot_generation.h/.cpp # CoT XML generation
+│ │ ├── display_handler.h/.cpp # OLED display management
+│ │ ├── power_management.h/.cpp # Battery & power
+│ │ ├── security.h/.cpp # AES-256-GCM encryption / HMAC
+│ │ ├── audit_log.h/.cpp # Security audit logging
+│ │ └── input_validation.h/.cpp # Input sanitization
+│ └── platformio.ini # PlatformIO build config (Meshtastic-arduino v0.0.7)
 ├── atak_plugin/ # ATAK plugin source code
-│ ├── app/
-│ │ ├── src/main/java/com/akitaengineering/meshtak/
+│ ├── src/
+│ │ ├── AkitaMeshTAKPlugin.java # Plugin lifecycle
+│ │ ├── com/akitaengineering/meshtak/
 │ │ │ ├── Config.java # CRITICAL: UUIDs / VIDs
-│ │ │ ├── AkitaMeshTAKPlugin.java
-│ │ │ ├── services/
-│ │ │ │ ├── BLEService.java
-│ │ │ │ └── SerialService.java
-│ │ │ └── ui/
-│ │ │ ├── AkitaToolbar.java
-│ │ │ └── ...
-│ │ ├── res/
-│ │ └── ...
-│ └── build.gradle
+│ │ │ ├── AuditLogger.java # Security audit logging
+│ │ │ ├── SecurityManager.java # AES-256-GCM encryption / HMAC
+│ │ │ └── VersionManager.java # Version management
+│ │ ├── services/
+│ │ │ ├── BLEService.java
+│ │ │ └── SerialService.java
+│ │ └── ui/
+│ │ ├── AkitaToolbar.java
+│ │ ├── ConnectionStatusOverlay.java
+│ │ ├── SendDataView.java
+│ │ └── SettingsFragment.java
+│ ├── res/ # Android XML resources
+│ ├── build.gradle # Gradle build config (targetSdk 35)
+│ └── libs/atak-sdk.jar # ATAK SDK (compileOnly)
 ├── documentation/ # Documentation
 └── LICENSE / COPYING # GPLv3 license files
 ```
@@ -75,14 +89,18 @@ The ATAK plugin is built using **Android Studio**.
 Communication uses a simple string-based command protocol.
 
 ## ATAK → Firmware
-- `CMD:GET_BATT:`  
+- `CMD:GET_BATT`  
 Requests battery status  
-- `CMD:ALERT:SOS:`  
+- `CMD:GET_VERSION`  
+Requests firmware version  
+- `CMD:ALERT:SOS`  
 Triggers SOS alert broadcast  
 
 ## Firmware → ATAK
 - `STATUS:BATT:XX%`  
-Response to battery query (e.g., `STATUS:BATT:85%`)
+Response to battery query (e.g., `STATUS:BATT:85%`)  
+- `VERSION:X.Y.Z`  
+Response to version query (e.g., `VERSION:0.2.0`)
 
 All other received data is treated as **CoT XML**.
 
@@ -110,6 +128,6 @@ Protocol definitions exist in:
 This project is licensed under the **GNU General Public License v3.0**.  
 See the `LICENSE` and `COPYING` files in the root directory.
 
-**Copyright (C) 2025 Akita Engineering**
+**Copyright (C) 2025-2026 Akita Engineering**
 
 

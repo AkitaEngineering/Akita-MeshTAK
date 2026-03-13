@@ -109,9 +109,28 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 **Contents**:
 - Installation instructions
 - Basic operation
+- Security overview
 - Troubleshooting tips
 
 **Audience**: End users
+
+---
+
+#### 7. Quick Reference Card (QR)
+**File**: `QR_AkitaMeshTAK_Quick_Reference.md`  
+**Document Number**: QR-AKITA-MESHTAK-001  
+**Purpose**: Single-page operational quick reference for field use
+
+**Contents**:
+- Startup/shutdown checklists
+- Status indicator reference
+- Common commands
+- Emergency procedures
+- Troubleshooting quick checks
+- Security quick check
+- Daily checklist
+
+**Audience**: Field operators, end users
 
 ---
 
@@ -123,6 +142,8 @@ System Specification (SS)
     +---> Technical Manual (TM)
     |         |
     |         +---> Operator's Manual (OM)
+    |         |
+    |         +---> Quick Reference Card (QR)
     |         |
     |         +---> Security Guide
     |
@@ -178,6 +199,22 @@ Start with: **Developer Guide**
 - **System Specification**: Updated with requirement changes
 - **Security Guide**: Updated with security enhancements
 - **Developer Guide**: Updated with code changes
+- **Quick Reference Card**: Updated with operational procedure changes
+- **User Guide**: Updated with end-user-facing changes
+
+---
+
+## Current Document Versions
+
+| Document | Number | Revision | Date |
+|----------|--------|----------|------|
+| System Specification | SS-AKITA-MESHTAK-001 | 1.2 | 2026-03-13 |
+| Technical Manual | TM-AKITA-MESHTAK-001 | 1.2 | 2026-03-13 |
+| Operator's Manual | OM-AKITA-MESHTAK-001 | 1.2 | 2026-03-13 |
+| Quick Reference Card | QR-AKITA-MESHTAK-001 | 1.2 | 2026-03-13 |
+| Security Guide | — | 0.2.0 | 2026-03-13 |
+| Developer Guide | — | 0.2.0 | 2026-03-13 |
+| User Guide | — | 0.2.0 | 2026-03-13 |
 
 ### Change Control
 All documentation changes must be:
@@ -209,5 +246,5 @@ For documentation questions or updates:
 
 ---
 
-**Copyright (C) 2025 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
 

@@ -3,8 +3,8 @@
 ## QUICK REFERENCE CARD
 
 **Document Number:** QR-AKITA-MESHTAK-001  
-**Revision:** 1.1  
-**Date:** 2026-03-12  
+**Revision:** 1.2  
+**Date:** 2026-03-13  
 **Classification:** UNCLASSIFIED
 
 ---
@@ -98,6 +98,8 @@
 
 - ☐ Confirm secure provisioning secret is configured for this deployment
 - ☐ Confirm firmware/plugin encrypted metadata match (`v1`, `k1`)
+- ☐ Confirm firmware encryption enabled (default: on)
+- ☐ Confirm plugin encryption enabled after provisioning (`securityManager.setEncryptionEnabled(true)`)
 - ☐ Confirm encrypted transport operational (envelope format: `ENC:v1:k1:<hex>`)
 - ☐ If encrypted payloads are rejected, verify version/key-id alignment before field use
 
@@ -114,9 +116,9 @@
 
 **Firmware**: 0.2.0  
 **Plugin**: 0.2.0  
-**Document**: QR-AKITA-MESHTAK-001 Rev 1.1
+**Document**: QR-AKITA-MESHTAK-001 Rev 1.2
 
 ---
 
-**Copyright (C) 2025 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
 

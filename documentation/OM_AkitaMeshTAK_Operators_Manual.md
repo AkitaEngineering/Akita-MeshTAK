@@ -3,8 +3,8 @@
 ## OPERATOR'S MANUAL
 
 **Document Number:** OM-AKITA-MESHTAK-001  
-**Revision:** 1.1  
-**Date:** 2026-03-12  
+**Revision:** 1.2  
+**Date:** 2026-03-13  
 **Classification:** UNCLASSIFIED  
 **Prepared By:** Akita Engineering  
 **Approved By:** [Approval Authority]
@@ -17,8 +17,8 @@
 |------|-------------|
 | Document Title | Akita MeshTAK System Operator's Manual |
 | Document Number | OM-AKITA-MESHTAK-001 |
-| Revision | 1.1 |
-| Date | 2026-03-12 |
+| Revision | 1.2 |
+| Date | 2026-03-13 |
 | Classification | UNCLASSIFIED |
 | Distribution | As Required |
 | Supersedes | None |
@@ -353,7 +353,7 @@ The Akita MeshTAK toolbar shows:
 - **Encryption Keys**: Never share encryption keys with unauthorized personnel
 - **Audit Logs**: Audit logs may contain sensitive information. Secure storage required.
 - **Device Security**: Secure devices physically. Report lost or stolen devices immediately.
-- **Encryption Default**: Encrypted transport is enabled when provisioning metadata is configured correctly.
+- **Encryption Default**: Firmware enables encryption by default. The Android plugin starts with encryption **disabled** for backward compatibility; encryption must be explicitly enabled after key provisioning (see Security Guide for provisioning workflow).
 - **Metadata Match Required**: Firmware and plugin must use matching provisioning secret and encrypted envelope metadata (`version`, `key-id`).
 
 #### CAUTIONS
@@ -426,6 +426,7 @@ The Akita MeshTAK toolbar shows:
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
+| 1.2 | 2026-03-13 | Corrected encryption default state for Android plugin; added key provisioning references | Akita Engineering |
 | 1.1 | 2026-03-12 | Updated operator security guidance for AES-256-GCM, versioned encrypted envelopes, and key-id alignment checks | Akita Engineering |
 | 1.0 | 2025-12-31 | Initial release | Akita Engineering |
 
@@ -433,5 +434,5 @@ The Akita MeshTAK toolbar shows:
 
 **END OF DOCUMENT**
 
-**Copyright (C) 2025 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
 

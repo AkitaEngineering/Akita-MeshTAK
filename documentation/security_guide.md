@@ -14,7 +14,8 @@ This document outlines the security features implemented in Akita MeshTAK for mi
 - **Versioned Envelope**: Encrypted payloads use `ENC:v1:k1:<hex>` format for protocol versioning and key-id rotation
 
 #### Encryption Activation (Current Behavior)
-- **Default State**: Encryption is enabled by default when provisioning succeeds.
+- **Firmware Default**: Encryption is enabled by default (`SECURITY_MODE_AES256_HMAC`). The firmware encrypts/decrypts all BLE and serial payloads when a valid provisioning secret is configured.
+- **Android Plugin Default**: Encryption is **disabled** by default (`encryptionEnabled = false`) for backward compatibility with unprovisioned firmware. After key provisioning, call `securityManager.setEncryptionEnabled(true)` to activate encryption.
 - **Enablement Requirement**: Firmware and plugin must use matching provisioning secret, version, and key-id metadata.
 - **Behavior**: Encrypted traffic uses AES-GCM with per-message nonce and authentication tag; malformed or mismatched encrypted envelopes are rejected.
 
@@ -29,6 +30,37 @@ This document outlines the security features implemented in Akita MeshTAK for mi
 - Never hardcode keys in source code
 - Use secure key exchange protocols
 - Rotate key-id values in controlled deployments (for example, `k1` -> `k2`) and update both firmware/plugin configuration together.
+
+#### Key Provisioning Workflow
+
+Follow these steps to enable end-to-end encryption:
+
+1. **Generate a Provisioning Secret**
+   - Create a strong random secret (32+ characters): `openssl rand -hex 32`
+   - This secret will be shared between firmware and plugin.
+
+2. **Configure Firmware**
+   - In `firmware/src/config.h`, replace the default `PROVISIONING_SECRET` with your generated secret.
+   - Set `DEFAULT_SECURITY_MODE` to `SECURITY_MODE_AES256_HMAC`.
+   - Build and flash the firmware.
+
+3. **Configure Android Plugin**
+   - In `atak_plugin/src/com/akitaengineering/meshtak/Config.java`, set `PROVISIONING_SECRET` to the same secret.
+   - After the plugin connects to the device, call:
+     ```java
+     securityManager.setEncryptionEnabled(true);
+     ```
+   - This can be triggered from the Settings UI or programmatically after successful connection.
+
+4. **Verify Encryption**
+   - Check audit logs for `"Encryption enabled"` events.
+   - Verify encrypted payloads use the `ENC:v1:k1:<hex>` format.
+   - Confirm both sides can decrypt each other's messages.
+
+5. **Key Rotation**
+   - To rotate keys, change the provisioning secret on both firmware and plugin simultaneously.
+   - Update the key-id (e.g., `k1` → `k2`) to distinguish new keys from old ones.
+   - Redeploy firmware and restart the plugin.
 
 ### 2. Input Validation
 - **Command Validation**: All incoming commands are validated before processing
@@ -207,9 +239,11 @@ If you discover a security vulnerability:
 - **v0.2.0**: Initial security implementation
    - AES-256-GCM encrypted transport with authenticated integrity
    - Versioned/key-id encrypted envelope format (`ENC:v1:k1:<hex>`)
-  - Input validation
-  - Audit logging
-  - Error handling improvements
+   - Firmware encryption enabled by default; plugin encryption opt-in after provisioning
+   - Input validation
+   - Audit logging
+   - Constant-time HMAC comparison (timing attack prevention)
+   - Error handling improvements
 
 ---
 
@@ -222,5 +256,5 @@ If you discover a security vulnerability:
 
 ---
 
-**Copyright (C) 2025 Akita Engineering**
+**Copyright (C) 2025-2026 Akita Engineering**
 

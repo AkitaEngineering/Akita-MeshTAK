@@ -3,8 +3,8 @@
 ## TECHNICAL MANUAL
 
 **Document Number:** TM-AKITA-MESHTAK-001  
-**Revision:** 1.1  
-**Date:** 2026-03-12  
+**Revision:** 1.2  
+**Date:** 2026-03-13  
 **Classification:** UNCLASSIFIED  
 **Prepared By:** Akita Engineering  
 **Approved By:** [Approval Authority]
@@ -17,8 +17,8 @@
 |------|-------------|
 | Document Title | Akita MeshTAK System Technical Manual |
 | Document Number | TM-AKITA-MESHTAK-001 |
-| Revision | 1.1 |
-| Date | 2026-03-12 |
+| Revision | 1.2 |
+| Date | 2026-03-13 |
 | Classification | UNCLASSIFIED |
 | Distribution | As Required |
 | Supersedes | None |
@@ -211,7 +211,7 @@ The Akita MeshTAK System is a secure communication and situational awareness pla
 - **Build System**: PlatformIO
 - **Compiler**: GCC for ESP32
 - **Libraries**:
-  - Meshtastic Library
+  - Meshtastic Arduino Library (v0.0.7)
   - BLE Library (ESP32)
   - mbedTLS (for encryption)
 
@@ -392,7 +392,7 @@ The Akita MeshTAK System is a secure communication and situational awareness pla
 #### 5.3.3 Build Procedure
 1. Sync Gradle files
 2. Build APK: `Build → Build Bundle(s) / APK(s) → Build APK(s)`
-3. Locate APK: `atak_plugin/app/build/outputs/apk/debug/` or `release/`
+3. Locate APK: `atak_plugin/build/outputs/apk/debug/` or `release/`
 4. Transfer APK to Android device
 
 #### 5.3.4 Installation on Device
@@ -488,7 +488,8 @@ Configure via ATAK settings:
 3. Implement key rotation policy
 
 **Encryption Activation (Current Behavior)**:
-- Default: Encryption is enabled when provisioning metadata is valid.
+- Firmware default: Encryption is enabled (SECURITY_MODE_AES256_HMAC) when provisioning metadata is valid.
+- Android plugin default: Encryption is disabled (`encryptionEnabled = false`) for backward compatibility. After successful key provisioning, call `securityManager.setEncryptionEnabled(true)` to activate encryption.
 - Firmware and plugin must share matching provisioning secret, envelope version, and key-id.
 - Encrypted payloads with unknown version/key-id are rejected and logged.
 
@@ -982,6 +983,7 @@ See Section 6 for configuration examples.
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
+| 1.2 | 2026-03-13 | Updated Meshtastic library version; fixed APK output path; corrected encryption default state for Android plugin; updated document revision | Akita Engineering |
 | 1.1 | 2026-03-12 | Updated security architecture/specifications to AES-256-GCM and versioned key-id encrypted envelope model | Akita Engineering |
 | 1.0 | 2025-12-31 | Initial release | Akita Engineering |
 
@@ -989,5 +991,5 @@ See Section 6 for configuration examples.
 
 **END OF DOCUMENT**
 
-**Copyright (C) 2025 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
 
