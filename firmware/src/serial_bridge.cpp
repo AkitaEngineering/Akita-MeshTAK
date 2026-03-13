@@ -147,22 +147,22 @@ void loopSerialBridge() {
         return;
       }
 
-        // Security: Log serial data reception
-        logAuditEvent(AUDIT_EVENT_DATA_RECEIVED, 0, "SERIAL",
-             ("Data received: " + decodedData.substring(0, 32)).c_str(), true);
-        
-        Serial.print("Received command via Serial: ");
+      // Security: Log serial data reception
+      logAuditEvent(AUDIT_EVENT_DATA_RECEIVED, 0, "SERIAL",
+           ("Data received: " + decodedData.substring(0, 32)).c_str(), true);
+
+      Serial.print("Received command via Serial: ");
       Serial.println(decodedData);
-        
-        // Input validation before processing
+
+      // Input validation before processing
       ValidationResult validation = validateCommand(decodedData);
-        if (validation == VALIDATION_OK) {
+      if (validation == VALIDATION_OK) {
         processIncomingCommand(decodedData); // Process the command
-        } else {
-            logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 2, "SERIAL",
-                         "Invalid command - validation failed", false);
-            Serial.printf("SECURITY: Serial command validation failed: %d\n", validation);
-        }
+      } else {
+        logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 2, "SERIAL",
+                     "Invalid command - validation failed", false);
+        Serial.printf("SECURITY: Serial command validation failed: %d\n", validation);
+      }
     }
   }
 }

@@ -52,8 +52,8 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
         sosButton = v.findViewById(R.id.sos_button);
 
         updateConnectionMethodDisplay();
-        setBleStatus("Idle");
-        setSerialStatus("Idle");
+        setDetailedBleStatus("Idle");
+        setDetailedSerialStatus("Idle");
         setBatteryStatus("--%");
 
         if (sosButton != null) {

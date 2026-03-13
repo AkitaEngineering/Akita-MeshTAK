@@ -137,7 +137,12 @@ bool verifyHMAC(const uint8_t* data, size_t data_len, const uint8_t* hmac) {
     uint8_t calculated_hmac[32];
     generateHMAC(data, data_len, calculated_hmac);
     
-    bool valid = (memcmp(calculated_hmac, hmac, 32) == 0);
+    // Constant-time comparison to prevent timing attacks
+    volatile uint8_t diff = 0;
+    for (size_t i = 0; i < 32; i++) {
+        diff |= calculated_hmac[i] ^ hmac[i];
+    }
+    bool valid = (diff == 0);
     if (!valid) {
         g_security_status.integrity_failures++;
     }

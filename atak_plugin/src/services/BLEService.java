@@ -283,14 +283,35 @@ public class BLEService extends Service {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             stopConnectionTimeout();
-            if (newState == android.bluetooth.BluetoothProfile.STATE_CONNECTED) {
+            // Check GATT status first to properly distinguish errors from normal disconnections
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Log.e(TAG, "onConnectionStateChange: GATT error for device " + gatt.getDevice().getAddress() + ", status: " + status + ", newState: " + newState);
+                bleConnectionStatus = "Error";
+                if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
+                if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Error: Connection failed with status " + status);
+                
+                if (auditLogger != null) {
+                    auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
+                                   "BLE", "GATT error status " + status + " for " + gatt.getDevice().getAddress(), false);
+                }
+                
+                disconnect();
+                close();
+                if (connectionRetryCount <= MAX_RETRY_ATTEMPTS) {
+                    long delay = CONNECT_RETRY_DELAY * (long) Math.pow(2, connectionRetryCount - 1);
+                    Log.i(TAG, "Attempting to reconnect after error in " + delay + " ms (attempt " + connectionRetryCount + "/" + MAX_RETRY_ATTEMPTS + ")");
+                    handler.postDelayed(() -> connect(bluetoothDeviceAddress), delay);
+                } else {
+                    Log.w(TAG, "Max reconnection attempts reached after error. Will rescan periodically.");
+                    handler.postDelayed(BLEService.this::startScan, RE_SCAN_DELAY);
+                }
+            } else if (newState == android.bluetooth.BluetoothProfile.STATE_CONNECTED) {
                 Log.i(TAG, "onConnectionStateChange: Connected to GATT server for device " + gatt.getDevice().getAddress());
                 connectionRetryCount = 0;
                 bleConnectionStatus = "Connected";
                 if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
                 if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Connected to " + gatt.getDevice().getAddress());
                 
-                // Audit log connection
                 if (auditLogger != null) {
                     auditLogger.log(AuditLogger.EventType.CONNECTION, AuditLogger.Severity.INFO,
                                    "BLE", "Connected to " + gatt.getDevice().getAddress(), true);
@@ -298,12 +319,11 @@ public class BLEService extends Service {
                 
                 bluetoothGatt.discoverServices();
             } else if (newState == android.bluetooth.BluetoothProfile.STATE_DISCONNECTED) {
-                Log.i(TAG, "onConnectionStateChange: Disconnected from GATT server for device " + gatt.getDevice().getAddress() + ", status: " + status);
+                Log.i(TAG, "onConnectionStateChange: Disconnected from GATT server for device " + gatt.getDevice().getAddress());
                 bleConnectionStatus = "Disconnected";
                 if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
                 if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Disconnected");
                 
-                // Audit log disconnection
                 if (auditLogger != null) {
                     auditLogger.log(AuditLogger.EventType.DISCONNECTION, AuditLogger.Severity.INFO,
                                    "BLE", "Disconnected from " + gatt.getDevice().getAddress(), true);
@@ -316,21 +336,6 @@ public class BLEService extends Service {
                     handler.postDelayed(() -> connect(bluetoothDeviceAddress), delay);
                 } else {
                     Log.w(TAG, "Max reconnection attempts reached. Will rescan periodically.");
-                    handler.postDelayed(BLEService.this::startScan, RE_SCAN_DELAY);
-                }
-            } else if (status != BluetoothGatt.GATT_SUCCESS) {
-                Log.e(TAG, "onConnectionStateChange: GATT connection error for device " + gatt.getDevice().getAddress() + ", status: " + status + ", newState: " + newState);
-                bleConnectionStatus = "Error";
-                if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
-                if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Error: Connection failed with status " + status);
-                disconnect();
-                close();
-                if (connectionRetryCount <= MAX_RETRY_ATTEMPTS) {
-                    long delay = CONNECT_RETRY_DELAY * (long) Math.pow(2, connectionRetryCount - 1);
-                    Log.i(TAG, "Attempting to reconnect after error in " + delay + " ms (attempt " + connectionRetryCount + "/" + MAX_RETRY_ATTEMPTS + ")");
-                    handler.postDelayed(() -> connect(bluetoothDeviceAddress), delay);
-                } else {
-                    Log.w(TAG, "Max reconnection attempts reached after error. Will rescan periodically.");
                     handler.postDelayed(BLEService.this::startScan, RE_SCAN_DELAY);
                 }
             }

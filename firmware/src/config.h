@@ -56,7 +56,5 @@
 
 // --- Power Management Settings ---
 #define BATTERY_CHECK_INTERVAL 60000 
-float readBatteryVoltage();
-void processIncomingCommand(const String& cmd);
 
 #endif

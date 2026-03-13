@@ -6,7 +6,13 @@
 
 bool setupDisplay() {
   Serial.println("Initializing Display...");
-  Heltec.display->init();
+  // Initialize Heltec framework (display=true, LoRa=false, serial=false)
+  // LoRa is managed by Meshtastic; Serial is already initialized in main.
+  Heltec.begin(true, false, false);
+  if (Heltec.display == nullptr) {
+    Serial.println("ERROR: Display initialization failed - display is null");
+    return false;
+  }
   Heltec.display->flipScreenVertically();
   Heltec.display->setFont(ArialMT_Plain_10);
   Heltec.display->clear();
@@ -15,7 +21,7 @@ bool setupDisplay() {
 }
 
 void loopDisplay() {
-  //  Update the display
+  if (Heltec.display == nullptr) return;
   static unsigned long lastDisplayUpdate = 0;
   if (millis() - lastDisplayUpdate > 5000) {
     String displayInfo = "Node: " + getLocalNodeId();
@@ -25,6 +31,7 @@ void loopDisplay() {
 }
 
 void displayMessage(const String& message) {
+  if (Heltec.display == nullptr) return;
   Heltec.display->clear();
   Heltec.display->drawString(0, 0, message);
   Heltec.display->display();
