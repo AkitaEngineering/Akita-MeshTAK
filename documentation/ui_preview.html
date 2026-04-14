@@ -293,7 +293,7 @@
 
     .chips {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 16px;
     }
@@ -450,6 +450,36 @@
       gap: 12px;
     }
 
+    .playbook-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .secondary-button {
+      border: 1px solid rgba(122, 135, 148, 0.3);
+      border-radius: 14px;
+      padding: 10px 14px;
+      background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+    }
+
+    body.red .secondary-button {
+      background: #000000;
+      border-color: #ff3b30;
+      color: #ff3b30;
+    }
+
     .select,
     .textarea,
     .history-select {
@@ -519,7 +549,8 @@
 
       .chips,
       .stats,
-      .toolbar .row {
+      .toolbar .row,
+      .playbook-row {
         grid-template-columns: 1fr;
       }
     }
@@ -533,7 +564,7 @@
         <p>Static no-hardware mockup of the secure, interoperable toolbar and dashboard.</p>
       </div>
       <div class="controls">
-        <span class="pill">Operational palettes plus Night Red monochrome</span>
+        <span class="pill">Mission profiles, assurance telemetry, and Night Red monochrome</span>
         <select id="themeModeSelect" class="mode-select" aria-label="Theme mode">
           <option value="dark" selected>Dark Ops</option>
           <option value="light">Light Ops</option>
@@ -554,6 +585,11 @@
 
         <div class="stack">
           <strong>Secure route: BLE • Target AkitaNode01</strong>
+        </div>
+
+        <div class="row">
+          <div class="stack"><strong>Profile: Search &amp; Rescue</strong></div>
+          <div class="stack"><strong style="color: var(--danger);">Security: Rotate deployment secret</strong></div>
         </div>
 
         <div class="row">
@@ -581,12 +617,13 @@
         <div class="chips">
           <div class="chip primary">Active route: BLE</div>
           <div class="chip">Target AkitaNode01</div>
+          <div class="chip">Profile: SAR</div>
         </div>
 
         <div class="dashboard-body">
           <section class="summary">
             <h3>Operational Summary</h3>
-            <p class="summary-copy">Encrypted BLE mesh profile armed for AkitaNode01. Secure ATAK and partner traffic will route over the mesh radio when transmitted.</p>
+            <p class="summary-copy">Search &amp; Rescue posture is armed over BLE for AkitaNode01. Secure ATAK and partner traffic will route over the mesh radio for search grids, casualty updates, and extraction coordination.</p>
 
             <div class="stats">
               <div class="stat">
@@ -610,6 +647,100 @@
             <p class="mini-copy">Secure frame fits comfortably inside the radio payload envelope.</p>
             <div class="progress"><span></span></div>
             <p class="mini-copy">Last secure transmission: JSON • 318 B via BLE • 2m ago.</p>
+          </section>
+
+          <section class="card">
+            <h3>Mission Assurance</h3>
+            <p class="section-subtitle">Search &amp; Rescue workflows are rehearsable, but the deployment secret is still placeholder material. Rotate provisioning before field use.</p>
+
+            <div class="stats">
+              <div class="stat">
+                <label>Encryption</label>
+                <strong style="font-size:18px;color: var(--success);">AES-256 / HMAC active</strong>
+              </div>
+              <div class="stat">
+                <label>Audit</label>
+                <strong style="font-size:18px;color: var(--success);">Audit active • 18 events</strong>
+              </div>
+              <div class="stat">
+                <label>Interoperability</label>
+                <strong style="font-size:18px;color: var(--success);">ATAK CoT + partner bridges live</strong>
+              </div>
+              <div class="stat">
+                <label>Provisioning</label>
+                <strong style="font-size:18px;color: var(--danger);">Rotate deployment secret</strong>
+              </div>
+            </div>
+
+            <div class="action-row">
+              <button class="secondary-button">Rotate Secret</button>
+              <button class="secondary-button">Export Audit</button>
+              <button class="secondary-button">Reload Security</button>
+            </div>
+          </section>
+
+          <div class="cards-row">
+            <section class="card">
+              <h3>Tactical Map Layer</h3>
+              <p class="section-subtitle">Search sectors, geofences, stale marker alerts, and route health render directly on the ATAK map.</p>
+              <div class="chart">
+                <svg viewBox="0 0 640 300" aria-label="Tactical map overlay schematic">
+                  <rect x="22" y="22" width="596" height="256" rx="22" fill="none" stroke="var(--grid)" stroke-width="2" />
+                  <rect x="198" y="78" width="244" height="160" rx="12" fill="none" stroke="var(--warning)" stroke-width="4" />
+                  <path d="M320 158 L420 94" fill="none" stroke="var(--army)" stroke-width="4" stroke-linecap="round" />
+                  <path d="M320 158 A100 100 0 0 1 420 94" fill="none" stroke="var(--army)" stroke-width="4" />
+                  <path d="M320 158 L480 164" fill="none" stroke="var(--army)" stroke-width="4" stroke-linecap="round" />
+                  <path d="M320 158 A160 160 0 0 1 480 164" fill="none" stroke="var(--army)" stroke-width="4" />
+                  <path d="M320 158 L392 246" fill="none" stroke="var(--army)" stroke-width="4" stroke-linecap="round" />
+                  <path d="M320 158 A112 112 0 0 1 392 246" fill="none" stroke="var(--army)" stroke-width="4" />
+                  <circle cx="320" cy="158" r="10" fill="var(--text)" />
+                  <circle cx="470" cy="102" r="16" fill="none" stroke="var(--danger)" stroke-width="4" />
+                  <circle cx="494" cy="222" r="16" fill="none" stroke="var(--danger)" stroke-width="4" />
+                  <text x="438" y="82" fill="var(--text-secondary)" font-size="16">STALE</text>
+                  <text x="512" y="226" fill="var(--text-secondary)" font-size="16">STALE</text>
+                  <text x="334" y="148" fill="var(--text)" font-size="18" font-weight="700">Team Alpha</text>
+                  <text x="210" y="64" fill="var(--text-secondary)" font-size="16">Search sectors</text>
+                  <text x="484" y="52" fill="var(--text-secondary)" font-size="16">Route: BLE • Connected</text>
+                </svg>
+              </div>
+              <div class="legend">
+                <div><span class="dot" style="background: var(--warning);"></span><span>Geofence around active team</span></div>
+                <div><span class="dot" style="background: var(--army);"></span><span>Sector wedges for search coverage</span></div>
+                <div><span class="dot" style="background: var(--danger);"></span><span>Stale marker callouts on delayed nodes</span></div>
+              </div>
+            </section>
+
+            <section class="card">
+              <h3>Incident Board</h3>
+              <p class="section-subtitle">Role-pack aware command board with quick actions aligned to the active mission profile.</p>
+              <div class="stats">
+                <div class="stat">
+                  <label>Incident</label>
+                  <strong style="font-size:18px;">Search Grid</strong>
+                </div>
+                <div class="stat">
+                  <label>Role Pack</label>
+                  <strong style="font-size:18px;">SAR Field Team</strong>
+                </div>
+                <div class="stat">
+                  <label>Tempo</label>
+                  <strong style="font-size:18px;">Responsive</strong>
+                </div>
+                <div class="stat">
+                  <label>Next Action</label>
+                  <strong style="font-size:18px;">Prepare extraction update</strong>
+                </div>
+              </div>
+              <p class="field-note">Queue SAR Field Team actions into the secure composer.</p>
+              <div class="playbook-row">
+                <select class="select">
+                  <option>Extraction Update</option>
+                  <option>Medical Escalation</option>
+                  <option>Search Lane Shift</option>
+                </select>
+                <button class="tx-button">Queue Action</button>
+              </div>
+            </section>
           </section>
 
           <div class="cards-row">
@@ -659,6 +790,15 @@
               <h3>Transmit Payload</h3>
               <p class="section-subtitle">Prepare a secure frame and verify payload budget before release.</p>
               <div class="form-grid" style="margin-top:14px;">
+                <p class="field-note">Playbooks emphasize search progress, medical updates, and extraction coordination.</p>
+                <div class="playbook-row">
+                  <select class="select">
+                    <option>Team Spot Report</option>
+                    <option>Medical Update</option>
+                    <option>Extraction Request</option>
+                  </select>
+                  <button class="tx-button">Load Playbook</button>
+                </div>
                 <select class="select">
                   <option>JSON</option>
                   <option>Plain Text</option>
@@ -686,7 +826,7 @@
       </section>
     </div>
 
-    <p class="preview-note">This preview is a visual approximation of the implemented plugin UI, not a live ATAK render. It is intended for palette, hierarchy, spacing, and chart validation before device testing.</p>
+    <p class="preview-note">This preview is a visual approximation of the implemented plugin UI, not a live ATAK render. The plugin now combines ATAK-native tactical overlays, provisioning workflow, incident boards, and secure mission command before device testing.</p>
   </div>
 
   <script>

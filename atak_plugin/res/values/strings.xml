@@ -7,8 +7,17 @@
     <string name="serial_baud_rate_title">Serial Baud Rate</string>
     <string name="send_test_message_title">Send Test Message</string>
     <string name="ui_theme_title">Dashboard Theme</string>
+    <string name="mission_profile_title">Mission Profile</string>
+    <string name="security_category_title">Security and Provisioning</string>
+    <string name="provisioning_secret_title">Provisioning Secret</string>
+    <string name="encryption_enabled_title">Enable Encrypted Transport</string>
+    <string name="rotate_secret_title">Rotate Provisioning Secret</string>
+    <string name="export_audit_title">Export Audit Log</string>
+    <string name="reload_security_title">Reload Security State</string>
     <string name="history_spinner_prompt">Reuse a recent command</string>
     <string name="history_spinner_empty">No command history yet</string>
+    <string name="template_spinner_empty">No mission playbooks configured</string>
+    <string name="role_action_spinner_empty">No role actions configured</string>
     <string name="mock_mode_title">Mock Transport Mode</string>
     <string name="mock_ble_status_title">Mock BLE Status</string>
     <string name="mock_serial_status_title">Mock Serial Status</string>

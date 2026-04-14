@@ -25,6 +25,8 @@ import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.driver.UsbSerialProber;
 import com.hoho.android.usbserial.util.SerialInputOutputManager;
+import com.akitaengineering.meshtak.ui.AkitaMissionMarkerRegistry;
+import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.Config;
 import com.akitaengineering.meshtak.AuditLogger;
@@ -126,21 +128,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         securityManager = SecurityManager.getInstance();
         auditLogger = AuditLogger.getInstance();
         auditLogger.initialize(getApplicationContext());
-        
-        // Initialize deterministic keys from provisioning material.
-        if (!securityManager.isInitialized()) {
-            String deviceId = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-                    .getString("ble_device_name", "AkitaNode01");
-            if (!securityManager.initializeFromProvisioning(deviceId, Config.PROVISIONING_SECRET)) {
-                Log.e(TAG, "Failed to initialize security manager");
-                auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
-                               "SerialService", "Security initialization failed", false);
-            } else {
-                auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
-                               "SerialService", "Security initialized", true);
-                securityManager.setEncryptionEnabled(true);
-            }
-        }
+        initializeSecurity();
         
         usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
@@ -181,6 +169,30 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             baudRate = 115200;
         }
         Log.i(TAG, "Using baud rate: " + baudRate);
+    }
+
+    private void initializeSecurity() {
+        SharedPreferences preferences = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this);
+        String deviceId = preferences.getString("ble_device_name", "AkitaNode01");
+        String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(preferences);
+        boolean encryptionEnabled = AkitaProvisioningManager.isEncryptionEnabled(preferences);
+
+        securityManager.reset();
+        if (!securityManager.initializeFromProvisioning(deviceId, provisioningSecret)) {
+            Log.e(TAG, "Failed to initialize security manager");
+            auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
+                    "SerialService", "Security initialization failed", false);
+            return;
+        }
+
+        securityManager.setEncryptionEnabled(encryptionEnabled);
+        auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
+                "SerialService", encryptionEnabled ? "Security initialized" : "Security initialized with encryption disabled", true);
+    }
+
+    public void reloadSecurityConfiguration() {
+        loadPreferences();
+        initializeSecurity();
     }
     
     private void updateStatus(final String status) {
@@ -396,6 +408,13 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                 Marker marker = (Marker) mapItem;
                 marker.setGeoPoint(geoPoint);
             }
+
+            AkitaMissionMarkerRegistry.getInstance().recordMarker(
+                    uid,
+                    callsign != null ? callsign : uid,
+                    cotPoint.getLatitude(),
+                    cotPoint.getLongitude(),
+                    "Serial");
         } catch (Exception e) {
             Log.e(TAG, "Error parsing CoT data from serial: " + e.getMessage(), e);
         }

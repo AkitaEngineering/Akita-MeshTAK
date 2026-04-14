@@ -50,15 +50,33 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private static final String PREF_LAST_SEND_BYTES = "dashboard_last_send_bytes";
     private static final String PREF_LAST_SEND_FORMAT = "dashboard_last_send_format";
     private static final String PREF_LAST_SEND_ROUTE = "dashboard_last_send_route";
+    private final MapView mapView;
     private Spinner dataFormatSpinner;
+    private Spinner missionTemplateSpinner;
+    private Spinner incidentRoleActionSpinner;
     private EditText dataToSendEditText;
     private Button sendButton;
+    private Button loadTemplateButton;
+    private Button loadRoleActionButton;
     private Spinner commandHistorySpinner;
     private Button themeModeButton;
     private TextView routeChip;
     private TextView endpointChip;
+    private TextView missionProfileChip;
     private TextView operationalSummaryTextView;
     private TextView payloadSummaryTextView;
+    private TextView assuranceSummaryTextView;
+    private TextView incidentBoardSummaryTextView;
+    private TextView incidentTitleValueTextView;
+    private TextView incidentRolePackValueTextView;
+    private TextView incidentTempoValueTextView;
+    private TextView incidentNextActionValueTextView;
+    private TextView incidentRoleActionHintTextView;
+    private TextView encryptionStatusValueTextView;
+    private TextView auditStatusValueTextView;
+    private TextView interoperabilityStatusValueTextView;
+    private TextView provisioningStatusValueTextView;
+    private TextView templateHintTextView;
     private TextView activeRouteValueTextView;
     private TextView payloadBudgetValueTextView;
     private TextView lastSendValueTextView;
@@ -74,6 +92,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private FormatDistributionChartView formatDistributionChartView;
     private View dashboardContent;
     private View summaryCard;
+    private View assuranceCard;
+    private View incidentBoardCard;
     private View trendCard;
     private View formatCard;
     private View composerCard;
@@ -82,6 +102,14 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private View payloadStatCard;
     private View lastSendStatCard;
     private View deliveryStatCard;
+    private View assuranceEncryptionCard;
+    private View assuranceAuditCard;
+    private View assuranceInteroperabilityCard;
+    private View assuranceProvisioningCard;
+    private View incidentTitleCard;
+    private View incidentRolePackCard;
+    private View incidentTempoCard;
+    private View incidentNextActionCard;
     private View plainLegendDot;
     private View jsonLegendDot;
     private View customLegendDot;
@@ -91,7 +119,11 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private final List<String> commandHistory = new ArrayList<>();
     private final List<Integer> recentPayloadSizes = new ArrayList<>();
     private final List<String> dataFormats = new ArrayList<>();
+    private final List<AkitaMissionProfile.TemplatePreset> templatePresets = new ArrayList<>();
+    private final List<AkitaIncidentBoard.RoleAction> roleActions = new ArrayList<>();
     private ThemedSpinnerAdapter formatAdapter;
+    private ThemedSpinnerAdapter templateAdapter;
+    private ThemedSpinnerAdapter roleActionAdapter;
     private ThemedSpinnerAdapter historyAdapter;
     private final Context context;
     private final SharedPreferences preferences;
@@ -113,6 +145,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     public SendDataView(Context context, MapView mapView, BLEService bleService, SerialService serialService) {
         super(context);
         this.context = context;
+        this.mapView = mapView;
         this.preferences = PreferenceManager.getDefaultSharedPreferences(context);
         this.bleService = bleService;
         this.serialService = serialService;
@@ -125,9 +158,13 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         bindViews();
         loadPersistedState();
         setupFormatSpinner();
+        setupMissionTemplateSpinner();
+        setupRoleActionSpinner();
         setupHistorySpinner();
         setupComposerInteractions();
         updateThemeModeButton();
+        refreshMissionTemplates();
+        refreshRoleActions();
         refreshHistorySpinner();
         applyTheme();
         refreshDashboard();
@@ -143,14 +180,31 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
 
     private void bindViews() {
         dataFormatSpinner = findViewById(R.id.data_format_spinner);
+        missionTemplateSpinner = findViewById(R.id.mission_template_spinner);
+        incidentRoleActionSpinner = findViewById(R.id.incident_role_action_spinner);
         dataToSendEditText = findViewById(R.id.data_to_send);
         sendButton = findViewById(R.id.send_button);
+        loadTemplateButton = findViewById(R.id.load_template_button);
+        loadRoleActionButton = findViewById(R.id.load_role_action_button);
         commandHistorySpinner = findViewById(R.id.command_history_spinner);
         themeModeButton = findViewById(R.id.theme_mode_button);
         routeChip = findViewById(R.id.route_chip);
         endpointChip = findViewById(R.id.endpoint_chip);
+        missionProfileChip = findViewById(R.id.mission_profile_chip);
         operationalSummaryTextView = findViewById(R.id.operational_summary);
         payloadSummaryTextView = findViewById(R.id.payload_summary);
+        assuranceSummaryTextView = findViewById(R.id.assurance_summary);
+        incidentBoardSummaryTextView = findViewById(R.id.incident_board_summary);
+        incidentTitleValueTextView = findViewById(R.id.incident_title_value);
+        incidentRolePackValueTextView = findViewById(R.id.incident_role_pack_value);
+        incidentTempoValueTextView = findViewById(R.id.incident_tempo_value);
+        incidentNextActionValueTextView = findViewById(R.id.incident_next_action_value);
+        incidentRoleActionHintTextView = findViewById(R.id.incident_role_action_hint);
+        encryptionStatusValueTextView = findViewById(R.id.assurance_encryption_value);
+        auditStatusValueTextView = findViewById(R.id.assurance_audit_value);
+        interoperabilityStatusValueTextView = findViewById(R.id.assurance_interop_value);
+        provisioningStatusValueTextView = findViewById(R.id.assurance_provisioning_value);
+        templateHintTextView = findViewById(R.id.template_hint);
         activeRouteValueTextView = findViewById(R.id.stat_active_route_value);
         payloadBudgetValueTextView = findViewById(R.id.stat_payload_value);
         lastSendValueTextView = findViewById(R.id.stat_last_send_value);
@@ -166,6 +220,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         formatDistributionChartView = findViewById(R.id.format_distribution_chart);
         dashboardContent = findViewById(R.id.dashboard_content);
         summaryCard = findViewById(R.id.summary_card);
+        assuranceCard = findViewById(R.id.assurance_card);
+        incidentBoardCard = findViewById(R.id.incident_board_card);
         trendCard = findViewById(R.id.trend_card);
         formatCard = findViewById(R.id.format_card);
         composerCard = findViewById(R.id.composer_card);
@@ -174,6 +230,14 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         payloadStatCard = findViewById(R.id.stat_payload_card);
         lastSendStatCard = findViewById(R.id.stat_last_send_card);
         deliveryStatCard = findViewById(R.id.stat_delivery_card);
+        assuranceEncryptionCard = findViewById(R.id.assurance_encryption_card);
+        assuranceAuditCard = findViewById(R.id.assurance_audit_card);
+        assuranceInteroperabilityCard = findViewById(R.id.assurance_interop_card);
+        assuranceProvisioningCard = findViewById(R.id.assurance_provisioning_card);
+        incidentTitleCard = findViewById(R.id.incident_title_card);
+        incidentRolePackCard = findViewById(R.id.incident_role_pack_card);
+        incidentTempoCard = findViewById(R.id.incident_tempo_card);
+        incidentNextActionCard = findViewById(R.id.incident_next_action_card);
         plainLegendDot = findViewById(R.id.plain_legend_dot);
         jsonLegendDot = findViewById(R.id.json_legend_dot);
         customLegendDot = findViewById(R.id.custom_legend_dot);
@@ -221,6 +285,16 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         });
     }
 
+    private void setupMissionTemplateSpinner() {
+        templateAdapter = new ThemedSpinnerAdapter(context, new ArrayList<>());
+        missionTemplateSpinner.setAdapter(templateAdapter);
+    }
+
+    private void setupRoleActionSpinner() {
+        roleActionAdapter = new ThemedSpinnerAdapter(context, new ArrayList<>());
+        incidentRoleActionSpinner.setAdapter(roleActionAdapter);
+    }
+
     private void setupComposerInteractions() {
         dataToSendEditText.addTextChangedListener(new TextWatcher() {
             @Override
@@ -240,6 +314,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         themeModeButton.setOnClickListener(v ->
                 AkitaTheme.setThemeMode(context, AkitaTheme.nextThemeMode(context)));
 
+        loadTemplateButton.setOnClickListener(v -> loadSelectedTemplate());
+        loadRoleActionButton.setOnClickListener(v -> loadSelectedRoleAction());
         sendButton.setOnClickListener(v -> sendCurrentPayload());
     }
 
@@ -266,9 +342,14 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 || AkitaMockSettings.PREF_MOCK_BLE_STATUS.equals(key)
                 || AkitaMockSettings.PREF_MOCK_SERIAL_STATUS.equals(key)
                 || AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)
+                || AkitaMissionProfile.PREF_MISSION_PROFILE.equals(key)
+                || AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
+                || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)
                 || "ble_device_name".equals(key)
                 || "serial_baud_rate".equals(key)
                 || "serial_port_path".equals(key)) {
+            refreshMissionTemplates();
+            refreshRoleActions();
             refreshDashboard();
             refreshHistorySpinner();
         }
@@ -392,13 +473,25 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         String routeLabel = "ble".equals(connectionMethod) ? "BLE" : "Serial";
         routeChip.setText((mockModeEnabled ? "Simulated route: " : "Active route: ") + routeLabel);
         endpointChip.setText(buildEndpointDescription());
+        missionProfileChip.setText("Profile: " + AkitaMissionProfile.getProfileBadge(preferences));
         operationalSummaryTextView.setText(buildOperationalSummary());
+        assuranceSummaryTextView.setText(AkitaOperationalReadiness.getAssuranceSummary(context, isActiveTransportAttached(), mapView != null));
+        refreshIncidentBoard();
         activeRouteValueTextView.setText(routeLabel);
         long displayLastSendAt = getDisplayLastSendAt();
         lastSendValueTextView.setText(displayLastSendAt > 0 ? formatRelativeTime(displayLastSendAt) : "Never");
         deliveryRatioValueTextView.setText(buildDeliveryRatio());
         lastOperationTextView.setText(buildLastOperationText());
         historyCaptionTextView.setText(buildHistoryCaption());
+
+        setAssuranceStatus(encryptionStatusValueTextView,
+            AkitaOperationalReadiness.getEncryptionStatus(context, isActiveTransportAttached()));
+        setAssuranceStatus(auditStatusValueTextView,
+            AkitaOperationalReadiness.getAuditStatus(context));
+        setAssuranceStatus(interoperabilityStatusValueTextView,
+            AkitaOperationalReadiness.getInteroperabilityStatus(context, isActiveTransportAttached(), mapView != null));
+        setAssuranceStatus(provisioningStatusValueTextView,
+            AkitaOperationalReadiness.getProvisioningStatus(context));
 
         plainLegendTextView.setText(String.format(Locale.US, "Plain Text %d", getDisplayPlainTextCount()));
         jsonLegendTextView.setText(String.format(Locale.US, "JSON %d", getDisplayJsonCount()));
@@ -468,6 +561,105 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         return selectedItem.toString();
     }
 
+    private void refreshMissionTemplates() {
+        templatePresets.clear();
+        templatePresets.addAll(AkitaMissionProfile.getTemplatePresets(preferences));
+
+        List<String> templateLabels = new ArrayList<>();
+        if (templatePresets.isEmpty()) {
+            templateLabels.add(context.getString(R.string.template_spinner_empty));
+            missionTemplateSpinner.setEnabled(false);
+            loadTemplateButton.setEnabled(false);
+        } else {
+            for (AkitaMissionProfile.TemplatePreset preset : templatePresets) {
+                templateLabels.add(preset.label);
+            }
+            missionTemplateSpinner.setEnabled(true);
+            loadTemplateButton.setEnabled(true);
+        }
+
+        templateAdapter.replaceItems(templateLabels);
+        missionTemplateSpinner.setSelection(0, false);
+        missionTemplateSpinner.setAlpha(missionTemplateSpinner.isEnabled() ? 1f : 0.65f);
+        loadTemplateButton.setAlpha(loadTemplateButton.isEnabled() ? 1f : 0.65f);
+        templateHintTextView.setText(AkitaMissionProfile.getTemplateHint(preferences));
+    }
+
+    private void refreshRoleActions() {
+        roleActions.clear();
+        roleActions.addAll(AkitaIncidentBoard.getRoleActions(preferences));
+
+        List<String> actionLabels = new ArrayList<>();
+        if (roleActions.isEmpty()) {
+            actionLabels.add(context.getString(R.string.role_action_spinner_empty));
+            incidentRoleActionSpinner.setEnabled(false);
+            loadRoleActionButton.setEnabled(false);
+        } else {
+            for (AkitaIncidentBoard.RoleAction roleAction : roleActions) {
+                actionLabels.add(roleAction.label);
+            }
+            incidentRoleActionSpinner.setEnabled(true);
+            loadRoleActionButton.setEnabled(true);
+        }
+
+        roleActionAdapter.replaceItems(actionLabels);
+        incidentRoleActionSpinner.setSelection(0, false);
+        incidentRoleActionSpinner.setAlpha(incidentRoleActionSpinner.isEnabled() ? 1f : 0.65f);
+        loadRoleActionButton.setAlpha(loadRoleActionButton.isEnabled() ? 1f : 0.65f);
+    }
+
+    private void refreshIncidentBoard() {
+        AkitaIncidentBoard.IncidentState incidentState = AkitaIncidentBoard.getState(preferences);
+        incidentBoardSummaryTextView.setText(incidentState.summary);
+        incidentTitleValueTextView.setText(incidentState.title);
+        incidentRolePackValueTextView.setText(incidentState.rolePack);
+        incidentTempoValueTextView.setText(incidentState.tempo);
+        incidentNextActionValueTextView.setText(incidentState.nextAction);
+        incidentRoleActionHintTextView.setText("Queue " + incidentState.rolePack + " actions into the secure composer.");
+    }
+
+    private void loadSelectedTemplate() {
+        if (templatePresets.isEmpty()) {
+            return;
+        }
+
+        int selectedIndex = missionTemplateSpinner.getSelectedItemPosition();
+        if (selectedIndex < 0 || selectedIndex >= templatePresets.size()) {
+            selectedIndex = 0;
+        }
+
+        AkitaMissionProfile.TemplatePreset preset = templatePresets.get(selectedIndex);
+        int formatIndex = dataFormats.indexOf(preset.format);
+        if (formatIndex >= 0) {
+            dataFormatSpinner.setSelection(formatIndex, false);
+        }
+        dataToSendEditText.setText(preset.payload);
+        dataToSendEditText.setSelection(preset.payload.length());
+        updatePayloadInsights();
+        Toast.makeText(context, "Loaded playbook: " + preset.label, Toast.LENGTH_SHORT).show();
+    }
+
+    private void loadSelectedRoleAction() {
+        if (roleActions.isEmpty()) {
+            return;
+        }
+
+        int selectedIndex = incidentRoleActionSpinner.getSelectedItemPosition();
+        if (selectedIndex < 0 || selectedIndex >= roleActions.size()) {
+            selectedIndex = 0;
+        }
+
+        AkitaIncidentBoard.RoleAction roleAction = roleActions.get(selectedIndex);
+        int formatIndex = dataFormats.indexOf(roleAction.format);
+        if (formatIndex >= 0) {
+            dataFormatSpinner.setSelection(formatIndex, false);
+        }
+        dataToSendEditText.setText(roleAction.payload);
+        dataToSendEditText.setSelection(roleAction.payload.length());
+        updatePayloadInsights();
+        Toast.makeText(context, "Queued role action: " + roleAction.label, Toast.LENGTH_SHORT).show();
+    }
+
     private String buildEndpointDescription() {
         if (AkitaMockSettings.isEnabled(preferences)) {
             if ("ble".equals(connectionMethod)) {
@@ -488,29 +680,31 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     }
 
     private String buildOperationalSummary() {
+        String profileLabel = AkitaMissionProfile.getProfileLabel(preferences);
+        String missionFocus = AkitaMissionProfile.getOperationalFocus(preferences);
         if (AkitaMockSettings.isEnabled(preferences)) {
             if ("ble".equals(connectionMethod)) {
                 String deviceName = preferences.getString("ble_device_name", "AkitaNode01");
-                return "Mock secure transport active. BLE route is being simulated for " + deviceName + " so operators can validate encrypted ATAK interoperability without hardware.";
+                return profileLabel + " playbook is active in mock mode. BLE route is being simulated for " + deviceName + " so teams can validate encrypted ATAK interoperability and " + missionFocus + " without hardware.";
             }
             String baudRate = preferences.getString("serial_baud_rate", "115200");
             String portPath = preferences.getString("serial_port_path", "/dev/ttyUSB0");
-            return "Mock secure transport active. Serial route is being simulated on " + portPath + " at " + baudRate + " baud for interoperability validation without hardware.";
+            return profileLabel + " playbook is active in mock mode. Serial route is being simulated on " + portPath + " at " + baudRate + " baud so teams can rehearse " + missionFocus + " without hardware.";
         }
         if ("ble".equals(connectionMethod)) {
             String deviceName = preferences.getString("ble_device_name", "AkitaNode01");
             if (bleService != null) {
-                return "Encrypted BLE mesh profile armed for " + deviceName + ". Secure ATAK and partner traffic will route over the mesh radio when transmitted.";
+                return profileLabel + " posture is armed over BLE for " + deviceName + ". Secure ATAK and partner traffic will route over the mesh radio for " + missionFocus + ".";
             }
-            return "Encrypted BLE mesh profile staged for " + deviceName + ". Waiting for the transport service to attach before release.";
+            return profileLabel + " posture is staged over BLE for " + deviceName + ". Waiting for the transport service to attach before release.";
         }
 
         String baudRate = preferences.getString("serial_baud_rate", "115200");
         String portPath = preferences.getString("serial_port_path", "/dev/ttyUSB0");
         if (serialService != null) {
-            return "Encrypted serial profile armed on " + portPath + " at " + baudRate + " baud for direct device exchange and partner-system interoperability.";
+            return profileLabel + " posture is armed on serial route " + portPath + " at " + baudRate + " baud for " + missionFocus + " and partner-system interoperability.";
         }
-        return "Encrypted serial profile staged on " + portPath + " at " + baudRate + " baud. Waiting for the transport service to attach.";
+        return profileLabel + " posture is staged on serial route " + portPath + " at " + baudRate + " baud. Waiting for the transport service to attach.";
     }
 
     private String buildDeliveryRatio() {
@@ -568,6 +762,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         dashboardContent.setBackgroundColor(palette.background);
 
         applyPanel(summaryCard, AkitaTheme.createAccentPanelDrawable(context, palette));
+        applyPanel(assuranceCard, AkitaTheme.createPanelDrawable(context, palette, true));
+        applyPanel(incidentBoardCard, AkitaTheme.createPanelDrawable(context, palette, true));
         applyPanel(trendCard, AkitaTheme.createPanelDrawable(context, palette, true));
         applyPanel(formatCard, AkitaTheme.createPanelDrawable(context, palette, true));
         applyPanel(composerCard, AkitaTheme.createPanelDrawable(context, palette, true));
@@ -577,20 +773,36 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         applyPanel(payloadStatCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(lastSendStatCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(deliveryStatCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(assuranceEncryptionCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(assuranceAuditCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(assuranceInteroperabilityCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(assuranceProvisioningCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(incidentTitleCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(incidentRolePackCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(incidentTempoCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(incidentNextActionCard, AkitaTheme.createStatTileDrawable(context, palette));
 
         routeChip.setBackground(AkitaTheme.createBadgeDrawable(context, palette, true));
         routeChip.setTextColor(palette.white);
         endpointChip.setBackground(AkitaTheme.createBadgeDrawable(context, palette, false));
         endpointChip.setTextColor(palette.textPrimary);
+        missionProfileChip.setBackground(AkitaTheme.createBadgeDrawable(context, palette, false));
+        missionProfileChip.setTextColor(palette.textPrimary);
 
         sendButton.setBackground(AkitaTheme.createAccentButtonDrawable(context, palette));
         sendButton.setTextColor(palette.white);
+        loadTemplateButton.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+        loadTemplateButton.setTextColor(palette.textPrimary);
+        loadRoleActionButton.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+        loadRoleActionButton.setTextColor(palette.textPrimary);
 
         dataToSendEditText.setBackground(AkitaTheme.createInputDrawable(context, palette));
         dataToSendEditText.setTextColor(palette.textPrimary);
         dataToSendEditText.setHintTextColor(palette.textMuted);
 
         applySpinnerStyle(dataFormatSpinner, palette);
+        applySpinnerStyle(missionTemplateSpinner, palette);
+        applySpinnerStyle(incidentRoleActionSpinner, palette);
         applySpinnerStyle(commandHistorySpinner, palette);
 
         themeModeButton.setBackground(AkitaTheme.createBadgeDrawable(context, palette, true));
@@ -607,10 +819,20 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         setTextColors(palette.textPrimary,
                 R.id.dashboard_title,
                 R.id.summary_card_title,
+                R.id.assurance_card_title,
+                R.id.incident_board_title,
                 R.id.stat_active_route_value,
                 R.id.stat_payload_value,
                 R.id.stat_last_send_value,
                 R.id.stat_delivery_value,
+                R.id.assurance_encryption_value,
+                R.id.assurance_audit_value,
+                R.id.assurance_interop_value,
+                R.id.assurance_provisioning_value,
+                R.id.incident_title_value,
+                R.id.incident_role_pack_value,
+                R.id.incident_tempo_value,
+                R.id.incident_next_action_value,
                 R.id.trend_card_title,
                 R.id.format_card_title,
                 R.id.composer_card_title,
@@ -620,10 +842,14 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.dashboard_subtitle,
                 R.id.operational_summary,
                 R.id.payload_summary,
+                R.id.assurance_summary,
+                R.id.incident_board_summary,
                 R.id.last_operation_text,
                 R.id.trend_card_subtitle,
                 R.id.format_card_subtitle,
                 R.id.composer_card_subtitle,
+                R.id.template_hint,
+                R.id.incident_role_action_hint,
                 R.id.history_caption,
                 R.id.payload_metrics,
                 R.id.plain_legend_text,
@@ -632,10 +858,22 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.stat_route_label,
                 R.id.stat_payload_label,
                 R.id.stat_last_send_label,
-                R.id.stat_delivery_label);
+                R.id.stat_delivery_label,
+                R.id.assurance_encryption_label,
+                R.id.assurance_audit_label,
+                R.id.assurance_interop_label,
+                R.id.assurance_provisioning_label,
+                R.id.incident_title_label,
+                R.id.incident_role_pack_label,
+                R.id.incident_tempo_label,
+                R.id.incident_next_action_label);
 
         formatAdapter.setPalette(palette);
+        templateAdapter.setPalette(palette);
+        roleActionAdapter.setPalette(palette);
         historyAdapter.setPalette(palette);
+        refreshMissionTemplates();
+        refreshRoleActions();
         updatePayloadInsights();
     }
 
@@ -712,6 +950,44 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private void applySpinnerStyle(Spinner spinner, AkitaTheme.Palette palette) {
         spinner.setBackground(AkitaTheme.createInputDrawable(context, palette));
         spinner.setPopupBackgroundDrawable(AkitaTheme.createInputDrawable(context, palette));
+    }
+
+    private void setAssuranceStatus(TextView view, String status) {
+        AkitaTheme.Palette palette = AkitaTheme.resolvePalette(context);
+        view.setText(status);
+        if (palette.monochrome) {
+            view.setTextColor(palette.textPrimary);
+            return;
+        }
+
+        String normalizedStatus = status == null ? "" : status.toLowerCase(Locale.US);
+        int color = palette.textPrimary;
+        if (normalizedStatus.contains("rotate")
+                || normalizedStatus.contains("failed")
+                || normalizedStatus.contains("disabled")
+                || normalizedStatus.contains("degraded")) {
+            color = palette.danger;
+        } else if (normalizedStatus.contains("pending")
+                || normalizedStatus.contains("standby")
+                || normalizedStatus.contains("staged")
+                || normalizedStatus.contains("awaiting")) {
+            color = palette.warning;
+        } else if (normalizedStatus.contains("active")
+                || normalizedStatus.contains("live")
+                || normalizedStatus.contains("loaded")
+                || normalizedStatus.contains("rehearsed")
+                || normalizedStatus.contains("simulated")
+                || normalizedStatus.contains("ready")) {
+            color = palette.success;
+        }
+        view.setTextColor(color);
+    }
+
+    private boolean isActiveTransportAttached() {
+        if (AkitaMockSettings.isEnabled(preferences)) {
+            return true;
+        }
+        return "ble".equals(connectionMethod) ? bleService != null : serialService != null;
     }
 
     private void setTextColors(int color, int... viewIds) {

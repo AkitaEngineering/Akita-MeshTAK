@@ -63,6 +63,30 @@
         android:orientation="horizontal">
 
         <TextView
+            android:id="@+id/mission_profile_status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:padding="14dp"
+            android:text="Profile: SAR" />
+
+        <TextView
+            android:id="@+id/security_posture_status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:padding="14dp"
+            android:text="Security: Provisioning pending" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal">
+
+        <TextView
             android:id="@+id/ble_status"
             android:layout_width="0dp"
             android:layout_height="wrap_content"

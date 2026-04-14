@@ -15,6 +15,39 @@
         android:entryValues="@array/ui_theme_values"
         android:defaultValue="dark" />
 
+    <ListPreference
+        android:key="mission_profile"
+        android:title="@string/mission_profile_title"
+        android:entries="@array/mission_profile_entries"
+        android:entryValues="@array/mission_profile_values"
+        android:defaultValue="search_rescue" />
+
+    <PreferenceCategory
+        android:title="@string/security_category_title">
+
+        <SwitchPreferenceCompat
+            android:key="security_encryption_enabled"
+            android:title="@string/encryption_enabled_title"
+            android:defaultValue="true" />
+
+        <EditTextPreference
+            android:key="security_provisioning_secret"
+            android:title="@string/provisioning_secret_title"
+            android:defaultValue="" />
+
+        <Preference
+            android:key="security_rotate_secret"
+            android:title="@string/rotate_secret_title" />
+
+        <Preference
+            android:key="security_export_audit"
+            android:title="@string/export_audit_title" />
+
+        <Preference
+            android:key="security_reload_state"
+            android:title="@string/reload_security_title" />
+    </PreferenceCategory>
+
     <SwitchPreferenceCompat
         android:key="mock_mode"
         android:title="@string/mock_mode_title"

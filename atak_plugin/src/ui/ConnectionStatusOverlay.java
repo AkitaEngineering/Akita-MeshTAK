@@ -12,6 +12,8 @@ import androidx.preference.PreferenceManager;
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.plugin.ui.PluginMapOverlay;
 
+import java.util.Locale;
+
 public class ConnectionStatusOverlay extends PluginMapOverlay {
 
     private String bleStatus = "BLE: Idle";
@@ -91,13 +93,17 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
         applyPalette(palette);
 
         String connectionMethod = PreferenceManager.getDefaultSharedPreferences(context)
-                .getString("connection_method", "ble");
+            .getString("connection_method", "ble");
         String deviceName = PreferenceManager.getDefaultSharedPreferences(context)
                 .getString("ble_device_name", "AkitaNode01");
         String baudRate = PreferenceManager.getDefaultSharedPreferences(context)
                 .getString("serial_baud_rate", "115200");
         String portPath = PreferenceManager.getDefaultSharedPreferences(context)
                 .getString("serial_port_path", "/dev/ttyUSB0");
+        String profileLine = "Profile: "
+            + AkitaMissionProfile.getProfileLabel(PreferenceManager.getDefaultSharedPreferences(context))
+            + " • "
+            + AkitaOperationalReadiness.getToolbarSecurityStatus(context, isActiveRouteLive(connectionMethod));
 
         String routeLine = connectionMethod.equalsIgnoreCase("ble")
             ? "Secure route: BLE • Target " + deviceName
@@ -106,8 +112,11 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
         String freshnessLine = "Interoperability freshness: BLE " + formatAgeSeconds(lastBleUpdate)
             + " • Serial " + formatAgeSeconds(lastSerialUpdate);
 
-        float totalWidth = Math.max(320f * context.getResources().getDisplayMetrics().density, headerPaint.measureText(routeLine) + (textPadding * 2));
-        float totalHeight = 220f * context.getResources().getDisplayMetrics().density;
+        float contentWidth = Math.max(
+            Math.max(textPaint.measureText(routeLine), mutedPaint.measureText(profileLine)),
+            mutedPaint.measureText(freshnessLine));
+        float totalWidth = Math.max(320f * context.getResources().getDisplayMetrics().density, contentWidth + (textPadding * 2));
+        float totalHeight = 248f * context.getResources().getDisplayMetrics().density;
         RectF background = new RectF(textPadding, textPadding, textPadding + totalWidth, textPadding + totalHeight);
         canvas.drawRoundRect(background, cornerRadius, cornerRadius, backgroundPaint);
         canvas.drawRoundRect(background, cornerRadius, cornerRadius, strokePaint);
@@ -130,6 +139,9 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
 
         y += textPaint.getTextSize() * 1.45f;
         canvas.drawText(routeLine, x, y, textPaint);
+
+        y += mutedPaint.getTextSize() * 1.45f;
+        canvas.drawText(profileLine, x, y, mutedPaint);
 
         y += textPaint.getTextSize() * 1.75f;
         drawStatusRow(canvas, background, y, "BLE", stripPrefix(bleStatus, "BLE: "), lastBleUpdate, palette);
@@ -209,5 +221,14 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
             return value.substring(prefix.length());
         }
         return value;
+    }
+
+    private boolean isActiveRouteLive(String connectionMethod) {
+        if (AkitaMockSettings.isEnabled(context)) {
+            return true;
+        }
+        String activeStatus = connectionMethod.equalsIgnoreCase("ble") ? bleStatus : serialStatus;
+        String normalizedStatus = activeStatus == null ? "" : activeStatus.toLowerCase(Locale.US);
+        return normalizedStatus.contains("connected") || normalizedStatus.contains("ready");
     }
 }

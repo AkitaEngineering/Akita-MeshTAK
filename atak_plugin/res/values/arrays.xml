@@ -23,6 +23,20 @@
         <item>light</item>
         <item>night_red</item>
     </string-array>
+    <string-array name="mission_profile_entries">
+        <item>Search &amp; Rescue</item>
+        <item>Law Enforcement</item>
+        <item>Coast Guard</item>
+        <item>Military</item>
+        <item>Private Security</item>
+    </string-array>
+    <string-array name="mission_profile_values">
+        <item>search_rescue</item>
+        <item>law_enforcement</item>
+        <item>coast_guard</item>
+        <item>military</item>
+        <item>private_security</item>
+    </string-array>
     <string-array name="mock_status_entries">
         <item>Connected</item>
         <item>Connecting</item>

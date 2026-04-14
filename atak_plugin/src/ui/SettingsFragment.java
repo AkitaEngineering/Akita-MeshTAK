@@ -7,6 +7,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.IBinder;
 import android.text.InputType;
 import android.util.Log;
@@ -17,14 +19,16 @@ import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
+import androidx.preference.SwitchPreferenceCompat;
 
 import com.atakmap.android.maps.MapView;
+import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.R;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
 import com.akitaengineering.meshtak.ui.AkitaTheme;
 
-public class SettingsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener {
+public class SettingsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener, android.content.SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static final String TAG = "SettingsFragment";
     private MapView mapView;
@@ -81,6 +85,12 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
 
         ListPreference connectionMethodPref = findPreference("connection_method");
         ListPreference uiThemePref = findPreference(AkitaTheme.PREF_UI_THEME);
+        ListPreference missionProfilePref = findPreference(AkitaMissionProfile.PREF_MISSION_PROFILE);
+        SwitchPreferenceCompat encryptionEnabledPref = findPreference(AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED);
+        EditTextPreference provisioningSecretPref = findPreference(AkitaProvisioningManager.PREF_PROVISIONING_SECRET);
+        Preference rotateSecretPref = findPreference("security_rotate_secret");
+        Preference exportAuditPref = findPreference("security_export_audit");
+        Preference reloadSecurityPref = findPreference("security_reload_state");
         Preference mockModePref = findPreference(AkitaMockSettings.PREF_MOCK_MODE);
         ListPreference mockBleStatusPref = findPreference(AkitaMockSettings.PREF_MOCK_BLE_STATUS);
         ListPreference mockSerialStatusPref = findPreference(AkitaMockSettings.PREF_MOCK_SERIAL_STATUS);
@@ -95,6 +105,13 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         if (connectionMethodPref != null) connectionMethodPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
         if (uiThemePref != null) uiThemePref.setOnPreferenceChangeListener(this);
         if (uiThemePref != null) uiThemePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (missionProfilePref != null) missionProfilePref.setOnPreferenceChangeListener(this);
+        if (missionProfilePref != null) missionProfilePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (encryptionEnabledPref != null) encryptionEnabledPref.setOnPreferenceChangeListener(this);
+        if (provisioningSecretPref != null) provisioningSecretPref.setOnPreferenceChangeListener(this);
+        if (provisioningSecretPref != null) provisioningSecretPref.setSummary(AkitaProvisioningManager.getProvisioningSummary(requireContext()));
+        if (provisioningSecretPref != null) provisioningSecretPref.setOnBindEditTextListener(editText ->
+            editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD));
         if (mockModePref != null) mockModePref.setOnPreferenceChangeListener(this);
         if (mockBleStatusPref != null) mockBleStatusPref.setOnPreferenceChangeListener(this);
         if (mockBleStatusPref != null) mockBleStatusPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
@@ -110,6 +127,30 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
          if (sendTestMessagePref != null) {
             sendTestMessagePref.setOnPreferenceClickListener(preference -> {
                 sendTestMessageToDevice();
+                return true;
+            });
+        }
+        if (rotateSecretPref != null) {
+            rotateSecretPref.setSummary(AkitaProvisioningManager.getRotationSummary(requireContext()));
+            rotateSecretPref.setOnPreferenceClickListener(preference -> {
+                String rotatedSecret = AkitaProvisioningManager.rotateProvisioningSecret(requireContext());
+                refreshProvisioningPreferenceSummaries();
+                reloadBoundServiceSecurity();
+                Toast.makeText(getActivity(), "Provisioning secret rotated: " + AkitaProvisioningManager.maskSecret(rotatedSecret), Toast.LENGTH_SHORT).show();
+                return true;
+            });
+        }
+        if (exportAuditPref != null) {
+            exportAuditPref.setOnPreferenceClickListener(preference -> {
+                String exportPath = AuditLogger.getInstance().exportToFile();
+                Toast.makeText(getActivity(), exportPath == null ? "Audit export failed." : "Audit exported to " + exportPath, Toast.LENGTH_LONG).show();
+                return true;
+            });
+        }
+        if (reloadSecurityPref != null) {
+            reloadSecurityPref.setOnPreferenceClickListener(preference -> {
+                reloadBoundServiceSecurity();
+                Toast.makeText(getActivity(), "Security state reloaded.", Toast.LENGTH_SHORT).show();
                 return true;
             });
         }
@@ -133,6 +174,9 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
     @Override
     public void onStart() {
         super.onStart();
+        if (getPreferenceManager() != null && getPreferenceManager().getSharedPreferences() != null) {
+            getPreferenceManager().getSharedPreferences().registerOnSharedPreferenceChangeListener(this);
+        }
         if (getActivity() != null && AkitaMockSettings.isEnabled(PreferenceManager.getDefaultSharedPreferences(getActivity()))) {
             return;
         }
@@ -146,6 +190,9 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
     @Override
     public void onStop() {
         super.onStop();
+        if (getPreferenceManager() != null && getPreferenceManager().getSharedPreferences() != null) {
+            getPreferenceManager().getSharedPreferences().unregisterOnSharedPreferenceChangeListener(this);
+        }
         if (getActivity() != null) {
             // Unbind services
             if (bleService != null) getActivity().unbindService(bleConnection);
@@ -198,6 +245,35 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         }
     }
 
+    private void refreshProvisioningPreferenceSummaries() {
+        EditTextPreference provisioningSecretPref = findPreference(AkitaProvisioningManager.PREF_PROVISIONING_SECRET);
+        Preference rotateSecretPref = findPreference("security_rotate_secret");
+        if (provisioningSecretPref != null && getContext() != null) {
+            provisioningSecretPref.setSummary(AkitaProvisioningManager.getProvisioningSummary(getContext()));
+        }
+        if (rotateSecretPref != null && getContext() != null) {
+            rotateSecretPref.setSummary(AkitaProvisioningManager.getRotationSummary(getContext()));
+        }
+    }
+
+    private void reloadBoundServiceSecurity() {
+        if (bleService != null) {
+            bleService.reloadSecurityConfiguration();
+        }
+        if (serialService != null) {
+            serialService.reloadSecurityConfiguration();
+        }
+    }
+
+    @Override
+    public void onSharedPreferenceChanged(android.content.SharedPreferences sharedPreferences, String key) {
+        if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
+                || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)) {
+            refreshProvisioningPreferenceSummaries();
+            new Handler(Looper.getMainLooper()).post(this::reloadBoundServiceSecurity);
+        }
+    }
+
     // --- Preference Change Listener ---
 
     @Override
@@ -213,6 +289,12 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
             if (blePref != null) blePref.setEnabled(selectedMethod.equals("ble"));
             if (serialPathPref != null) serialPathPref.setEnabled(selectedMethod.equals("serial"));
             if (serialBaudPref != null) serialBaudPref.setEnabled(selectedMethod.equals("serial"));
+        } else if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)) {
+            String newSecret = String.valueOf(newValue).trim();
+            if (!newSecret.isEmpty() && newSecret.length() < 12) {
+                Toast.makeText(getActivity(), "Provisioning secret must be at least 12 characters or left blank to use the build-time secret.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
         } else if (AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)) {
             try {
                 int batteryLevel = Integer.parseInt(String.valueOf(newValue));

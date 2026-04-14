@@ -9,6 +9,7 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -145,10 +146,10 @@ public class AuditLogger {
         }
     }
     
-    public void exportToFile() {
+    public String exportToFile() {
         if (context == null) {
             Log.e(TAG, "Context not initialized, cannot export");
-            return;
+            return null;
         }
         
         try {
@@ -173,14 +174,16 @@ public class AuditLogger {
                         entry.source,
                         entry.details,
                         entry.success ? "OK" : "FAIL");
-                    fos.write(line.getBytes());
+                    fos.write(line.getBytes(StandardCharsets.UTF_8));
                 }
             }
             
             fos.close();
             Log.i(TAG, "Audit log exported to: " + logFile.getAbsolutePath());
+            return logFile.getAbsolutePath();
         } catch (IOException e) {
             Log.e(TAG, "Failed to export audit log", e);
+            return null;
         }
     }
     

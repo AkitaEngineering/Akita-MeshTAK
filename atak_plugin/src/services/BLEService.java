@@ -19,7 +19,9 @@ import com.atakmap.api.CotPoint;
 import com.atakmap.api.Point2;
 import com.atakmap.api.map.MapItem;
 import com.atakmap.api.map.Marker;
+import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
+import com.akitaengineering.meshtak.ui.AkitaMissionMarkerRegistry;
 import com.akitaengineering.meshtak.Config;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.SecurityManager;
@@ -98,19 +100,7 @@ public class BLEService extends Service {
         securityManager = SecurityManager.getInstance();
         auditLogger = AuditLogger.getInstance();
         auditLogger.initialize(getApplicationContext());
-        
-        // Initialize deterministic keys from provisioning material.
-        if (!securityManager.isInitialized()) {
-            if (!securityManager.initializeFromProvisioning(targetDeviceName, Config.PROVISIONING_SECRET)) {
-                Log.e(TAG, "Failed to initialize security manager");
-                auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
-                               "BLEService", "Security initialization failed", false);
-            } else {
-                auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
-                               "BLEService", "Security initialized", true);
-                securityManager.setEncryptionEnabled(true);
-            }
-        }
+        initializeSecurity();
         
         initialize();
         startScan();
@@ -167,6 +157,29 @@ public class BLEService extends Service {
         if (prefName != null && !prefName.trim().isEmpty()) {
             targetDeviceName = prefName.trim();
         }
+    }
+
+    private void initializeSecurity() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean encryptionEnabled = AkitaProvisioningManager.isEncryptionEnabled(preferences);
+        String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(preferences);
+
+        securityManager.reset();
+        if (!securityManager.initializeFromProvisioning(targetDeviceName, provisioningSecret)) {
+            Log.e(TAG, "Failed to initialize security manager");
+            auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
+                    "BLEService", "Security initialization failed", false);
+            return;
+        }
+
+        securityManager.setEncryptionEnabled(encryptionEnabled);
+        auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
+                "BLEService", encryptionEnabled ? "Security initialized" : "Security initialized with encryption disabled", true);
+    }
+
+    public void reloadSecurityConfiguration() {
+        loadPreferences();
+        initializeSecurity();
     }
 
     private boolean scanning;
@@ -465,6 +478,13 @@ public class BLEService extends Service {
                 Marker marker = (Marker) mapItem;
                 marker.setGeoPoint(geoPoint);
             }
+
+            AkitaMissionMarkerRegistry.getInstance().recordMarker(
+                    uid,
+                    callsign != null ? callsign : uid,
+                    cotPoint.getLatitude(),
+                    cotPoint.getLongitude(),
+                    "BLE");
         } catch (Exception e) {
             Log.e(TAG, "Error processing CoT data: " + e.getMessage(), e);
         }

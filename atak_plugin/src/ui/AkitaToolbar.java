@@ -25,6 +25,8 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
     private TextView toolbarSubtitleTextView;
     private TextView themeBadgeTextView;
     private TextView connectionMethodStatusTextView;
+    private TextView missionProfileStatusTextView;
+    private TextView securityPostureStatusTextView;
     private TextView bleStatusTextView;
     private TextView serialStatusTextView;
     private TextView batteryStatusTextView;
@@ -48,6 +50,9 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
     public void setServices(BLEService ble, SerialService serial) {
         this.bleService = ble;
         this.serialService = serial;
+        updateConnectionMethodDisplay();
+        updateMissionProfileStatus();
+        updateSecurityPostureStatus();
         setBatteryStatus("--%");
     }
 
@@ -59,6 +64,8 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
         toolbarSubtitleTextView = v.findViewById(R.id.toolbar_subtitle);
         themeBadgeTextView = v.findViewById(R.id.theme_badge);
         connectionMethodStatusTextView = v.findViewById(R.id.connection_method_status);
+        missionProfileStatusTextView = v.findViewById(R.id.mission_profile_status);
+        securityPostureStatusTextView = v.findViewById(R.id.security_posture_status);
         bleStatusTextView = v.findViewById(R.id.ble_status);
         serialStatusTextView = v.findViewById(R.id.serial_status);
         batteryStatusTextView = v.findViewById(R.id.battery_status);
@@ -67,6 +74,8 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
 
         applyTheme();
         updateConnectionMethodDisplay();
+        updateMissionProfileStatus();
+        updateSecurityPostureStatus();
         setDetailedBleStatus(bleDetailedStatus);
         setDetailedSerialStatus(serialDetailedStatus);
         setBatteryStatus(batteryPercent >= 0 ? batteryPercent + "%" : "--%");
@@ -87,11 +96,15 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
         if (key.equals("connection_method") || key.equals("ble_device_name") || key.equals("serial_baud_rate") || key.equals("serial_port_path")) {
             updateConnectionMethodDisplay();
+            updateSecurityPostureStatus();
+        } else if (AkitaMissionProfile.PREF_MISSION_PROFILE.equals(key)) {
+            updateMissionProfileStatus();
         } else if (AkitaMockSettings.PREF_MOCK_MODE.equals(key)
                 || AkitaMockSettings.PREF_MOCK_BLE_STATUS.equals(key)
                 || AkitaMockSettings.PREF_MOCK_SERIAL_STATUS.equals(key)
                 || AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)) {
             updateConnectionMethodDisplay();
+            updateSecurityPostureStatus();
         } else if (AkitaTheme.PREF_UI_THEME.equals(key)) {
             applyTheme();
         }
@@ -114,8 +127,36 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
                 displayMethod = "Secure route: Serial • " + portPath + " @ " + baudRate;
             }
             connectionMethodStatusTextView.setText(displayMethod);
+            updateMissionProfileStatus();
             updateOperationalHealth();
         }
+    }
+
+    private void updateMissionProfileStatus() {
+        if (missionProfileStatusTextView == null) {
+            return;
+        }
+        String label = AkitaMissionProfile.getProfileLabel(PreferenceManager.getDefaultSharedPreferences(context));
+        missionProfileStatusTextView.setText("Profile: " + label);
+    }
+
+    private void updateSecurityPostureStatus() {
+        if (securityPostureStatusTextView == null) {
+            return;
+        }
+        securityPostureStatusTextView.setText(AkitaOperationalReadiness.getToolbarSecurityStatus(context, isActiveTransportAvailable()));
+        securityPostureStatusTextView.setTextColor(AkitaTheme.statusColor(
+                securityPostureStatusTextView.getText().toString(),
+                AkitaTheme.resolvePalette(context)));
+    }
+
+    private boolean isActiveTransportAvailable() {
+        if (AkitaMockSettings.isEnabled(context)) {
+            return true;
+        }
+        String method = PreferenceManager.getDefaultSharedPreferences(context)
+                .getString("connection_method", "ble");
+        return "ble".equalsIgnoreCase(method) ? bleService != null : serialService != null;
     }
     
     private void triggerSosAlert() {
@@ -275,6 +316,15 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
         if (toolbarHealthTextView != null) {
             toolbarHealthTextView.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
             updateOperationalHealth();
+        }
+        if (missionProfileStatusTextView != null) {
+            missionProfileStatusTextView.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+            missionProfileStatusTextView.setTextColor(palette.textPrimary);
+            updateMissionProfileStatus();
+        }
+        if (securityPostureStatusTextView != null) {
+            securityPostureStatusTextView.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+            updateSecurityPostureStatus();
         }
         if (sosButton != null) {
             sosButton.setBackground(AkitaTheme.createDangerButtonDrawable(context, palette));

@@ -20,12 +20,16 @@ import com.atakmap.android.plugin.ui.PluginMapOverlay;
 import com.atakmap.android.plugin.ui.PluginPreferenceFragment;
 import com.atakmap.android.plugin.ui.PluginToolbar;
 import com.atakmap.android.plugin.ui.PluginView;
+import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
 import com.akitaengineering.meshtak.ui.AkitaMockSettings;
+import com.akitaengineering.meshtak.ui.AkitaMissionProfile;
+import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.ui.AkitaTheme;
 import com.akitaengineering.meshtak.ui.ConnectionStatusOverlay;
+import com.akitaengineering.meshtak.ui.MissionMapOverlay;
 import com.akitaengineering.meshtak.ui.SendDataView;
 import com.akitaengineering.meshtak.ui.SettingsFragment;
 
@@ -41,6 +45,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
     private SerialService serialService;
     private AkitaToolbar akitaToolbar;
     private ConnectionStatusOverlay connectionStatusOverlay;
+    private MissionMapOverlay missionMapOverlay;
     private SendDataView sendDataView;
 
     // --- Service Connection Handlers ---
@@ -56,6 +61,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             
             if (akitaToolbar != null) akitaToolbar.setServices(bleService, serialService);
             if (sendDataView != null) sendDataView.setServices(bleService, serialService);
+            if (missionMapOverlay != null) missionMapOverlay.setBleStatus(bleService.getConnectionStatus());
             Log.i(TAG, "BLE Service bound and configured.");
         }
 
@@ -66,6 +72,9 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             if (sendDataView != null) sendDataView.setServices(null, serialService);
             if (connectionStatusOverlay != null) {
                 connectionStatusOverlay.setBleStatus("Disconnected");
+            }
+            if (missionMapOverlay != null) {
+                missionMapOverlay.setBleStatus("Disconnected");
             }
         }
     };
@@ -81,6 +90,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             
             if (akitaToolbar != null) akitaToolbar.setServices(bleService, serialService);
             if (sendDataView != null) sendDataView.setServices(bleService, serialService);
+            if (missionMapOverlay != null) missionMapOverlay.setSerialStatus(serialService.getConnectionStatus());
             Log.i(TAG, "Serial Service bound and configured.");
         }
 
@@ -92,17 +102,22 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             if (connectionStatusOverlay != null) {
                 connectionStatusOverlay.setSerialStatus("Disconnected");
             }
+            if (missionMapOverlay != null) {
+                missionMapOverlay.setSerialStatus("Disconnected");
+            }
         }
     };
 
     private final BLEService.BleStatusListener bleStatusListener = (status) -> {
         if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus(status);
         if (connectionStatusOverlay != null) connectionStatusOverlay.setBleStatus(status);
+        if (missionMapOverlay != null) missionMapOverlay.setBleStatus(status);
     };
 
     private final SerialService.SerialStatusListener serialStatusListener = (status) -> {
         if (akitaToolbar != null) akitaToolbar.setDetailedSerialStatus(status);
         if (connectionStatusOverlay != null) connectionStatusOverlay.setSerialStatus(status);
+        if (missionMapOverlay != null) missionMapOverlay.setSerialStatus(status);
     };
 
     // --- Plugin Lifecycle ---
@@ -117,9 +132,12 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
         // Register for preference changes globally to handle connection method swaps
         PreferenceManager.getDefaultSharedPreferences(context)
                 .registerOnSharedPreferenceChangeListener(this);
+
+        AuditLogger.getInstance().initialize(context.getApplicationContext());
         
         akitaToolbar = new AkitaToolbar(context);
         connectionStatusOverlay = new ConnectionStatusOverlay(context, view);
+        missionMapOverlay = new MissionMapOverlay(context, view);
         
         if (isMockModeEnabled()) {
             applyMockState();
@@ -189,6 +207,10 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             connectionStatusOverlay.setBleStatus(bleStatus);
             connectionStatusOverlay.setSerialStatus(serialStatus);
         }
+        if (missionMapOverlay != null) {
+            missionMapOverlay.setBleStatus(bleStatus);
+            missionMapOverlay.setSerialStatus(serialStatus);
+        }
         if (sendDataView != null) {
             sendDataView.setServices(null, null);
         }
@@ -235,7 +257,19 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             
             // 3. Update the toolbar display instantly
             if (akitaToolbar != null) akitaToolbar.updateConnectionMethodDisplay();
-        } else if (AkitaTheme.PREF_UI_THEME.equals(key) && mapView != null) {
+        } else if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
+                || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)) {
+            if (bleService != null) {
+                bleService.reloadSecurityConfiguration();
+            }
+            if (serialService != null) {
+                serialService.reloadSecurityConfiguration();
+            }
+            if (mapView != null) {
+                mapView.invalidate();
+            }
+        } else if ((AkitaTheme.PREF_UI_THEME.equals(key)
+                || AkitaMissionProfile.PREF_MISSION_PROFILE.equals(key)) && mapView != null) {
             mapView.invalidate();
             if (isMockModeEnabled()) {
                 applyMockState();
@@ -249,6 +283,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
     public List<PluginMapOverlay> getOverlays() {
         List<PluginMapOverlay> overlays = new ArrayList<>();
         overlays.add(connectionStatusOverlay);
+        overlays.add(missionMapOverlay);
         return overlays;
     }
 

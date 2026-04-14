@@ -277,6 +277,13 @@ public class SecurityManager {
         return encryptionEnabled;
     }
 
+    public synchronized void reset() {
+        aesKey = null;
+        hmacKey = null;
+        initialized = false;
+        encryptionEnabled = false;
+    }
+
     public void setEncryptionEnabled(boolean enabled) {
         this.encryptionEnabled = enabled;
         Log.i(TAG, "Encryption enabled set to: " + enabled);
