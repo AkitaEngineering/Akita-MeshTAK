@@ -13,6 +13,7 @@ public final class AkitaTheme {
     public static final String MODE_DARK = "dark";
     public static final String MODE_LIGHT = "light";
     public static final String MODE_NIGHT_RED = "night_red";
+    public static final String MODE_NIGHT_GREEN = "night_green";
 
     private AkitaTheme() {
     }
@@ -24,6 +25,9 @@ public final class AkitaTheme {
         }
         if (MODE_NIGHT_RED.equalsIgnoreCase(mode)) {
             return nightRedPalette();
+        }
+        if (MODE_NIGHT_GREEN.equalsIgnoreCase(mode)) {
+            return nightGreenPalette();
         }
         return darkPalette();
     }
@@ -39,6 +43,10 @@ public final class AkitaTheme {
 
     public static boolean isNightRedMode(Context context) {
         return MODE_NIGHT_RED.equalsIgnoreCase(getThemeMode(context));
+    }
+
+    public static boolean isNightGreenMode(Context context) {
+        return MODE_NIGHT_GREEN.equalsIgnoreCase(getThemeMode(context));
     }
 
     public static void setThemeMode(Context context, String mode) {
@@ -59,6 +67,9 @@ public final class AkitaTheme {
         if (MODE_LIGHT.equalsIgnoreCase(currentMode)) {
             return MODE_NIGHT_RED;
         }
+        if (MODE_NIGHT_RED.equalsIgnoreCase(currentMode)) {
+            return MODE_NIGHT_GREEN;
+        }
         return MODE_DARK;
     }
 
@@ -69,6 +80,9 @@ public final class AkitaTheme {
         }
         if (MODE_NIGHT_RED.equalsIgnoreCase(mode)) {
             return "Night Red";
+        }
+        if (MODE_NIGHT_GREEN.equalsIgnoreCase(mode)) {
+            return "Night Green";
         }
         return "Dark Ops";
     }
@@ -162,45 +176,45 @@ public final class AkitaTheme {
 
     public static Palette darkPalette() {
         return new Palette(
-                Color.parseColor("#06080B"),
-                Color.parseColor("#11161C"),
-                Color.parseColor("#182230"),
-                Color.parseColor("#556B2F"),
-                Color.parseColor("#7A8794"),
-                Color.parseColor("#F4F7FA"),
-                Color.parseColor("#C4CDD5"),
-                Color.parseColor("#8E9BA7"),
-                Color.parseColor("#556B2F"),
-                Color.parseColor("#839667"),
-                Color.parseColor("#223754"),
-                Color.parseColor("#B8C1C9"),
-                Color.parseColor("#B45757"),
-                Color.parseColor("#C6A34A"),
-                Color.parseColor("#72B26F"),
-                Color.parseColor("#334150"),
-                Color.parseColor("#FFFFFF"),
+                Color.parseColor("#09090B"),   // background — near-black
+                Color.parseColor("#131316"),   // surface — charcoal
+                Color.parseColor("#1C1C21"),   // surfaceElevated — dark graphite
+                Color.parseColor("#6E6E76"),   // surfaceAccent — titanium mid
+                Color.parseColor("#3F3F46"),   // outline — zinc-700
+                Color.parseColor("#FAFAFA"),   // textPrimary — white
+                Color.parseColor("#A1A1AA"),   // textSecondary — zinc-400
+                Color.parseColor("#71717A"),   // textMuted — zinc-500
+                Color.parseColor("#A1A1AA"),   // accent — silver
+                Color.parseColor("#D4D4D8"),   // accentStrong — zinc-300
+                Color.parseColor("#27272A"),   // navy (secondary fill) — zinc-800
+                Color.parseColor("#D4D4D8"),   // silver — zinc-300
+                Color.parseColor("#EF4444"),   // danger — red
+                Color.parseColor("#EAB308"),   // warning — yellow
+                Color.parseColor("#22C55E"),   // success — green
+                Color.parseColor("#27272A"),   // grid — zinc-800
+                Color.parseColor("#FFFFFF"),   // white
                 false);
     }
 
     public static Palette lightPalette() {
         return new Palette(
-                Color.parseColor("#EEF2F4"),
-                Color.parseColor("#FFFFFF"),
-                Color.parseColor("#E3E8EC"),
-                Color.parseColor("#556B2F"),
-                Color.parseColor("#7B8792"),
-                Color.parseColor("#0D1723"),
-                Color.parseColor("#465462"),
-                Color.parseColor("#6E7A86"),
-                Color.parseColor("#556B2F"),
-                Color.parseColor("#425220"),
-                Color.parseColor("#284362"),
-                Color.parseColor("#A2ADB7"),
-                Color.parseColor("#9E4545"),
-                Color.parseColor("#9B7A1F"),
-                Color.parseColor("#567C4F"),
-                Color.parseColor("#D2DAE1"),
-                Color.parseColor("#FFFFFF"),
+                Color.parseColor("#F4F4F5"),   // background — zinc-100
+                Color.parseColor("#FFFFFF"),   // surface — white
+                Color.parseColor("#E4E4E7"),   // surfaceElevated — zinc-200
+                Color.parseColor("#71717A"),   // surfaceAccent — titanium mid
+                Color.parseColor("#A1A1AA"),   // outline — zinc-400
+                Color.parseColor("#09090B"),   // textPrimary — near-black
+                Color.parseColor("#52525B"),   // textSecondary — zinc-600
+                Color.parseColor("#71717A"),   // textMuted — zinc-500
+                Color.parseColor("#52525B"),   // accent — graphite
+                Color.parseColor("#3F3F46"),   // accentStrong — zinc-700
+                Color.parseColor("#E4E4E7"),   // navy (secondary fill) — zinc-200
+                Color.parseColor("#A1A1AA"),   // silver — zinc-400
+                Color.parseColor("#DC2626"),   // danger — red-600
+                Color.parseColor("#CA8A04"),   // warning — yellow-600
+                Color.parseColor("#16A34A"),   // success — green-600
+                Color.parseColor("#D4D4D8"),   // grid — zinc-300
+                Color.parseColor("#FFFFFF"),   // white
                 false);
     }
 
@@ -223,6 +237,28 @@ public final class AkitaTheme {
                 Color.parseColor("#FF3B30"),
                 Color.parseColor("#FF3B30"),
                 Color.parseColor("#FF3B30"),
+                true);
+    }
+
+    public static Palette nightGreenPalette() {
+        return new Palette(
+                Color.parseColor("#000000"),
+                Color.parseColor("#000000"),
+                Color.parseColor("#000000"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
+                Color.parseColor("#33FF00"),
                 true);
     }
 

@@ -6,45 +6,45 @@
   <title>Akita MeshTAK UI Preview</title>
   <style>
     :root {
-      --bg: #06080b;
-      --surface: #11161c;
-      --surface-elevated: #182230;
-      --outline: #7a8794;
-      --text: #f4f7fa;
-      --text-secondary: #c4cdd5;
-      --text-muted: #8e9ba7;
-      --army: #556b2f;
-      --army-strong: #839667;
-      --navy: #223754;
-      --silver: #b8c1c9;
-      --danger: #b45757;
-      --warning: #c6a34a;
-      --success: #72b26f;
-      --grid: #334150;
-      --toolbar-accent: rgba(34, 55, 84, 0.78);
-      --accent-panel: linear-gradient(180deg, rgba(34, 55, 84, 0.95), rgba(24, 34, 48, 0.92));
-      --shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+      --bg: #09090b;
+      --surface: #131316;
+      --surface-elevated: #1c1c21;
+      --outline: #3f3f46;
+      --text: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent: #a1a1aa;
+      --accent-strong: #d4d4d8;
+      --navy: #27272a;
+      --silver: #d4d4d8;
+      --danger: #ef4444;
+      --warning: #eab308;
+      --success: #22c55e;
+      --grid: #27272a;
+      --toolbar-accent: rgba(39, 39, 42, 0.78);
+      --accent-panel: linear-gradient(180deg, rgba(39, 39, 42, 0.95), rgba(28, 28, 33, 0.92));
+      --shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
     }
 
     body.light {
-      --bg: #eef2f4;
+      --bg: #f4f4f5;
       --surface: #ffffff;
-      --surface-elevated: #e3e8ec;
-      --outline: #7b8792;
-      --text: #0d1723;
-      --text-secondary: #465462;
-      --text-muted: #6e7a86;
-      --army: #556b2f;
-      --army-strong: #425220;
-      --navy: #284362;
-      --silver: #a2adb7;
-      --danger: #9e4545;
-      --warning: #9b7a1f;
-      --success: #567c4f;
-      --grid: #d2dae1;
-      --toolbar-accent: rgba(40, 67, 98, 0.10);
-      --accent-panel: linear-gradient(180deg, rgba(40, 67, 98, 0.18), rgba(255, 255, 255, 0.94));
-      --shadow: 0 18px 48px rgba(20, 32, 45, 0.10);
+      --surface-elevated: #e4e4e7;
+      --outline: #a1a1aa;
+      --text: #09090b;
+      --text-secondary: #52525b;
+      --text-muted: #71717a;
+      --accent: #52525b;
+      --accent-strong: #3f3f46;
+      --navy: #e4e4e7;
+      --silver: #a1a1aa;
+      --danger: #dc2626;
+      --warning: #ca8a04;
+      --success: #16a34a;
+      --grid: #d4d4d8;
+      --toolbar-accent: rgba(63, 63, 70, 0.08);
+      --accent-panel: linear-gradient(180deg, rgba(63, 63, 70, 0.12), rgba(255, 255, 255, 0.96));
+      --shadow: 0 18px 48px rgba(9, 9, 11, 0.08);
     }
 
     body.red {
@@ -55,14 +55,35 @@
       --text: #ff3b30;
       --text-secondary: #ff3b30;
       --text-muted: #ff3b30;
-      --army: #ff3b30;
-      --army-strong: #ff3b30;
+      --accent: #ff3b30;
+      --accent-strong: #ff3b30;
       --navy: #ff3b30;
       --silver: #ff3b30;
       --danger: #ff3b30;
       --warning: #ff3b30;
       --success: #ff3b30;
       --grid: #ff3b30;
+      --toolbar-accent: #000000;
+      --accent-panel: linear-gradient(180deg, #000000, #000000);
+      --shadow: none;
+    }
+
+    body.green {
+      --bg: #000000;
+      --surface: #000000;
+      --surface-elevated: #000000;
+      --outline: #33ff00;
+      --text: #33ff00;
+      --text-secondary: #33ff00;
+      --text-muted: #33ff00;
+      --accent: #33ff00;
+      --accent-strong: #33ff00;
+      --navy: #33ff00;
+      --silver: #33ff00;
+      --danger: #33ff00;
+      --warning: #33ff00;
+      --success: #33ff00;
+      --grid: #33ff00;
       --toolbar-accent: #000000;
       --accent-panel: linear-gradient(180deg, #000000, #000000);
       --shadow: none;
@@ -76,14 +97,18 @@
       margin: 0;
       font-family: "Segoe UI", "Aptos", sans-serif;
       background:
-        radial-gradient(circle at top left, rgba(85, 107, 47, 0.18), transparent 32%),
-        radial-gradient(circle at top right, rgba(184, 193, 201, 0.12), transparent 28%),
-        linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 76%, #121b26));
+        radial-gradient(circle at top left, rgba(161, 161, 170, 0.08), transparent 32%),
+        radial-gradient(circle at top right, rgba(212, 212, 216, 0.06), transparent 28%),
+        linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 76%, #18181b));
       color: var(--text);
       min-height: 100vh;
     }
 
     body.red {
+      background: #000000;
+    }
+
+    body.green {
       background: #000000;
     }
 
@@ -143,6 +168,14 @@
       backdrop-filter: none;
     }
 
+    body.green .pill,
+    body.green .mode-select {
+      background: #000000;
+      border-color: #33ff00;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+
     .mode-select {
       color: var(--text);
       cursor: pointer;
@@ -166,6 +199,11 @@
 
     body.red .panel {
       border-color: #ff3b30;
+      box-shadow: none;
+    }
+
+    body.green .panel {
+      border-color: #33ff00;
       box-shadow: none;
     }
 
@@ -208,7 +246,7 @@
       border-radius: 999px;
       font-size: 13px;
       border: 1px solid rgba(255, 255, 255, 0.18);
-      background: var(--army);
+      background: var(--accent);
       color: white;
       white-space: nowrap;
     }
@@ -217,6 +255,12 @@
       background: #000000;
       color: #ff3b30;
       border-color: #ff3b30;
+    }
+
+    body.green .badge {
+      background: #000000;
+      color: #33ff00;
+      border-color: #33ff00;
     }
 
     .toolbar .stack,
@@ -238,6 +282,16 @@
     body.red .history-card {
       background: #000000;
       border-color: #ff3b30;
+    }
+
+    body.green .toolbar .stack,
+    body.green .summary,
+    body.green .card,
+    body.green .stat,
+    body.green .input-frame,
+    body.green .history-card {
+      background: #000000;
+      border-color: #33ff00;
     }
 
     .toolbar .stack {
@@ -269,6 +323,13 @@
       background: #000000;
       color: #ff3b30;
       border: 1px solid #ff3b30;
+    }
+
+    body.green .toolbar .danger,
+    body.green .tx-button {
+      background: #000000;
+      color: #33ff00;
+      border: 1px solid #33ff00;
     }
 
     .dashboard {
@@ -312,7 +373,7 @@
     }
 
     .chip.primary {
-      background: var(--army);
+      background: var(--accent);
       color: white;
       border-color: rgba(255, 255, 255, 0.18);
     }
@@ -322,6 +383,13 @@
       background: #000000;
       color: #ff3b30;
       border-color: #ff3b30;
+    }
+
+    body.green .chip,
+    body.green .chip.primary {
+      background: #000000;
+      color: #33ff00;
+      border-color: #33ff00;
     }
 
     .summary {
@@ -334,6 +402,10 @@
     }
 
     body.red .summary {
+      background: #000000;
+    }
+
+    body.green .summary {
       background: #000000;
     }
 
@@ -381,16 +453,25 @@
       border: 1px solid #ff3b30;
     }
 
+    body.green .progress {
+      background: #000000;
+      border: 1px solid #33ff00;
+    }
+
     .progress > span {
       display: block;
       height: 100%;
       width: 62%;
-      background: linear-gradient(90deg, var(--army), var(--army-strong));
+      background: linear-gradient(90deg, var(--accent), var(--accent-strong));
       border-radius: inherit;
     }
 
     body.red .progress > span {
       background: #ff3b30;
+    }
+
+    body.green .progress > span {
+      background: #33ff00;
     }
 
     .cards-row {
@@ -417,6 +498,11 @@
     body.red .chart {
       background: #000000;
       border-color: #ff3b30;
+    }
+
+    body.green .chart {
+      background: #000000;
+      border-color: #33ff00;
     }
 
     .chart svg {
@@ -480,6 +566,12 @@
       color: #ff3b30;
     }
 
+    body.green .secondary-button {
+      background: #000000;
+      border-color: #33ff00;
+      color: #33ff00;
+    }
+
     .select,
     .textarea,
     .history-select {
@@ -500,6 +592,14 @@
       color: #ff3b30;
     }
 
+    body.green .select,
+    body.green .textarea,
+    body.green .history-select {
+      background: #000000;
+      border-color: #33ff00;
+      color: #33ff00;
+    }
+
     .textarea {
       min-height: 140px;
       resize: none;
@@ -510,7 +610,7 @@
       border: none;
       border-radius: 18px;
       padding: 14px 16px;
-      background: var(--army);
+      background: var(--accent);
       color: white;
       font-size: 15px;
       font-weight: 700;
@@ -564,11 +664,12 @@
         <p>Static no-hardware mockup of the secure, interoperable toolbar and dashboard.</p>
       </div>
       <div class="controls">
-        <span class="pill">Mission profiles, assurance telemetry, and Night Red monochrome</span>
+        <span class="pill">Mission profiles, assurance telemetry, Night Red and Night Green monochrome</span>
         <select id="themeModeSelect" class="mode-select" aria-label="Theme mode">
           <option value="dark" selected>Dark Ops</option>
           <option value="light">Light Ops</option>
           <option value="red">Night Red</option>
+          <option value="green">Night Green</option>
         </select>
       </div>
     </div>
@@ -687,12 +788,12 @@
                 <svg viewBox="0 0 640 300" aria-label="Tactical map overlay schematic">
                   <rect x="22" y="22" width="596" height="256" rx="22" fill="none" stroke="var(--grid)" stroke-width="2" />
                   <rect x="198" y="78" width="244" height="160" rx="12" fill="none" stroke="var(--warning)" stroke-width="4" />
-                  <path d="M320 158 L420 94" fill="none" stroke="var(--army)" stroke-width="4" stroke-linecap="round" />
-                  <path d="M320 158 A100 100 0 0 1 420 94" fill="none" stroke="var(--army)" stroke-width="4" />
-                  <path d="M320 158 L480 164" fill="none" stroke="var(--army)" stroke-width="4" stroke-linecap="round" />
-                  <path d="M320 158 A160 160 0 0 1 480 164" fill="none" stroke="var(--army)" stroke-width="4" />
-                  <path d="M320 158 L392 246" fill="none" stroke="var(--army)" stroke-width="4" stroke-linecap="round" />
-                  <path d="M320 158 A112 112 0 0 1 392 246" fill="none" stroke="var(--army)" stroke-width="4" />
+                  <path d="M320 158 L420 94" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" />
+                  <path d="M320 158 A100 100 0 0 1 420 94" fill="none" stroke="var(--accent)" stroke-width="4" />
+                  <path d="M320 158 L480 164" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" />
+                  <path d="M320 158 A160 160 0 0 1 480 164" fill="none" stroke="var(--accent)" stroke-width="4" />
+                  <path d="M320 158 L392 246" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" />
+                  <path d="M320 158 A112 112 0 0 1 392 246" fill="none" stroke="var(--accent)" stroke-width="4" />
                   <circle cx="320" cy="158" r="10" fill="var(--text)" />
                   <circle cx="470" cy="102" r="16" fill="none" stroke="var(--danger)" stroke-width="4" />
                   <circle cx="494" cy="222" r="16" fill="none" stroke="var(--danger)" stroke-width="4" />
@@ -705,7 +806,7 @@
               </div>
               <div class="legend">
                 <div><span class="dot" style="background: var(--warning);"></span><span>Geofence around active team</span></div>
-                <div><span class="dot" style="background: var(--army);"></span><span>Sector wedges for search coverage</span></div>
+                <div><span class="dot" style="background: var(--accent);"></span><span>Sector wedges for search coverage</span></div>
                 <div><span class="dot" style="background: var(--danger);"></span><span>Stale marker callouts on delayed nodes</span></div>
               </div>
             </section>
@@ -757,7 +858,7 @@
                   </g>
                   <path d="M20 170 L80 154 L140 188 L200 122 L260 144 L320 108 L380 132 L440 76 L500 96 L560 56 L620 84"
                         stroke="var(--silver)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-                  <circle cx="620" cy="84" r="7" fill="var(--army)" />
+                  <circle cx="620" cy="84" r="7" fill="var(--accent)" />
                   <text x="566" y="26" fill="var(--text-secondary)" font-size="18">512 B</text>
                   <text x="580" y="254" fill="var(--text-secondary)" font-size="18">0 B</text>
                   <text x="548" y="70" fill="var(--text-secondary)" font-size="18">318 B</text>
@@ -772,7 +873,7 @@
                 <svg viewBox="0 0 320 260" aria-label="Format distribution chart" style="max-width:320px;">
                   <circle cx="160" cy="126" r="74" fill="none" stroke="var(--silver)" stroke-width="14" stroke-dasharray="107 465" transform="rotate(-90 160 126)" />
                   <circle cx="160" cy="126" r="52" fill="none" stroke="var(--navy)" stroke-width="14" stroke-dasharray="131 326" transform="rotate(-90 160 126)" />
-                  <circle cx="160" cy="126" r="30" fill="none" stroke="var(--army)" stroke-width="14" stroke-dasharray="47 141" transform="rotate(-90 160 126)" />
+                  <circle cx="160" cy="126" r="30" fill="none" stroke="var(--accent)" stroke-width="14" stroke-dasharray="47 141" transform="rotate(-90 160 126)" />
                   <text x="160" y="123" text-anchor="middle" fill="var(--text)" font-size="34" font-weight="800">24</text>
                   <text x="160" y="148" text-anchor="middle" fill="var(--text-secondary)" font-size="14">frames tracked</text>
                 </svg>
@@ -780,7 +881,7 @@
               <div class="legend">
                 <div><span class="dot" style="background: var(--silver);"></span><span>Plain Text 6</span></div>
                 <div><span class="dot" style="background: var(--navy);"></span><span>JSON 12</span></div>
-                <div><span class="dot" style="background: var(--army);"></span><span>Custom 6</span></div>
+                <div><span class="dot" style="background: var(--accent);"></span><span>Custom 6</span></div>
               </div>
             </section>
           </div>
@@ -838,7 +939,8 @@
       const mode = select.value;
       document.body.classList.toggle('light', mode === 'light');
       document.body.classList.toggle('red', mode === 'red');
-      const label = mode === 'light' ? 'Light Ops' : mode === 'red' ? 'Night Red' : 'Dark Ops';
+      document.body.classList.toggle('green', mode === 'green');
+      const label = mode === 'light' ? 'Light Ops' : mode === 'red' ? 'Night Red' : mode === 'green' ? 'Night Green' : 'Dark Ops';
       toolbarBadge.textContent = label;
       dashBadge.textContent = label;
     }
