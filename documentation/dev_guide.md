@@ -74,13 +74,20 @@ The firmware is built using **PlatformIO**.
 
 ## ATAK Plugin
 
-The ATAK plugin is built using **Android Studio**.
+The ATAK plugin is built using **Android Studio** or the Gradle wrapper from the command line.
 
-1. Install Android Studio and Android SDK  
-2. Configure ATAK SDK as a library module  
-3. Open `atak_plugin/` in Android Studio  
-4. Configure UUIDs & USB IDs: edit ```atak_plugin/src/com/akitaengineering/meshtak/Config.java```
-5. Build the APK
+1. Install Android Studio (or the Android command-line tools) and Android SDK (platform 35, build-tools 35.0.1)  
+2. Place `atak-sdk.jar` in `atak_plugin/libs/`  
+3. Open `atak_plugin/` in Android Studio — it will create `local.properties` automatically.  
+   *Or* create `atak_plugin/local.properties` manually with your SDK path:  
+   ```properties
+   sdk.dir=/path/to/your/Android/Sdk
+   ```  
+   *Or* set the `ANDROID_HOME` environment variable instead. `local.properties` is gitignored and machine-specific.  
+4. Configure UUIDs & USB IDs: edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java`  
+5. Build:  
+   - **Android Studio:** Build → Build Bundle(s) / APK(s) → Build APK(s)  
+   - **Command line:** `cd atak_plugin && ./gradlew assembleDebug` (or `.\gradlew.bat assembleDebug` on Windows)
 
 ---
 

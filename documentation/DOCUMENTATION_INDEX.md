@@ -134,6 +134,21 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 
 ---
 
+#### 8. UI Preview
+**File**: `ui_preview.html`  
+**Purpose**: No-hardware visualization of the current dashboard, toolbar, tactical overlay concepts, and Night Red presentation mode
+
+**Contents**:
+- Dashboard theme preview (Dark Ops, Light Ops, Night Red)
+- Mission assurance card
+- Tactical map layer schematic
+- Incident board and role-pack action preview
+- Provisioning workflow controls preview
+
+**Audience**: Designers, reviewers, operators without a device on hand
+
+---
+
 ## Document Relationships
 
 ```
@@ -201,6 +216,7 @@ Start with: **Developer Guide**
 - **Developer Guide**: Updated with code changes
 - **Quick Reference Card**: Updated with operational procedure changes
 - **User Guide**: Updated with end-user-facing changes
+- **UI Preview**: Updated with major dashboard and workflow changes
 
 ---
 
@@ -209,12 +225,12 @@ Start with: **Developer Guide**
 | Document | Number | Revision | Date |
 |----------|--------|----------|------|
 | System Specification | SS-AKITA-MESHTAK-001 | 1.2 | 2026-03-13 |
-| Technical Manual | TM-AKITA-MESHTAK-001 | 1.2 | 2026-03-13 |
-| Operator's Manual | OM-AKITA-MESHTAK-001 | 1.2 | 2026-03-13 |
-| Quick Reference Card | QR-AKITA-MESHTAK-001 | 1.2 | 2026-03-13 |
-| Security Guide | — | 0.2.0 | 2026-03-13 |
+| Technical Manual | TM-AKITA-MESHTAK-001 | 1.3 | 2026-04-14 |
+| Operator's Manual | OM-AKITA-MESHTAK-001 | 1.3 | 2026-04-14 |
+| Quick Reference Card | QR-AKITA-MESHTAK-001 | 1.3 | 2026-04-14 |
+| Security Guide | — | 0.3.0 | 2026-04-14 |
 | Developer Guide | — | 0.2.0 | 2026-03-13 |
-| User Guide | — | 0.2.0 | 2026-03-13 |
+| User Guide | — | 0.3.0 | 2026-04-14 |
 
 ### Change Control
 All documentation changes must be:
@@ -237,12 +253,13 @@ For documentation questions or updates:
 
 | Document | Status | Revision | Date |
 |----------|--------|----------|------|
-| Technical Manual (TM) | APPROVED | 1.0 | 2025-12-31 |
-| Operator's Manual (OM) | APPROVED | 1.0 | 2025-12-31 |
-| System Specification (SS) | APPROVED | 1.0 | 2025-12-31 |
-| Security Guide | APPROVED | 1.0 | 2025-12-31 |
-| Developer Guide | APPROVED | 1.0 | 2025-12-31 |
-| User Guide | APPROVED | 1.0 | 2025-12-31 |
+| Technical Manual (TM) | APPROVED | 1.3 | 2026-04-14 |
+| Operator's Manual (OM) | APPROVED | 1.3 | 2026-04-14 |
+| System Specification (SS) | APPROVED | 1.2 | 2026-03-13 |
+| Security Guide | APPROVED | 0.3.0 | 2026-04-14 |
+| Developer Guide | APPROVED | 0.2.0 | 2026-03-13 |
+| User Guide | APPROVED | 0.3.0 | 2026-04-14 |
+| Quick Reference Card (QR) | APPROVED | 1.3 | 2026-04-14 |
 
 ---
 

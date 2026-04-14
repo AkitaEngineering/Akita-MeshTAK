@@ -3,6 +3,8 @@
 ## Overview
 This document outlines the security features implemented in Akita MeshTAK for military, law enforcement, search and rescue, and security operations.
 
+The current Android plugin security model is surfaced directly to operators through the settings UI and mission-assurance dashboard so teams can verify provisioning, encrypted transport posture, audit readiness, and interoperability before live traffic is transmitted.
+
 ---
 
 ## Security Features
@@ -15,7 +17,9 @@ This document outlines the security features implemented in Akita MeshTAK for mi
 
 #### Encryption Activation (Current Behavior)
 - **Firmware Default**: Encryption is enabled by default (`SECURITY_MODE_AES256_HMAC`). The firmware encrypts/decrypts all BLE and serial payloads when a valid provisioning secret is configured.
-- **Android Plugin Default**: Encryption is **disabled** by default (`encryptionEnabled = false`) for backward compatibility with unprovisioned firmware. After key provisioning, call `securityManager.setEncryptionEnabled(true)` to activate encryption.
+- **Android Plugin Default**: The plugin reads `security_encryption_enabled` from settings and treats encrypted transport as enabled unless an operator explicitly disables it.
+- **Provisioning Source**: The active provisioning secret is read from plugin settings when present; `Config.PROVISIONING_SECRET` is used only as a fallback.
+- **Readiness Warning**: Placeholder secrets can support rehearsal and UI preview, but Mission Assurance will flag that posture as not deployment-ready.
 - **Enablement Requirement**: Firmware and plugin must use matching provisioning secret, version, and key-id metadata.
 - **Behavior**: Encrypted traffic uses AES-GCM with per-message nonce and authentication tag; malformed or mismatched encrypted envelopes are rejected.
 
@@ -45,22 +49,23 @@ Follow these steps to enable end-to-end encryption:
    - Build and flash the firmware.
 
 3. **Configure Android Plugin**
-   - In `atak_plugin/src/com/akitaengineering/meshtak/Config.java`, set `PROVISIONING_SECRET` to the same secret.
-   - After the plugin connects to the device, call:
-     ```java
-     securityManager.setEncryptionEnabled(true);
-     ```
-   - This can be triggered from the Settings UI or programmatically after successful connection.
+   - Preferred method: open **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**.
+   - Enter the deployment secret in **Provisioning Secret**.
+   - Confirm **Enable Encrypted Transport** is enabled.
+   - Tap **Reload Security State** after security changes.
+   - If a fixed build-time fallback is required, set `atak_plugin/src/com/akitaengineering/meshtak/Config.java` `PROVISIONING_SECRET` to the same value.
 
 4. **Verify Encryption**
-   - Check audit logs for `"Encryption enabled"` events.
+   - Review the **Mission Assurance** card for encryption, audit, interoperability, and provisioning status.
+   - Check audit logs for security initialization and data send/receive events.
    - Verify encrypted payloads use the `ENC:v1:k1:<hex>` format.
    - Confirm both sides can decrypt each other's messages.
 
 5. **Key Rotation**
    - To rotate keys, change the provisioning secret on both firmware and plugin simultaneously.
+   - The plugin can generate a new runtime secret using **Rotate Provisioning Secret**, but the firmware must still be updated to match before deployment.
    - Update the key-id (e.g., `k1` → `k2`) to distinguish new keys from old ones.
-   - Redeploy firmware and restart the plugin.
+   - Tap **Reload Security State** or restart the plugin after the change.
 
 ### 2. Input Validation
 - **Command Validation**: All incoming commands are validated before processing
@@ -92,6 +97,11 @@ Follow these steps to enable end-to-end encryption:
 - SOS triggers (CRITICAL)
 - Configuration changes
 - Errors
+
+#### Operator Actions
+- **Export Audit Log** is available from **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**.
+- Exported logs should be handled according to mission retention and evidence procedures.
+- Audit export should be included in post-mission or post-exercise actions when required by SOP.
 
 ### 4. Message Integrity
 - **AEAD Verification**: AES-GCM tag verification provides built-in integrity protection
@@ -144,26 +154,31 @@ Follow these steps to enable end-to-end encryption:
 ### For Operators
 
 1. **Secure Key Management**
-   - Use strong, unique keys for each device
-   - Rotate keys periodically
-   - Store keys securely (hardware security modules if available)
+   - Use strong, deployment-specific provisioning secrets
+   - Replace placeholder secrets before live use
+   - Rotate secrets periodically and synchronize firmware/plugin updates
 
 2. **Monitor Audit Logs**
    - Review logs regularly
    - Investigate security violations
    - Export logs for compliance
 
-3. **Network Security**
+3. **Use Mission Assurance**
+   - Confirm provisioning status is ready for deployment
+   - Confirm encrypted transport remains enabled for production operations
+   - Confirm interoperability and audit signals are healthy before mission release
+
+4. **Network Security**
    - Use encrypted WiFi (WPA3 if available)
    - Use TLS for MQTT (if enabled)
    - Isolate networks when possible
 
-4. **Physical Security**
+5. **Physical Security**
    - Secure devices physically
    - Protect against tampering
    - Use tamper-evident seals
 
-5. **Access Control**
+6. **Access Control**
    - Limit who can configure devices
    - Use strong passwords
    - Implement role-based access control
@@ -181,9 +196,15 @@ In `firmware/src/config.h`:
 
 ### Android Plugin Configuration
 
+In the plugin settings UI:
+- Configure **Enable Encrypted Transport**
+- Configure or rotate **Provisioning Secret**
+- Export audit logs as required
+- Reload security state after changes
+
 In `atak_plugin/src/com/akitaengineering/meshtak/Config.java`:
 - Set matching UUIDs
-- Configure security settings
+- Maintain a valid build-time fallback provisioning secret only when required
 - Set validation parameters
 
 ---
@@ -236,10 +257,15 @@ If you discover a security vulnerability:
 
 ## Version History
 
+- **v0.3.0**: Runtime provisioning and mission-assurance update
+   - Preference-backed provisioning secret with build-time fallback
+   - Encrypted transport policy surfaced in settings
+   - Audit export and security reload actions added to settings
+   - Mission Assurance flags placeholder provisioning and degraded posture
 - **v0.2.0**: Initial security implementation
    - AES-256-GCM encrypted transport with authenticated integrity
    - Versioned/key-id encrypted envelope format (`ENC:v1:k1:<hex>`)
-   - Firmware encryption enabled by default; plugin encryption opt-in after provisioning
+   - Firmware encryption enabled by default; original plugin workflow required explicit opt-in after provisioning
    - Input validation
    - Audit logging
    - Constant-time HMAC comparison (timing attack prevention)

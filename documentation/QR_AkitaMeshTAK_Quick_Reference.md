@@ -3,8 +3,8 @@
 ## QUICK REFERENCE CARD
 
 **Document Number:** QR-AKITA-MESHTAK-001  
-**Revision:** 1.2  
-**Date:** 2026-03-13  
+**Revision:** 1.3  
+**Date:** 2026-04-14  
 **Classification:** UNCLASSIFIED
 
 ---
@@ -16,6 +16,7 @@
 2. ☐ Power on Android device
 3. ☐ Open ATAK
 4. ☐ Verify "Connected" (green) in toolbar
+5. ☐ Verify Mission Assurance shows deployment-ready security posture
 
 ### Serial Connection
 1. ☐ Connect USB cable
@@ -24,6 +25,7 @@
 4. ☐ Grant USB permission
 5. ☐ Open ATAK
 6. ☐ Verify "Connected" (green) in toolbar
+7. ☐ Verify Secure Route and Security indicators are operational
 
 ---
 
@@ -87,20 +89,24 @@
 ## DAILY CHECKLIST
 
 - ☐ Verify connection status (green)
+- ☐ Verify mission profile and role pack
+- ☐ Review Mission Assurance
 - ☐ Check battery level
 - ☐ Test message sending
 - ☐ Verify location data receiving
+- ☐ Review tactical overlay for stale-marker or route-health warnings
 - ☐ Review for errors
 
 ---
 
 ## SECURITY QUICK CHECK
 
-- ☐ Confirm secure provisioning secret is configured for this deployment
+- ☐ Confirm active provisioning secret is configured for this deployment and is not placeholder material
 - ☐ Confirm firmware/plugin encrypted metadata match (`v1`, `k1`)
 - ☐ Confirm firmware encryption enabled (default: on)
-- ☐ Confirm plugin encryption enabled after provisioning (`securityManager.setEncryptionEnabled(true)`)
+- ☐ Confirm **Enable Encrypted Transport** remains enabled in plugin settings
 - ☐ Confirm encrypted transport operational (envelope format: `ENC:v1:k1:<hex>`)
+- ☐ Export audit log after mission or exercise if required by SOP
 - ☐ If encrypted payloads are rejected, verify version/key-id alignment before field use
 
 ---
@@ -116,7 +122,7 @@
 
 **Firmware**: 0.2.0  
 **Plugin**: 0.2.0  
-**Document**: QR-AKITA-MESHTAK-001 Rev 1.2
+**Document**: QR-AKITA-MESHTAK-001 Rev 1.3
 
 ---
 

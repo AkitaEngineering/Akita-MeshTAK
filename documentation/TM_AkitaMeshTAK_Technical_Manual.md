@@ -3,8 +3,8 @@
 ## TECHNICAL MANUAL
 
 **Document Number:** TM-AKITA-MESHTAK-001  
-**Revision:** 1.2  
-**Date:** 2026-03-13  
+**Revision:** 1.3  
+**Date:** 2026-04-14  
 **Classification:** UNCLASSIFIED  
 **Prepared By:** Akita Engineering  
 **Approved By:** [Approval Authority]
@@ -17,8 +17,8 @@
 |------|-------------|
 | Document Title | Akita MeshTAK System Technical Manual |
 | Document Number | TM-AKITA-MESHTAK-001 |
-| Revision | 1.2 |
-| Date | 2026-03-13 |
+| Revision | 1.3 |
+| Date | 2026-04-14 |
 | Classification | UNCLASSIFIED |
 | Distribution | As Required |
 | Supersedes | None |
@@ -469,8 +469,14 @@ Configure via ATAK settings:
 2. Navigate to: **Settings → Tool Preferences → Akita MeshTAK**
 3. Configure:
    - Connection Method: BLE or Serial
+   - Mission Profile: Operational workflow selection
+   - Dashboard Theme: Dark Ops, Light Ops, or Night Red
    - BLE Device Name: Device identifier
    - Serial Baud Rate: 115200 (default)
+   - Enable Encrypted Transport: Protected transport policy
+   - Provisioning Secret: Runtime deployment secret override
+   - Rotate Provisioning Secret / Reload Security State: Security lifecycle controls
+   - Mock Transport Mode: No-hardware rehearsal mode
 
 ### 6.3 Security Configuration
 
@@ -489,7 +495,9 @@ Configure via ATAK settings:
 
 **Encryption Activation (Current Behavior)**:
 - Firmware default: Encryption is enabled (SECURITY_MODE_AES256_HMAC) when provisioning metadata is valid.
-- Android plugin default: Encryption is disabled (`encryptionEnabled = false`) for backward compatibility. After successful key provisioning, call `securityManager.setEncryptionEnabled(true)` to activate encryption.
+- Android plugin default: Encryption policy is controlled by the `security_encryption_enabled` setting and is enabled unless an operator explicitly disables it.
+- Android plugin provisioning source: The plugin uses the runtime provisioning secret from settings when present, with `Config.PROVISIONING_SECRET` as a fallback.
+- Mission Assurance: Placeholder provisioning material is surfaced to the operator as a degraded posture even if rehearsal traffic is possible.
 - Firmware and plugin must share matching provisioning secret, envelope version, and key-id.
 - Encrypted payloads with unknown version/key-id are rejected and logged.
 
@@ -525,6 +533,7 @@ Configure via ATAK settings:
 2. Plugin automatically scans for device
 3. Connection status displays in toolbar
 4. Wait for "Connected" status (green)
+5. Verify Mission Assurance shows deployment-ready provisioning and encrypted transport posture
 
 **Serial Connection**:
 1. Connect USB cable between devices
@@ -532,26 +541,32 @@ Configure via ATAK settings:
 3. Plugin automatically detects device
 4. Connection status displays in toolbar
 5. Wait for "Connected" status (green)
+6. Verify Secure Route and Security indicators reflect the expected profile and route
 
 ### 7.2 Normal Operations
 
 #### 7.2.1 Monitoring Connection Status
 - **Toolbar Display**:
-  - Method: BLE or Serial
+   - Secure Route: BLE or Serial plus active endpoint
+   - Profile: Current mission profile
+   - Security: Provisioning and encrypted transport posture
   - Status: Connected (green), Connecting (yellow), Disconnected (red)
   - Battery: XX% (green/yellow/red based on level)
 
 #### 7.2.2 Sending Data
 1. Open "Send Data" view from ATAK menu
-2. Enter message text
-3. Select data format (Plain Text, JSON, Custom)
-4. Tap "Send" button
-5. Verify message sent (toast notification)
+2. Review the operational summary, mission assurance, and incident board cards
+3. Optionally load a mission playbook or role-pack queue action
+4. Enter message text
+5. Select data format (Plain Text, JSON, Custom)
+6. Tap "Transmit" button
+7. Verify message sent (toast notification)
 
 #### 7.2.3 Receiving Data
 - CoT location data automatically appears on ATAK map
 - Battery status updates automatically
 - Status messages displayed in toolbar
+- Tactical overlay can add route health, mission geofence, sectors, and stale-marker warnings
 
 #### 7.2.4 Emergency Alert (SOS)
 1. Locate SOS button in toolbar
@@ -983,6 +998,7 @@ See Section 6 for configuration examples.
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
+| 1.3 | 2026-04-14 | Updated runtime provisioning workflow, mission-assurance behavior, mission profile settings, and tactical overlay operation notes | Akita Engineering |
 | 1.2 | 2026-03-13 | Updated Meshtastic library version; fixed APK output path; corrected encryption default state for Android plugin; updated document revision | Akita Engineering |
 | 1.1 | 2026-03-12 | Updated security architecture/specifications to AES-256-GCM and versioned key-id encrypted envelope model | Akita Engineering |
 | 1.0 | 2025-12-31 | Initial release | Akita Engineering |

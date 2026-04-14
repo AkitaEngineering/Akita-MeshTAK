@@ -3,8 +3,8 @@
 ## OPERATOR'S MANUAL
 
 **Document Number:** OM-AKITA-MESHTAK-001  
-**Revision:** 1.2  
-**Date:** 2026-03-13  
+**Revision:** 1.3  
+**Date:** 2026-04-14  
 **Classification:** UNCLASSIFIED  
 **Prepared By:** Akita Engineering  
 **Approved By:** [Approval Authority]
@@ -17,8 +17,8 @@
 |------|-------------|
 | Document Title | Akita MeshTAK System Operator's Manual |
 | Document Number | OM-AKITA-MESHTAK-001 |
-| Revision | 1.2 |
-| Date | 2026-03-13 |
+| Revision | 1.3 |
+| Date | 2026-04-14 |
 | Classification | UNCLASSIFIED |
 | Distribution | As Required |
 | Supersedes | None |
@@ -75,6 +75,11 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 - **Emergency Alerts**: Send SOS alerts across network
 - **Battery Monitoring**: Monitor device battery level
 - **Secure Communication**: Encrypted and authenticated
+- **Mission Profiles**: Adjust workflow for SAR, law enforcement, coast guard, military, or private security
+- **Mission Assurance**: Surface encryption, audit, interoperability, and provisioning posture before transmission
+- **Incident Board**: Keep operational tempo, role pack, and next-action context visible
+- **Tactical Map Layer**: Show route health, geofence, sectors, and stale-marker warnings on the ATAK map
+- **Rehearsal and Theme Modes**: Support Mock Transport Mode plus Dark Ops, Light Ops, and Night Red displays
 
 ---
 
@@ -99,6 +104,10 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 4. Configure settings:
    - **BLE Device Name**: Enter device name (e.g., "AkitaNode01")
    - **Serial Baud Rate**: Leave at 115200 (default)
+  - **Mission Profile**: Select the operational workflow for your team
+  - **Dashboard Theme**: Select Dark Ops, Light Ops, or Night Red
+  - **Security and Provisioning**: Confirm encrypted transport is enabled and replace any placeholder provisioning secret before live operations
+  - **Mock Transport Mode**: Enable only for rehearsal without hardware
 
 ### 3.2 Daily Startup
 
@@ -108,6 +117,7 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 3. Power on Android device
 4. Open ATAK
 5. Wait for connection (status shows "Connected" in green)
+6. Review Mission Assurance and confirm there is no placeholder-secret warning for deployment use
 
 #### For Serial Connection:
 1. Power on Meshtastic device
@@ -116,6 +126,7 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 4. Power on Android device
 5. Open ATAK
 6. Wait for connection (status shows "Connected" in green)
+7. Review Mission Assurance and confirm the route and security posture are operational
 
 ---
 
@@ -125,7 +136,9 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 
 #### 4.1.1 Toolbar Display
 The Akita MeshTAK toolbar shows:
-- **Method**: BLE or Serial (connection type)
+- **Secure Route**: BLE or Serial plus the active endpoint
+- **Profile**: Current mission profile
+- **Security**: Current provisioning and encrypted transport posture
 - **Status**: 
   - 🟢 **Connected** (green): System ready
   - 🟡 **Connecting** (yellow): Establishing connection
@@ -144,13 +157,16 @@ The Akita MeshTAK toolbar shows:
 
 #### 4.2.1 Send Data View
 1. Open "Send Data" view from ATAK menu
-2. Enter your message in the text field
-3. Select data format:
+2. Review the **Operational Summary**, **Mission Assurance**, and **Incident Board** cards
+3. Optionally load a **Mission Playbook** or **Queue Action** from the active role pack
+4. Enter or review your message in the text field
+5. Select data format:
    - **Plain Text**: Standard text message
    - **JSON**: Structured data
    - **Custom**: Custom format
-4. Tap **Send** button
-5. Verify message sent (toast notification appears)
+6. Confirm payload budget and send context
+7. Tap **Transmit** button
+8. Verify message sent (toast notification appears)
 
 #### 4.2.2 Command History
 - Previously sent commands appear in dropdown
@@ -163,6 +179,7 @@ The Akita MeshTAK toolbar shows:
 - Team member locations appear automatically on ATAK map
 - Markers update in real-time
 - Tap marker for details
+- Tactical overlay may additionally show route health, mission geofence, sector arcs, and stale-marker warnings
 
 #### 4.3.2 Status Updates
 - Battery status updates every 30-60 seconds
@@ -205,8 +222,8 @@ The Akita MeshTAK toolbar shows:
 ### 5.1 Toolbar Elements
 
 #### 5.1.1 Connection Method Indicator
-- Displays: "Method: BLE" or "Method: Serial"
-- Shows current connection type
+- Displays: "Secure route: BLE" or "Secure route: Serial"
+- Shows current connection type and active route
 - Updates when connection method changes
 
 #### 5.1.2 Connection Status Indicator
@@ -217,14 +234,19 @@ The Akita MeshTAK toolbar shows:
 - **Serial: Connecting** (yellow): Establishing Serial connection
 - **Serial: Disconnected** (red): Serial connection failed
 
-#### 5.1.3 Battery Status Indicator
+#### 5.1.3 Mission and Security Indicators
+- **Profile**: Current mission profile badge and workflow context
+- **Security**: Provisioning and encrypted transport posture
+- **Secure Link**: Readiness summary for the active route
+
+#### 5.1.4 Battery Status Indicator
 - **BATT: XX%**: Battery percentage
 - Color coding:
   - Green: > 50% (good)
   - Yellow: 20-50% (low)
   - Red: < 20% (critical)
 
-#### 5.1.4 SOS Button
+#### 5.1.5 SOS Button
 - Red button labeled "SOS"
 - Sends emergency alert when tapped
 - **Use only in emergency situations**
@@ -237,8 +259,16 @@ The Akita MeshTAK toolbar shows:
 
 #### 5.2.2 Settings Options
 - **Connection Method**: BLE or Serial
+- **Mission Profile**: Search & Rescue, Law Enforcement, Coast Guard, Military, or Private Security
+- **Dashboard Theme**: Dark Ops, Light Ops, Night Red
 - **BLE Device Name**: Device identifier for BLE
 - **Serial Baud Rate**: Communication speed (default: 115200)
+- **Enable Encrypted Transport**: Enables or disables protected payload transport
+- **Provisioning Secret**: Runtime deployment secret for the plugin
+- **Rotate Provisioning Secret**: Generates a new plugin-side secret
+- **Export Audit Log**: Saves the Android audit trail to file
+- **Reload Security State**: Re-applies current security settings to live services
+- **Mock Transport Mode**: Rehearsal mode without hardware
 - **Send Test Message**: Test connection
 
 ### 5.3 Send Data Interface
@@ -249,9 +279,15 @@ The Akita MeshTAK toolbar shows:
 
 #### 5.3.2 Interface Elements
 - **Data Format Spinner**: Select format (Plain Text, JSON, Custom)
+- **Mission Playbook Spinner**: Load profile-specific preset traffic
+- **Queue Action Spinner**: Load role-pack actions from the incident board
 - **Data Input Field**: Enter message text
+- **Operational Summary**: Route, payload budget, last send, delivery ratio
+- **Mission Assurance**: Encryption, audit, interoperability, and provisioning posture
+- **Incident Board**: Incident title, role pack, tempo, and next action
+- **Payload/Format Charts**: Recent payload trend and data-format distribution
 - **Command History Spinner**: Select previous command
-- **Send Button**: Send message
+- **Transmit Button**: Send message
 
 ### 5.4 Map Overlay
 
@@ -259,6 +295,12 @@ The Akita MeshTAK toolbar shows:
 - Displays connection status on map
 - Shows BLE and Serial status
 - Updates in real-time
+
+#### 5.4.2 Tactical Mission Overlay
+- Displays a mission geofence around the active operating area
+- Displays sector arcs for search, containment, or control operations
+- Displays route-health context for the active transport
+- Displays stale-marker alerts when tracked nodes stop updating
 
 ---
 
@@ -307,6 +349,26 @@ The Akita MeshTAK toolbar shows:
 3. Verify device has power
 4. Try sending test message
 5. Restart connection
+6. Review Mission Assurance for provisioning or encryption warnings
+
+#### Problem: Security Shows "Rotate Deployment Secret"
+**Symptoms**: Mission Assurance or toolbar shows degraded provisioning posture
+
+**Solutions**:
+1. Open **Settings → Tool Preferences → Akita MeshTAK**
+2. Enter a deployment-specific provisioning secret or use **Rotate Provisioning Secret**
+3. Confirm **Enable Encrypted Transport** is enabled
+4. Tap **Reload Security State**
+5. Re-check Mission Assurance before field use
+
+#### Problem: Tactical Overlay Not Visible
+**Symptoms**: Team markers appear but no mission layer context is visible
+
+**Solutions**:
+1. Confirm ATAK map view is active
+2. Verify CoT traffic is being received
+3. Check that at least one team marker updated recently
+4. Review connection and security posture for transport issues
 
 ### 6.3 Battery Problems
 
@@ -353,7 +415,7 @@ The Akita MeshTAK toolbar shows:
 - **Encryption Keys**: Never share encryption keys with unauthorized personnel
 - **Audit Logs**: Audit logs may contain sensitive information. Secure storage required.
 - **Device Security**: Secure devices physically. Report lost or stolen devices immediately.
-- **Encryption Default**: Firmware enables encryption by default. The Android plugin starts with encryption **disabled** for backward compatibility; encryption must be explicitly enabled after key provisioning (see Security Guide for provisioning workflow).
+- **Encryption Policy**: The Android plugin uses the active **Enable Encrypted Transport** setting and runtime provisioning secret from settings, with a build-time fallback only if no runtime secret is present. Placeholder secrets are acceptable for rehearsal only.
 - **Metadata Match Required**: Firmware and plugin must use matching provisioning secret and encrypted envelope metadata (`version`, `key-id`).
 
 #### CAUTIONS
@@ -383,13 +445,18 @@ The Akita MeshTAK toolbar shows:
 - [ ] Plugin enabled in ATAK
 - [ ] Connection method selected (BLE/Serial)
 - [ ] Connection status shows "Connected" (green)
+- [ ] Mission profile verified
+- [ ] Mission Assurance reviewed
 - [ ] Battery status displaying
 
 #### Daily Operations Checklist
 - [ ] Verify connection status
+- [ ] Verify mission profile and role pack
+- [ ] Review Mission Assurance
 - [ ] Check battery level
 - [ ] Test message sending
 - [ ] Verify location data receiving
+- [ ] Review tactical overlay for warnings
 - [ ] Review for errors
 
 ### Appendix B: Status Indicator Reference
@@ -426,6 +493,7 @@ The Akita MeshTAK toolbar shows:
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
+| 1.3 | 2026-04-14 | Added mission assurance, incident board, tactical overlay, runtime provisioning, and updated operator workflow | Akita Engineering |
 | 1.2 | 2026-03-13 | Corrected encryption default state for Android plugin; added key provisioning references | Akita Engineering |
 | 1.1 | 2026-03-12 | Updated operator security guidance for AES-256-GCM, versioned encrypted envelopes, and key-id alignment checks | Akita Engineering |
 | 1.0 | 2025-12-31 | Initial release | Akita Engineering |

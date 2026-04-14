@@ -20,6 +20,7 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 
 - **Firmware**: You must set the correct UUIDs in `firmware/src/config.h`.  
 - **ATAK Plugin**: You must edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java` and fill in the placeholder UUIDs and USB IDs to match your firmware and hardware.  
+- **Provisioning Secret**: The plugin can now use a runtime provisioning secret from **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**. If you do not provide one there, the plugin falls back to `Config.PROVISIONING_SECRET`. A placeholder secret is acceptable for rehearsal only and is not deployment-ready.  
 
 ---
 
@@ -30,6 +31,12 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 - **Precision Location Tracking**: Transmits and receives accurate Cursor on Target (CoT) messages.  
 - **Critical Alert (SOS) Button**: A dedicated button on the ATAK toolbar to send a high-priority alert across the mesh.  
 - **Device Health Monitoring**: Displays the battery percentage of the connected Meshtastic device directly in the ATAK toolbar.  
+- **Mission Profiles**: Tailor the workflow for Search and Rescue, Law Enforcement, Coast Guard, Military, or Private Security operations.  
+- **Mission Assurance Dashboard**: Surface encryption, audit, interoperability, and provisioning posture before release of field traffic.  
+- **Incident Board and Role Packs**: Queue profile-specific quick actions and mission playbooks directly into the secure composer.  
+- **Tactical ATAK Map Layer**: Adds route-health context, mission geofences, search sectors, and stale-marker callouts directly to the ATAK map.  
+- **Operational Themes**: Dark Ops, Light Ops, and strict monochrome Night Red modes are available for different field environments.  
+- **No-Hardware Rehearsal Mode**: Mock transport mode and the static UI preview allow workflow validation without a radio on hand.  
 
 **Versatile Connectivity Options**:
 - Bluetooth Low Energy (BLE)  
@@ -39,10 +46,16 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 **Intuitive Data Management**:
 - Data Format Selection (Plain Text, JSON, Custom)  
 - Command History for frequently sent messages  
+- Mission playbook templates and role-pack quick actions  
 
 **Enhanced Situational Awareness**:
 - Clear connection status in the toolbar and on the map  
-- Map overlay for critical information  
+- Mission assurance telemetry and tactical map overlays for critical information  
+
+**Security and Accountability**:
+- Preference-backed provisioning secret management with build-time fallback  
+- Encrypted transport enable/disable control from settings  
+- Audit log export and security state reload actions  
 
 **Reliable Performance**:
 - Robust error handling, reconnection logic, and connection timeouts  
@@ -68,6 +81,7 @@ Comprehensive MILSPEC documentation is available in the `documentation/` directo
 - **System Specification (SS)**: Detailed system requirements and specifications
 - **Security Guide**: Comprehensive security documentation
 - **Developer Guide**: Information for developers and contributors
+- **UI Preview**: `documentation/ui_preview.html` provides a no-hardware visualization of the current toolbar and dashboard experience
 
 ---
 
