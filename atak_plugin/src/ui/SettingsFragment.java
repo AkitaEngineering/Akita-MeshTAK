@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.text.InputType;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -21,6 +22,7 @@ import com.atakmap.android.maps.MapView;
 import com.akitaengineering.meshtak.R;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
+import com.akitaengineering.meshtak.ui.AkitaTheme;
 
 public class SettingsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener {
 
@@ -78,6 +80,11 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         setPreferencesFromResource(R.xml.preferences, rootKey);
 
         ListPreference connectionMethodPref = findPreference("connection_method");
+        ListPreference uiThemePref = findPreference(AkitaTheme.PREF_UI_THEME);
+        Preference mockModePref = findPreference(AkitaMockSettings.PREF_MOCK_MODE);
+        ListPreference mockBleStatusPref = findPreference(AkitaMockSettings.PREF_MOCK_BLE_STATUS);
+        ListPreference mockSerialStatusPref = findPreference(AkitaMockSettings.PREF_MOCK_SERIAL_STATUS);
+        EditTextPreference mockBatteryLevelPref = findPreference(AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL);
         EditTextPreference bleDeviceNamePref = findPreference("ble_device_name");
         EditTextPreference serialPortPathPref = findPreference("serial_port_path");
         EditTextPreference serialBaudRatePref = findPreference("serial_baud_rate");
@@ -85,6 +92,18 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
 
         // Set listeners for preference changes
         if (connectionMethodPref != null) connectionMethodPref.setOnPreferenceChangeListener(this);
+        if (connectionMethodPref != null) connectionMethodPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (uiThemePref != null) uiThemePref.setOnPreferenceChangeListener(this);
+        if (uiThemePref != null) uiThemePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (mockModePref != null) mockModePref.setOnPreferenceChangeListener(this);
+        if (mockBleStatusPref != null) mockBleStatusPref.setOnPreferenceChangeListener(this);
+        if (mockBleStatusPref != null) mockBleStatusPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (mockSerialStatusPref != null) mockSerialStatusPref.setOnPreferenceChangeListener(this);
+        if (mockSerialStatusPref != null) mockSerialStatusPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (mockBatteryLevelPref != null) mockBatteryLevelPref.setOnPreferenceChangeListener(this);
+        if (mockBatteryLevelPref != null) mockBatteryLevelPref.setSummaryProvider(EditTextPreference.SimpleSummaryProvider.getInstance());
+        if (mockBatteryLevelPref != null) mockBatteryLevelPref.setOnBindEditTextListener(editText ->
+            editText.setInputType(InputType.TYPE_CLASS_NUMBER));
         if (bleDeviceNamePref != null) bleDeviceNamePref.setOnPreferenceChangeListener(this);
         if (serialPortPathPref != null) serialPortPathPref.setOnPreferenceChangeListener(this);
         if (serialBaudRatePref != null) serialBaudRatePref.setOnPreferenceChangeListener(this);
@@ -114,6 +133,9 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
     @Override
     public void onStart() {
         super.onStart();
+        if (getActivity() != null && AkitaMockSettings.isEnabled(PreferenceManager.getDefaultSharedPreferences(getActivity()))) {
+            return;
+        }
         if (getActivity() != null) {
             // Bind services to allow fragment to communicate changes
             getActivity().bindService(new Intent(getActivity(), BLEService.class), bleConnection, Context.BIND_AUTO_CREATE);
@@ -137,6 +159,9 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
 
      private void loadAndApplyPreferences() {
         if (getActivity() != null) {
+            if (AkitaMockSettings.isEnabled(PreferenceManager.getDefaultSharedPreferences(getActivity()))) {
+                return;
+            }
             // Load BLE device name preference
             String bleDeviceName = PreferenceManager.getDefaultSharedPreferences(getActivity())
                     .getString("ble_device_name", "AkitaNode01");
@@ -152,6 +177,13 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
     
     private void sendTestMessageToDevice() {
         String testMessage = "ATAK Test Message!";
+        if (getActivity() != null && AkitaMockSettings.isEnabled(PreferenceManager.getDefaultSharedPreferences(getActivity()))) {
+            String mockRoute = PreferenceManager.getDefaultSharedPreferences(getActivity())
+                    .getString("connection_method", "ble")
+                    .toUpperCase();
+            Toast.makeText(getActivity(), "Simulated via " + mockRoute + ": " + testMessage, Toast.LENGTH_SHORT).show();
+            return;
+        }
         String connectionMethod = PreferenceManager.getDefaultSharedPreferences(getActivity())
                 .getString("connection_method", "ble");
 
@@ -181,6 +213,17 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
             if (blePref != null) blePref.setEnabled(selectedMethod.equals("ble"));
             if (serialPathPref != null) serialPathPref.setEnabled(selectedMethod.equals("serial"));
             if (serialBaudPref != null) serialBaudPref.setEnabled(selectedMethod.equals("serial"));
+        } else if (AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)) {
+            try {
+                int batteryLevel = Integer.parseInt(String.valueOf(newValue));
+                if (batteryLevel < 0 || batteryLevel > 100) {
+                    Toast.makeText(getActivity(), "Mock battery level must be between 0 and 100.", Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+            } catch (NumberFormatException e) {
+                Toast.makeText(getActivity(), "Mock battery level must be numeric.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
         } else if (key.equals("ble_device_name") && bleService != null) {
             // Update BLE service immediately when name preference changes
             bleService.setTargetDeviceName((String) newValue);

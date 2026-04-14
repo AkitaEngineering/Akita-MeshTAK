@@ -3,11 +3,10 @@
 package com.akitaengineering.meshtak.ui;
 
 import android.content.Context;
-import android.graphics.Color;
-import android.view.View;
-import android.widget.Button;
 import android.widget.TextView;
 import android.content.SharedPreferences;
+import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
 import com.atakmap.android.plugin.ui.PluginToolbar;
@@ -20,15 +19,24 @@ import androidx.preference.PreferenceManager;
 
 public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnSharedPreferenceChangeListener {
 
+    private View attachedView;
+    private View toolbarRoot;
+    private TextView toolbarTitleTextView;
+    private TextView toolbarSubtitleTextView;
+    private TextView themeBadgeTextView;
     private TextView connectionMethodStatusTextView;
     private TextView bleStatusTextView;
     private TextView serialStatusTextView;
     private TextView batteryStatusTextView;
+    private TextView toolbarHealthTextView;
     private Button sosButton;              
     
     private Context context;
     private BLEService bleService;
     private SerialService serialService;
+    private String bleDetailedStatus = "Idle";
+    private String serialDetailedStatus = "Idle";
+    private int batteryPercent = -1;
 
     public AkitaToolbar(Context context) {
         super(context, R.layout.akita_toolbar);
@@ -45,16 +53,23 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
 
     @Override
     public void onAttachedToView(View v) {
+        attachedView = v;
+        toolbarRoot = v.findViewById(R.id.toolbar_root);
+        toolbarTitleTextView = v.findViewById(R.id.toolbar_title);
+        toolbarSubtitleTextView = v.findViewById(R.id.toolbar_subtitle);
+        themeBadgeTextView = v.findViewById(R.id.theme_badge);
         connectionMethodStatusTextView = v.findViewById(R.id.connection_method_status);
         bleStatusTextView = v.findViewById(R.id.ble_status);
         serialStatusTextView = v.findViewById(R.id.serial_status);
         batteryStatusTextView = v.findViewById(R.id.battery_status);
+        toolbarHealthTextView = v.findViewById(R.id.toolbar_health_label);
         sosButton = v.findViewById(R.id.sos_button);
 
+        applyTheme();
         updateConnectionMethodDisplay();
-        setDetailedBleStatus("Idle");
-        setDetailedSerialStatus("Idle");
-        setBatteryStatus("--%");
+        setDetailedBleStatus(bleDetailedStatus);
+        setDetailedSerialStatus(serialDetailedStatus);
+        setBatteryStatus(batteryPercent >= 0 ? batteryPercent + "%" : "--%");
 
         if (sosButton != null) {
             sosButton.setOnClickListener(view -> triggerSosAlert());
@@ -70,8 +85,15 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-        if (key.equals("connection_method")) {
+        if (key.equals("connection_method") || key.equals("ble_device_name") || key.equals("serial_baud_rate") || key.equals("serial_port_path")) {
             updateConnectionMethodDisplay();
+        } else if (AkitaMockSettings.PREF_MOCK_MODE.equals(key)
+                || AkitaMockSettings.PREF_MOCK_BLE_STATUS.equals(key)
+                || AkitaMockSettings.PREF_MOCK_SERIAL_STATUS.equals(key)
+                || AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)) {
+            updateConnectionMethodDisplay();
+        } else if (AkitaTheme.PREF_UI_THEME.equals(key)) {
+            applyTheme();
         }
     }
 
@@ -83,17 +105,30 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
             if (method.equalsIgnoreCase("ble")) {
                 String deviceName = PreferenceManager.getDefaultSharedPreferences(context)
                         .getString("ble_device_name", "AkitaNode01");
-                displayMethod = "Method: BLE (Device: " + deviceName + ")";
+                displayMethod = "Method: BLE • Target " + deviceName;
             } else {
                 String baudRate = PreferenceManager.getDefaultSharedPreferences(context)
                         .getString("serial_baud_rate", "115200");
-                displayMethod = "Method: Serial (Baud: " + baudRate + ")";
+                String portPath = PreferenceManager.getDefaultSharedPreferences(context)
+                        .getString("serial_port_path", "/dev/ttyUSB0");
+                displayMethod = "Method: Serial • " + portPath + " @ " + baudRate;
             }
             connectionMethodStatusTextView.setText(displayMethod);
+            updateOperationalHealth();
         }
     }
     
     private void triggerSosAlert() {
+        if (AkitaMockSettings.isEnabled(context)) {
+            Toast.makeText(context, "MOCK ALERT: SOS simulated for dashboard validation.", Toast.LENGTH_SHORT).show();
+            AuditLogger.getInstance().log(AuditLogger.EventType.SOS_TRIGGERED,
+                    AuditLogger.Severity.CRITICAL,
+                    "AkitaToolbar",
+                    "SOS alert simulated in mock mode",
+                    true);
+            return;
+        }
+
         String method = PreferenceManager.getDefaultSharedPreferences(context)
                 .getString("connection_method", "ble");
         
@@ -123,73 +158,128 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
     public void setBatteryStatus(final String status) {
         if (batteryStatusTextView != null) {
             batteryStatusTextView.post(() -> {
-                String label = "";
-                
+                AkitaTheme.Palette palette = AkitaTheme.resolvePalette(context);
+                String label = "Awaiting telemetry";
                 try {
                     int percent = Integer.parseInt(status.replace("%", "").trim());
+                    batteryPercent = percent;
                     if (percent <= 20) {
-                        label = " (Low)";
-                        batteryStatusTextView.setTextColor(Color.RED);
+                        label = "Reserve power";
+                        batteryStatusTextView.setTextColor(palette.danger);
                     } else if (percent <= 50) {
-                        label = " (Medium)";
-                        batteryStatusTextView.setTextColor(Color.YELLOW);
+                        label = "Operational";
+                        batteryStatusTextView.setTextColor(palette.warning);
                     } else {
-                        label = " (Good)";
-                        batteryStatusTextView.setTextColor(Color.GREEN);
+                        label = "Mission ready";
+                        batteryStatusTextView.setTextColor(palette.success);
                     }
                 } catch (NumberFormatException e) {
-                    batteryStatusTextView.setTextColor(Color.WHITE);
+                    batteryPercent = -1;
+                    batteryStatusTextView.setTextColor(palette.textPrimary);
                 }
-                batteryStatusTextView.setText("BATT: " + status + label);
+                batteryStatusTextView.setText("Battery: " + status + " • " + label);
+                updateOperationalHealth();
             });
         }
     }
 
     public void setDetailedBleStatus(final String detailedStatus) {
+        bleDetailedStatus = detailedStatus;
         if (bleStatusTextView != null) {
             bleStatusTextView.post(() -> {
                 bleStatusTextView.setText("BLE: " + detailedStatus);
-                String generalStatus = detailedStatus.toLowerCase();
-                if (generalStatus.contains("connected")) {
-                    updateStatusColor(bleStatusTextView, "Connected");
-                } else if (generalStatus.contains("disconnected") || generalStatus.contains("error") || generalStatus.contains("failed")) {
-                    updateStatusColor(bleStatusTextView, "Disconnected");
-                } else if (generalStatus.contains("connecting") || generalStatus.contains("scanning")) {
-                    updateStatusColor(bleStatusTextView, "Connecting");
-                } else {
-                    updateStatusColor(bleStatusTextView, "Idle");
-                }
+                updateStatusColor(bleStatusTextView, detailedStatus);
+                updateOperationalHealth();
             });
         }
     }
 
     public void setDetailedSerialStatus(final String detailedStatus) {
+        serialDetailedStatus = detailedStatus;
         if (serialStatusTextView != null) {
             serialStatusTextView.post(() -> {
                 serialStatusTextView.setText("Serial: " + detailedStatus);
-                String generalStatus = detailedStatus.toLowerCase();
-                if (generalStatus.contains("connected")) {
-                    updateStatusColor(serialStatusTextView, "Connected");
-                } else if (generalStatus.contains("disconnected") || generalStatus.contains("error") || generalStatus.contains("failed")) {
-                    updateStatusColor(serialStatusTextView, "Disconnected");
-                } else if (generalStatus.contains("connecting") || generalStatus.contains("searching")) {
-                    updateStatusColor(serialStatusTextView, "Connecting");
-                } else {
-                    updateStatusColor(serialStatusTextView, "Idle");
-                }
+                updateStatusColor(serialStatusTextView, detailedStatus);
+                updateOperationalHealth();
             });
         }
     }
 
     private void updateStatusColor(TextView textView, String status) {
-        if (status.equalsIgnoreCase("Connected")) {
-            textView.setTextColor(Color.GREEN);
-        } else if (status.equalsIgnoreCase("Disconnected") || status.equalsIgnoreCase("Error")) {
-            textView.setTextColor(Color.RED);
-        } else if (status.equalsIgnoreCase("Connecting") || status.equalsIgnoreCase("Idle")) {
-            textView.setTextColor(Color.YELLOW);
-        } else {
-            textView.setTextColor(Color.WHITE);
+        textView.setTextColor(AkitaTheme.statusColor(status, AkitaTheme.resolvePalette(context)));
+    }
+
+    private void updateOperationalHealth() {
+        if (toolbarHealthTextView == null) {
+            return;
         }
+
+        String activeMethod = PreferenceManager.getDefaultSharedPreferences(context)
+                .getString("connection_method", "ble");
+        String activeStatus = activeMethod.equalsIgnoreCase("ble") ? bleDetailedStatus : serialDetailedStatus;
+        String normalizedStatus = activeStatus == null ? "" : activeStatus.toLowerCase();
+
+        String healthText;
+        if (normalizedStatus.contains("connected")) {
+            healthText = batteryPercent >= 0 && batteryPercent <= 20
+                    ? "Link health: Connected, low power"
+                    : "Link health: Mission ready";
+        } else if (normalizedStatus.contains("connecting") || normalizedStatus.contains("scanning") || normalizedStatus.contains("searching")) {
+            healthText = "Link health: Establishing route";
+        } else if (normalizedStatus.contains("error") || normalizedStatus.contains("failed") || normalizedStatus.contains("disconnected")) {
+            healthText = "Link health: Degraded";
+        } else {
+            healthText = "Link health: Standby";
+        }
+
+        toolbarHealthTextView.setText(healthText);
+        toolbarHealthTextView.setTextColor(AkitaTheme.statusColor(healthText, AkitaTheme.resolvePalette(context)));
+    }
+
+    private void applyTheme() {
+        if (attachedView == null) {
+            return;
+        }
+
+        AkitaTheme.Palette palette = AkitaTheme.resolvePalette(context);
+
+        if (toolbarRoot != null) {
+            toolbarRoot.setBackground(AkitaTheme.createAccentPanelDrawable(context, palette));
+        }
+        if (toolbarTitleTextView != null) {
+            toolbarTitleTextView.setTextColor(palette.textPrimary);
+        }
+        if (toolbarSubtitleTextView != null) {
+            toolbarSubtitleTextView.setTextColor(palette.textSecondary);
+        }
+        if (themeBadgeTextView != null) {
+            themeBadgeTextView.setBackground(AkitaTheme.createBadgeDrawable(context, palette, true));
+            themeBadgeTextView.setTextColor(palette.white);
+            themeBadgeTextView.setText(AkitaTheme.getThemeLabel(context));
+        }
+        if (connectionMethodStatusTextView != null) {
+            connectionMethodStatusTextView.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+            connectionMethodStatusTextView.setTextColor(palette.textPrimary);
+        }
+        if (bleStatusTextView != null) {
+            bleStatusTextView.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+            updateStatusColor(bleStatusTextView, bleDetailedStatus);
+        }
+        if (serialStatusTextView != null) {
+            serialStatusTextView.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+            updateStatusColor(serialStatusTextView, serialDetailedStatus);
+        }
+        if (batteryStatusTextView != null) {
+            batteryStatusTextView.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+        }
+        if (toolbarHealthTextView != null) {
+            toolbarHealthTextView.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+            updateOperationalHealth();
+        }
+        if (sosButton != null) {
+            sosButton.setBackground(AkitaTheme.createDangerButtonDrawable(context, palette));
+            sosButton.setTextColor(palette.white);
+        }
+        setBatteryStatus(batteryPercent >= 0 ? batteryPercent + "%" : "--%");
     }
 }

@@ -22,7 +22,9 @@ import com.atakmap.android.plugin.ui.PluginToolbar;
 import com.atakmap.android.plugin.ui.PluginView;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
+import com.akitaengineering.meshtak.ui.AkitaMockSettings;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
+import com.akitaengineering.meshtak.ui.AkitaTheme;
 import com.akitaengineering.meshtak.ui.ConnectionStatusOverlay;
 import com.akitaengineering.meshtak.ui.SendDataView;
 import com.akitaengineering.meshtak.ui.SettingsFragment;
@@ -39,7 +41,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
     private SerialService serialService;
     private AkitaToolbar akitaToolbar;
     private ConnectionStatusOverlay connectionStatusOverlay;
-    private PluginView sendDataPluginView;
+    private SendDataView sendDataView;
 
     // --- Service Connection Handlers ---
 
@@ -53,6 +55,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             bleService.setBleStatusListener(bleStatusListener); 
             
             if (akitaToolbar != null) akitaToolbar.setServices(bleService, serialService);
+            if (sendDataView != null) sendDataView.setServices(bleService, serialService);
             Log.i(TAG, "BLE Service bound and configured.");
         }
 
@@ -60,6 +63,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
         public void onServiceDisconnected(ComponentName arg0) {
             bleService = null;
             Log.i(TAG, "BLE Service unbound.");
+            if (sendDataView != null) sendDataView.setServices(null, serialService);
             if (connectionStatusOverlay != null) {
                 connectionStatusOverlay.setBleStatus("Disconnected");
             }
@@ -76,6 +80,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             serialService.setSerialStatusListener(serialStatusListener);
             
             if (akitaToolbar != null) akitaToolbar.setServices(bleService, serialService);
+            if (sendDataView != null) sendDataView.setServices(bleService, serialService);
             Log.i(TAG, "Serial Service bound and configured.");
         }
 
@@ -83,6 +88,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
         public void onServiceDisconnected(ComponentName arg0) {
             serialService = null;
             Log.i(TAG, "Serial Service unbound.");
+            if (sendDataView != null) sendDataView.setServices(bleService, null);
             if (connectionStatusOverlay != null) {
                 connectionStatusOverlay.setSerialStatus("Disconnected");
             }
@@ -115,8 +121,11 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
         akitaToolbar = new AkitaToolbar(context);
         connectionStatusOverlay = new ConnectionStatusOverlay(context, view);
         
-        // Start services on startup
-        startAndBindServices();
+        if (isMockModeEnabled()) {
+            applyMockState();
+        } else {
+            startAndBindServices();
+        }
     }
 
     @Override
@@ -132,6 +141,10 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
     
     /** Starts/Binds both services */
     private void startAndBindServices() {
+        if (isMockModeEnabled()) {
+            applyMockState();
+            return;
+        }
         Intent bleServiceIntent = new Intent(pluginContext, BLEService.class);
         pluginContext.startService(bleServiceIntent);
         pluginContext.bindService(bleServiceIntent, bleConnection, Context.BIND_AUTO_CREATE);
@@ -151,12 +164,67 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
         
         bleService = null;
         serialService = null;
+        if (akitaToolbar != null) akitaToolbar.setServices(null, null);
+        if (sendDataView != null) sendDataView.setServices(null, null);
+    }
+
+    private boolean isMockModeEnabled() {
+        return AkitaMockSettings.isEnabled(PreferenceManager.getDefaultSharedPreferences(pluginContext));
+    }
+
+    private void applyMockState() {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(pluginContext);
+        String bleStatus = AkitaMockSettings.getBleStatus(preferences);
+        String serialStatus = AkitaMockSettings.getSerialStatus(preferences);
+        String batteryStatus = AkitaMockSettings.getBatteryLabel(preferences);
+
+        if (akitaToolbar != null) {
+            akitaToolbar.setServices(null, null);
+            akitaToolbar.updateConnectionMethodDisplay();
+            akitaToolbar.setDetailedBleStatus(bleStatus);
+            akitaToolbar.setDetailedSerialStatus(serialStatus);
+            akitaToolbar.setBatteryStatus(batteryStatus);
+        }
+        if (connectionStatusOverlay != null) {
+            connectionStatusOverlay.setBleStatus(bleStatus);
+            connectionStatusOverlay.setSerialStatus(serialStatus);
+        }
+        if (sendDataView != null) {
+            sendDataView.setServices(null, null);
+        }
+        if (mapView != null) {
+            mapView.invalidate();
+        }
     }
 
     /** Reloads the entire plugin connection state (used when Connection Method is changed) */
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        if (AkitaMockSettings.PREF_MOCK_MODE.equals(key)) {
+            if (isMockModeEnabled()) {
+                stopAndUnbindServices();
+                applyMockState();
+            } else {
+                startAndBindServices();
+            }
+            return;
+        }
+
+        if (AkitaMockSettings.PREF_MOCK_BLE_STATUS.equals(key)
+                || AkitaMockSettings.PREF_MOCK_SERIAL_STATUS.equals(key)
+                || AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)) {
+            if (isMockModeEnabled()) {
+                applyMockState();
+            }
+            return;
+        }
+
         if (key.equals("connection_method")) {
+            if (isMockModeEnabled()) {
+                if (akitaToolbar != null) akitaToolbar.updateConnectionMethodDisplay();
+                applyMockState();
+                return;
+            }
             Log.i(TAG, "Connection method preference changed. Reloading connection strategy.");
             
             // 1. Unbind/Stop everything cleanly
@@ -167,6 +235,11 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             
             // 3. Update the toolbar display instantly
             if (akitaToolbar != null) akitaToolbar.updateConnectionMethodDisplay();
+        } else if (AkitaTheme.PREF_UI_THEME.equals(key) && mapView != null) {
+            mapView.invalidate();
+            if (isMockModeEnabled()) {
+                applyMockState();
+            }
         }
     }
 
@@ -189,7 +262,8 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
     @Override
     public PluginView onCreateView(String viewId, PluginLayoutInflater inflater) {
         if (viewId.equals("com.akitaengineering.meshtak.send_data_view")) {
-            return new SendDataView(pluginContext, mapView, bleService, serialService);
+            sendDataView = new SendDataView(pluginContext, mapView, bleService, serialService);
+            return sendDataView;
         }
         return null;
     }

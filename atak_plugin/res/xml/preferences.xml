@@ -8,6 +8,40 @@
         android:entryValues="@array/connection_method_values"
         android:defaultValue="ble" />
 
+    <ListPreference
+        android:key="ui_theme"
+        android:title="@string/ui_theme_title"
+        android:entries="@array/ui_theme_entries"
+        android:entryValues="@array/ui_theme_values"
+        android:defaultValue="dark" />
+
+    <SwitchPreferenceCompat
+        android:key="mock_mode"
+        android:title="@string/mock_mode_title"
+        android:defaultValue="false" />
+
+    <ListPreference
+        android:key="mock_ble_status"
+        android:title="@string/mock_ble_status_title"
+        android:entries="@array/mock_status_entries"
+        android:entryValues="@array/mock_status_values"
+        android:defaultValue="Connected"
+        android:dependency="mock_mode" />
+
+    <ListPreference
+        android:key="mock_serial_status"
+        android:title="@string/mock_serial_status_title"
+        android:entries="@array/mock_status_entries"
+        android:entryValues="@array/mock_status_values"
+        android:defaultValue="Idle"
+        android:dependency="mock_mode" />
+
+    <EditTextPreference
+        android:key="mock_battery_level"
+        android:title="@string/mock_battery_level_title"
+        android:defaultValue="78"
+        android:dependency="mock_mode" />
+
     <EditTextPreference
         android:key="ble_device_name"
         android:title="@string/ble_device_name_title"

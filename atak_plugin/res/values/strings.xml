@@ -6,4 +6,11 @@
     <string name="serial_port_path_title">Serial Port Path</string>
     <string name="serial_baud_rate_title">Serial Baud Rate</string>
     <string name="send_test_message_title">Send Test Message</string>
+    <string name="ui_theme_title">Dashboard Theme</string>
+    <string name="history_spinner_prompt">Reuse a recent command</string>
+    <string name="history_spinner_empty">No command history yet</string>
+    <string name="mock_mode_title">Mock Transport Mode</string>
+    <string name="mock_ble_status_title">Mock BLE Status</string>
+    <string name="mock_serial_status_title">Mock Serial Status</string>
+    <string name="mock_battery_level_title">Mock Battery Level</string>
 </resources>

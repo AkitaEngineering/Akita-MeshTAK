@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Akita MeshTAK UI Preview</title>
+  <style>
+    :root {
+      --bg: #06080b;
+      --surface: #11161c;
+      --surface-elevated: #182230;
+      --outline: #7a8794;
+      --text: #f4f7fa;
+      --text-secondary: #c4cdd5;
+      --text-muted: #8e9ba7;
+      --army: #556b2f;
+      --army-strong: #839667;
+      --navy: #223754;
+      --silver: #b8c1c9;
+      --danger: #b45757;
+      --warning: #c6a34a;
+      --success: #72b26f;
+      --grid: #334150;
+      --toolbar-accent: rgba(34, 55, 84, 0.78);
+      --accent-panel: linear-gradient(180deg, rgba(34, 55, 84, 0.95), rgba(24, 34, 48, 0.92));
+      --shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+    }
+
+    body.light {
+      --bg: #eef2f4;
+      --surface: #ffffff;
+      --surface-elevated: #e3e8ec;
+      --outline: #7b8792;
+      --text: #0d1723;
+      --text-secondary: #465462;
+      --text-muted: #6e7a86;
+      --army: #556b2f;
+      --army-strong: #425220;
+      --navy: #284362;
+      --silver: #a2adb7;
+      --danger: #9e4545;
+      --warning: #9b7a1f;
+      --success: #567c4f;
+      --grid: #d2dae1;
+      --toolbar-accent: rgba(40, 67, 98, 0.10);
+      --accent-panel: linear-gradient(180deg, rgba(40, 67, 98, 0.18), rgba(255, 255, 255, 0.94));
+      --shadow: 0 18px 48px rgba(20, 32, 45, 0.10);
+    }
+
+    body.red {
+      --bg: #060000;
+      --surface: #120202;
+      --surface-elevated: #1d0505;
+      --outline: #8f3a3a;
+      --text: #ffb1a8;
+      --text-secondary: #e07a6a;
+      --text-muted: #a84b42;
+      --army: #c84a3d;
+      --army-strong: #ff6b57;
+      --navy: #4b0a0a;
+      --silver: #ff8e7a;
+      --danger: #ff4a3d;
+      --warning: #d85d4b;
+      --success: #ff7b66;
+      --grid: #3d0c0c;
+      --toolbar-accent: rgba(75, 10, 10, 0.88);
+      --accent-panel: linear-gradient(180deg, rgba(75, 10, 10, 0.96), rgba(18, 2, 2, 0.94));
+      --shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Aptos", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(85, 107, 47, 0.18), transparent 32%),
+        radial-gradient(circle at top right, rgba(184, 193, 201, 0.12), transparent 28%),
+        linear-gradient(180deg, var(--bg), color-mix(in srgb, var(--bg) 76%, #121b26));
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    body.red {
+      background:
+        radial-gradient(circle at top left, rgba(255, 107, 87, 0.15), transparent 32%),
+        radial-gradient(circle at top right, rgba(75, 10, 10, 0.35), transparent 26%),
+        linear-gradient(180deg, var(--bg), #140202);
+    }
+
+    .shell {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .titleblock h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0.02em;
+    }
+
+    .titleblock p {
+      margin: 6px 0 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pill,
+    .mode-select {
+      border: 1px solid rgba(122, 135, 148, 0.35);
+      border-radius: 999px;
+      padding: 10px 16px;
+      background: rgba(17, 22, 28, 0.4);
+      color: var(--text);
+      font-size: 14px;
+      backdrop-filter: blur(16px);
+    }
+
+    body.light .pill,
+    body.light .mode-select {
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .mode-select {
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 360px minmax(760px, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid rgba(122, 135, 148, 0.26);
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .toolbar {
+      background: var(--accent-panel);
+      padding: 18px;
+    }
+
+    .toolbar-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .toolbar-head h2,
+    .dashboard-head h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .toolbar-head p,
+    .dashboard-head p,
+    .section-subtitle,
+    .mini-copy,
+    .hint,
+    .legend span,
+    .field-note,
+    .summary-copy,
+    .preview-note {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: var(--army);
+      color: white;
+      white-space: nowrap;
+    }
+
+    .toolbar .stack,
+    .summary,
+    .card,
+    .stat,
+    .input-frame,
+    .history-card {
+      border-radius: 18px;
+      border: 1px solid rgba(122, 135, 148, 0.22);
+      background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
+    }
+
+    .toolbar .stack {
+      padding: 14px;
+      margin-top: 10px;
+    }
+
+    .toolbar .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .toolbar .danger {
+      margin-top: 12px;
+      width: 100%;
+      border: none;
+      border-radius: 18px;
+      padding: 14px;
+      background: var(--danger);
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .dashboard {
+      padding: 18px;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+
+    .dashboard-body {
+      display: grid;
+      gap: 16px;
+    }
+
+    .dashboard-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .chips {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .chip {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 42px;
+      border-radius: 999px;
+      border: 1px solid rgba(122, 135, 148, 0.24);
+      background: rgba(24, 34, 48, 0.5);
+      color: var(--text);
+      font-size: 13px;
+      padding: 0 16px;
+    }
+
+    .chip.primary {
+      background: var(--army);
+      color: white;
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .summary {
+      padding: 18px;
+      background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--navy) 88%, transparent),
+        color-mix(in srgb, var(--surface-elevated) 94%, transparent)
+      );
+    }
+
+    .summary h3,
+    .card h3,
+    .history-card h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .stat {
+      padding: 14px;
+    }
+
+    .stat label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .stat strong {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
+    .progress {
+      margin: 12px 0 8px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(122, 135, 148, 0.2);
+      overflow: hidden;
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      width: 62%;
+      background: linear-gradient(90deg, var(--army), var(--army-strong));
+      border-radius: inherit;
+    }
+
+    .cards-row {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 16px;
+    }
+
+    .card,
+    .history-card {
+      padding: 18px;
+    }
+
+    .chart {
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--grid) 18%, transparent);
+      border: 1px solid rgba(122, 135, 148, 0.16);
+      padding: 14px;
+      margin-top: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chart svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .legend {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .legend div {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .select,
+    .textarea,
+    .history-select {
+      width: 100%;
+      border: 1px solid rgba(122, 135, 148, 0.35);
+      background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
+      color: var(--text);
+      border-radius: 18px;
+      padding: 14px 16px;
+      font: inherit;
+    }
+
+    .textarea {
+      min-height: 140px;
+      resize: none;
+      line-height: 1.45;
+    }
+
+    .tx-button {
+      border: none;
+      border-radius: 18px;
+      padding: 14px 16px;
+      background: var(--army);
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1.2fr 0.85fr;
+      gap: 16px;
+    }
+
+    .preview-note {
+      margin-top: 18px;
+      font-size: 13px;
+    }
+
+    @media (max-width: 1180px) {
+      .preview-grid,
+      .cards-row,
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        padding: 14px;
+      }
+
+      .topbar,
+      .dashboard-head,
+      .toolbar-head {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .chips,
+      .stats,
+      .toolbar .row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="titleblock">
+        <h1>Akita MeshTAK Preview</h1>
+        <p>Static no-hardware mockup of the implemented toolbar and dashboard.</p>
+      </div>
+      <div class="controls">
+        <span class="pill">Palette: black, silver, navy, army green, grey, white</span>
+        <select id="themeModeSelect" class="mode-select" aria-label="Theme mode">
+          <option value="dark" selected>Dark Ops</option>
+          <option value="light">Light Ops</option>
+          <option value="red">Night Red</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="preview-grid">
+      <section class="panel toolbar">
+        <div class="toolbar-head">
+          <div>
+            <h2>Akita MeshTAK</h2>
+            <p>Live link posture and emergency control</p>
+          </div>
+          <span class="badge" id="toolbarThemeBadge">Dark Ops</span>
+        </div>
+
+        <div class="stack">
+          <strong>Method: BLE • Target AkitaNode01</strong>
+        </div>
+
+        <div class="row">
+          <div class="stack"><strong style="color: var(--success);">BLE: Connected</strong></div>
+          <div class="stack"><strong style="color: var(--warning);">Serial: Idle</strong></div>
+        </div>
+
+        <div class="row">
+          <div class="stack"><strong style="color: var(--success);">Battery: 78% • Mission ready</strong></div>
+          <div class="stack"><strong style="color: var(--success);">Link health: Mission ready</strong></div>
+        </div>
+
+        <button class="danger">Send SOS</button>
+      </section>
+
+      <section class="panel dashboard">
+        <div class="dashboard-head">
+          <div>
+            <h2>Mission Link Console</h2>
+            <p>Transmission posture, payload budget, and recent link traffic.</p>
+          </div>
+          <span class="badge" id="dashThemeBadge">Dark Ops</span>
+        </div>
+
+        <div class="chips">
+          <div class="chip primary">Active route: BLE</div>
+          <div class="chip">Target AkitaNode01</div>
+        </div>
+
+        <div class="dashboard-body">
+          <section class="summary">
+            <h3>Operational Summary</h3>
+            <p class="summary-copy">BLE profile armed for AkitaNode01. Draft traffic will route over the mesh radio when transmitted.</p>
+
+            <div class="stats">
+              <div class="stat">
+                <label>Active Route</label>
+                <strong>BLE</strong>
+              </div>
+              <div class="stat">
+                <label>Payload Budget</label>
+                <strong>318 / 512 B</strong>
+              </div>
+              <div class="stat">
+                <label>Last Send</label>
+                <strong>2m ago</strong>
+              </div>
+              <div class="stat">
+                <label>Delivery Ratio</label>
+                <strong>92%</strong>
+              </div>
+            </div>
+
+            <p class="mini-copy">Draft fits comfortably inside the radio payload envelope.</p>
+            <div class="progress"><span></span></div>
+            <p class="mini-copy">Last successful transmission: JSON • 318 B via BLE • 2m ago.</p>
+          </section>
+
+          <div class="cards-row">
+            <section class="card">
+              <h3>Recent Payload Trend</h3>
+              <p class="section-subtitle">Last 12 successful transmissions measured against the 512-byte envelope.</p>
+              <div class="chart">
+                <svg viewBox="0 0 640 260" aria-label="Payload trend chart">
+                  <g fill="none" stroke="var(--grid)" stroke-width="2">
+                    <path d="M20 40 H620" />
+                    <path d="M20 110 H620" />
+                    <path d="M20 180 H620" />
+                    <path d="M20 235 H620" />
+                  </g>
+                  <path d="M20 235 L20 170 L80 154 L140 188 L200 122 L260 144 L320 108 L380 132 L440 76 L500 96 L560 56 L620 84 L620 235 Z"
+                        fill="rgba(40,67,98,0.35)" />
+                  <path d="M20 170 L80 154 L140 188 L200 122 L260 144 L320 108 L380 132 L440 76 L500 96 L560 56 L620 84"
+                        stroke="var(--silver)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                  <circle cx="620" cy="84" r="7" fill="var(--army)" />
+                  <text x="566" y="26" fill="var(--text-secondary)" font-size="18">512 B</text>
+                  <text x="580" y="254" fill="var(--text-secondary)" font-size="18">0 B</text>
+                  <text x="548" y="70" fill="var(--text-secondary)" font-size="18">318 B</text>
+                </svg>
+              </div>
+            </section>
+
+            <section class="card">
+              <h3>Format Distribution</h3>
+              <p class="section-subtitle">Actual traffic mix across Plain Text, JSON, and Custom frames.</p>
+              <div class="chart" style="display:flex;justify-content:center;align-items:center;min-height:292px;">
+                <svg viewBox="0 0 320 260" aria-label="Format distribution chart" style="max-width:320px;">
+                  <circle cx="160" cy="126" r="68" fill="none" stroke="var(--grid)" stroke-width="28" />
+                  <circle cx="160" cy="126" r="68" fill="none" stroke="var(--silver)" stroke-width="28" stroke-dasharray="126 428" stroke-dashoffset="0" transform="rotate(-90 160 126)" />
+                  <circle cx="160" cy="126" r="68" fill="none" stroke="var(--navy)" stroke-width="28" stroke-dasharray="200 354" stroke-dashoffset="-126" transform="rotate(-90 160 126)" />
+                  <circle cx="160" cy="126" r="68" fill="none" stroke="var(--army)" stroke-width="28" stroke-dasharray="102 452" stroke-dashoffset="-326" transform="rotate(-90 160 126)" />
+                  <text x="160" y="123" text-anchor="middle" fill="var(--text)" font-size="34" font-weight="800">24</text>
+                  <text x="160" y="148" text-anchor="middle" fill="var(--text-secondary)" font-size="14">frames tracked</text>
+                </svg>
+              </div>
+              <div class="legend">
+                <div><span class="dot" style="background: var(--silver);"></span><span>Plain Text 6</span></div>
+                <div><span class="dot" style="background: var(--navy);"></span><span>JSON 12</span></div>
+                <div><span class="dot" style="background: var(--army);"></span><span>Custom 6</span></div>
+              </div>
+            </section>
+          </div>
+
+          <div class="two-col">
+            <section class="card">
+              <h3>Transmit Payload</h3>
+              <p class="section-subtitle">Prepare a frame and watch the budget meter before release.</p>
+              <div class="form-grid" style="margin-top:14px;">
+                <select class="select">
+                  <option>JSON</option>
+                  <option>Plain Text</option>
+                  <option>Custom</option>
+                </select>
+                <textarea class="textarea">{"type":"spotrep","grid":"11U PU 34567 89012","priority":"routine","summary":"Unit check-in and route status normal."}</textarea>
+                <div class="field-note">Prepared frame: JSON • 318 B • 194 B remaining</div>
+                <button class="tx-button">Transmit</button>
+              </div>
+            </section>
+
+            <section class="history-card">
+              <h3>Rapid Reuse</h3>
+              <p class="section-subtitle">Recent command snippets will appear here after transmission.</p>
+              <select class="history-select" style="margin-top:14px;">
+                <option>Reuse a recent command</option>
+                <option>ATAK Test Message!</option>
+                <option>{"type":"spotrep","priority":"routine"}</option>
+                <option>CUSTOM:REQUEST_STATUS</option>
+              </select>
+              <p class="hint" style="margin-top:14px;">3 reusable commands ready for retransmission.</p>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <p class="preview-note">This preview is a visual approximation of the implemented plugin UI, not a live ATAK render. It is intended for palette, hierarchy, spacing, and chart validation before device testing.</p>
+  </div>
+
+  <script>
+    const select = document.getElementById('themeModeSelect');
+    const toolbarBadge = document.getElementById('toolbarThemeBadge');
+    const dashBadge = document.getElementById('dashThemeBadge');
+
+    function syncTheme() {
+      const mode = select.value;
+      document.body.classList.toggle('light', mode === 'light');
+      document.body.classList.toggle('red', mode === 'red');
+      const label = mode === 'light' ? 'Light Ops' : mode === 'red' ? 'Night Red' : 'Dark Ops';
+      toolbarBadge.textContent = label;
+      dashBadge.textContent = label;
+    }
+
+    select.addEventListener('change', syncTheme);
+    syncTheme();
+  </script>
+</body>
+</html>
