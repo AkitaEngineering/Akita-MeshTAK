@@ -105,13 +105,13 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
             if (method.equalsIgnoreCase("ble")) {
                 String deviceName = PreferenceManager.getDefaultSharedPreferences(context)
                         .getString("ble_device_name", "AkitaNode01");
-                displayMethod = "Method: BLE • Target " + deviceName;
+                displayMethod = "Secure route: BLE • Target " + deviceName;
             } else {
                 String baudRate = PreferenceManager.getDefaultSharedPreferences(context)
                         .getString("serial_baud_rate", "115200");
                 String portPath = PreferenceManager.getDefaultSharedPreferences(context)
                         .getString("serial_port_path", "/dev/ttyUSB0");
-                displayMethod = "Method: Serial • " + portPath + " @ " + baudRate;
+                displayMethod = "Secure route: Serial • " + portPath + " @ " + baudRate;
             }
             connectionMethodStatusTextView.setText(displayMethod);
             updateOperationalHealth();
@@ -222,14 +222,14 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
         String healthText;
         if (normalizedStatus.contains("connected")) {
             healthText = batteryPercent >= 0 && batteryPercent <= 20
-                    ? "Link health: Connected, low power"
-                    : "Link health: Mission ready";
+                    ? "Secure link: Connected, low power"
+                    : "Secure link: Mission ready";
         } else if (normalizedStatus.contains("connecting") || normalizedStatus.contains("scanning") || normalizedStatus.contains("searching")) {
-            healthText = "Link health: Establishing route";
+            healthText = "Secure link: Establishing route";
         } else if (normalizedStatus.contains("error") || normalizedStatus.contains("failed") || normalizedStatus.contains("disconnected")) {
-            healthText = "Link health: Degraded";
+            healthText = "Secure link: Degraded";
         } else {
-            healthText = "Link health: Standby";
+            healthText = "Secure link: Standby";
         }
 
         toolbarHealthTextView.setText(healthText);

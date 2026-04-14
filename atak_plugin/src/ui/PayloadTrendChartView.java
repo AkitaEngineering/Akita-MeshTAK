@@ -59,25 +59,25 @@ public class PayloadTrendChartView extends View {
     }
 
     private void configurePaints() {
-        gridPaint.setColor(AkitaTheme.withAlpha(palette.grid, 180));
+        gridPaint.setColor(palette.monochrome ? palette.grid : AkitaTheme.withAlpha(palette.grid, 180));
         gridPaint.setStrokeWidth(dp(1));
 
         fillPaint.setStyle(Paint.Style.FILL);
-        fillPaint.setColor(AkitaTheme.withAlpha(palette.navy, 120));
+        fillPaint.setColor(palette.monochrome ? palette.background : AkitaTheme.withAlpha(palette.navy, 120));
 
         linePaint.setStyle(Paint.Style.STROKE);
-        linePaint.setColor(palette.silver);
+        linePaint.setColor(palette.monochrome ? palette.accent : palette.silver);
         linePaint.setStrokeWidth(dp(3));
         linePaint.setStrokeCap(Paint.Cap.ROUND);
         linePaint.setStrokeJoin(Paint.Join.ROUND);
 
         pointPaint.setStyle(Paint.Style.FILL);
-        pointPaint.setColor(palette.accentStrong);
+        pointPaint.setColor(palette.monochrome ? palette.accent : palette.accentStrong);
 
-        labelPaint.setColor(palette.textSecondary);
+        labelPaint.setColor(palette.monochrome ? palette.accent : palette.textSecondary);
         labelPaint.setTextSize(dp(11));
 
-        emptyPaint.setColor(palette.textMuted);
+        emptyPaint.setColor(palette.monochrome ? palette.accent : palette.textMuted);
         emptyPaint.setTextSize(dp(13));
         emptyPaint.setTextAlign(Paint.Align.CENTER);
     }
@@ -133,7 +133,9 @@ public class PayloadTrendChartView extends View {
         fillPath.lineTo(finalX, bottom);
         fillPath.close();
 
-        canvas.drawPath(fillPath, fillPaint);
+        if (!palette.monochrome) {
+            canvas.drawPath(fillPath, fillPaint);
+        }
         canvas.drawPath(linePath, linePaint);
 
         int lastValue = values.get(values.size() - 1);

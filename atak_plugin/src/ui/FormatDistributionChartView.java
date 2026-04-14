@@ -52,7 +52,7 @@ public class FormatDistributionChartView extends View {
     private void configurePaints() {
         trackPaint.setStyle(Paint.Style.STROKE);
         trackPaint.setStrokeCap(Paint.Cap.BUTT);
-        trackPaint.setColor(AkitaTheme.withAlpha(palette.grid, 210));
+        trackPaint.setColor(palette.monochrome ? palette.grid : AkitaTheme.withAlpha(palette.grid, 210));
 
         segmentPaint.setStyle(Paint.Style.STROKE);
         segmentPaint.setStrokeCap(Paint.Cap.BUTT);
@@ -62,7 +62,7 @@ public class FormatDistributionChartView extends View {
         primaryTextPaint.setTextSize(dp(24));
         primaryTextPaint.setFakeBoldText(true);
 
-        secondaryTextPaint.setColor(palette.textSecondary);
+        secondaryTextPaint.setColor(palette.monochrome ? palette.accent : palette.textSecondary);
         secondaryTextPaint.setTextAlign(Paint.Align.CENTER);
         secondaryTextPaint.setTextSize(dp(12));
     }
@@ -86,12 +86,17 @@ public class FormatDistributionChartView extends View {
         ringBounds.set(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
         ringBounds.inset(inset / 2f, inset / 2f);
 
+        int total = plainTextCount + jsonCount + customCount;
+        if (palette.monochrome) {
+            drawMonochromeRings(canvas, centerX, centerY, radius, total);
+            return;
+        }
+
         trackPaint.setStrokeWidth(strokeWidth);
         segmentPaint.setStrokeWidth(strokeWidth);
 
         canvas.drawArc(ringBounds, -90f, 360f, false, trackPaint);
 
-        int total = plainTextCount + jsonCount + customCount;
         if (total > 0) {
             float startAngle = -90f;
             startAngle = drawSegment(canvas, startAngle, plainTextCount, total, palette.silver);
@@ -106,6 +111,46 @@ public class FormatDistributionChartView extends View {
             canvas.drawText("0", centerX, centerY + dp(4), primaryTextPaint);
             canvas.drawText("Awaiting traffic", centerX, centerY + dp(24), secondaryTextPaint);
         }
+    }
+
+    private void drawMonochromeRings(Canvas canvas, float centerX, float centerY, float radius, int total) {
+        float baseStroke = Math.max(dp(10), radius * 0.16f);
+        float gap = dp(8);
+
+        if (total > 0) {
+            drawConcentricArc(canvas, centerX, centerY, radius, baseStroke, plainTextCount, total);
+            drawConcentricArc(canvas, centerX, centerY, radius - (baseStroke + gap), baseStroke, jsonCount, total);
+            drawConcentricArc(canvas, centerX, centerY, radius - ((baseStroke + gap) * 2f), baseStroke, customCount, total);
+
+            canvas.drawText(String.valueOf(total), centerX, centerY + dp(4), primaryTextPaint);
+            canvas.drawText("frames tracked", centerX, centerY + dp(24), secondaryTextPaint);
+        } else {
+            segmentPaint.setStyle(Paint.Style.STROKE);
+            segmentPaint.setStrokeWidth(baseStroke);
+            segmentPaint.setColor(palette.accent);
+            RectF bounds = new RectF(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+            canvas.drawArc(bounds, -90f, 360f, false, segmentPaint);
+            canvas.drawText("0", centerX, centerY + dp(4), primaryTextPaint);
+            canvas.drawText("Awaiting traffic", centerX, centerY + dp(24), secondaryTextPaint);
+        }
+    }
+
+    private void drawConcentricArc(Canvas canvas,
+                                   float centerX,
+                                   float centerY,
+                                   float radius,
+                                   float strokeWidth,
+                                   int count,
+                                   int total) {
+        if (radius <= 0f || count <= 0 || total <= 0) {
+            return;
+        }
+        RectF bounds = new RectF(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+        segmentPaint.setStyle(Paint.Style.STROKE);
+        segmentPaint.setStrokeWidth(strokeWidth);
+        segmentPaint.setColor(palette.accent);
+        float sweepAngle = (360f * count) / total;
+        canvas.drawArc(bounds, -90f, sweepAngle, false, segmentPaint);
     }
 
     private float drawSegment(Canvas canvas, float startAngle, int count, int total, int color) {

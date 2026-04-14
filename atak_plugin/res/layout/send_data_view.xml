@@ -39,7 +39,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Transmission posture, payload budget, and recent link traffic."
+                    android:text="Encrypted link posture, payload budget, and interoperable mission traffic."
                     android:textSize="13sp" />
             </LinearLayout>
 
@@ -271,7 +271,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Last 12 successful transmissions measured against the 512-byte envelope."
+                android:text="Last 12 encrypted transmissions measured against the 512-byte field envelope."
                 android:textSize="13sp" />
 
             <com.akitaengineering.meshtak.ui.PayloadTrendChartView
@@ -302,7 +302,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Actual traffic mix across Plain Text, JSON, and Custom frames."
+                android:text="Actual traffic mix across ATAK, JSON, and custom interoperability frames."
                 android:textSize="13sp" />
 
             <com.akitaengineering.meshtak.ui.FormatDistributionChartView
@@ -399,7 +399,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Prepare a frame and watch the budget meter before release."
+                android:text="Prepare a secure frame and verify payload budget before release."
                 android:textSize="13sp" />
 
             <Spinner
@@ -458,7 +458,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Recent command snippets will appear here after transmission."
+                android:text="Recent secure commands and interoperable frames will appear here after transmission."
                 android:textSize="13sp" />
 
             <Spinner

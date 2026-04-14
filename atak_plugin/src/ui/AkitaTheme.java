@@ -75,9 +75,9 @@ public final class AkitaTheme {
 
     public static GradientDrawable createPanelDrawable(Context context, Palette palette, boolean elevated) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(elevated ? palette.surfaceElevated : palette.surface);
+        drawable.setColor(palette.monochrome ? palette.background : elevated ? palette.surfaceElevated : palette.surface);
         drawable.setCornerRadius(dp(context, elevated ? 26 : 22));
-        drawable.setStroke(dp(context, 1), withAlpha(palette.outline, elevated ? 200 : 155));
+        drawable.setStroke(dp(context, 1), palette.monochrome ? palette.accent : withAlpha(palette.outline, elevated ? 200 : 155));
         return drawable;
     }
 
@@ -85,49 +85,49 @@ public final class AkitaTheme {
         GradientDrawable drawable = new GradientDrawable();
         String mode = getThemeMode(context);
         int alpha = MODE_LIGHT.equalsIgnoreCase(mode) ? 34 : MODE_NIGHT_RED.equalsIgnoreCase(mode) ? 220 : 150;
-        drawable.setColor(withAlpha(palette.navy, alpha));
+        drawable.setColor(palette.monochrome ? palette.background : withAlpha(palette.navy, alpha));
         drawable.setCornerRadius(dp(context, 26));
-        drawable.setStroke(dp(context, 1), withAlpha(palette.accentStrong, 210));
+        drawable.setStroke(dp(context, 1), palette.monochrome ? palette.accent : withAlpha(palette.accentStrong, 210));
         return drawable;
     }
 
     public static GradientDrawable createStatTileDrawable(Context context, Palette palette) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(withAlpha(palette.surfaceElevated, 245));
+        drawable.setColor(palette.monochrome ? palette.background : withAlpha(palette.surfaceElevated, 245));
         drawable.setCornerRadius(dp(context, 18));
-        drawable.setStroke(dp(context, 1), withAlpha(palette.outline, 145));
+        drawable.setStroke(dp(context, 1), palette.monochrome ? palette.accent : withAlpha(palette.outline, 145));
         return drawable;
     }
 
     public static GradientDrawable createInputDrawable(Context context, Palette palette) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(withAlpha(palette.surfaceElevated, 250));
+        drawable.setColor(palette.monochrome ? palette.background : withAlpha(palette.surfaceElevated, 250));
         drawable.setCornerRadius(dp(context, 18));
-        drawable.setStroke(dp(context, 1), withAlpha(palette.outline, 190));
+        drawable.setStroke(dp(context, 1), palette.monochrome ? palette.accent : withAlpha(palette.outline, 190));
         return drawable;
     }
 
     public static GradientDrawable createAccentButtonDrawable(Context context, Palette palette) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(palette.accent);
+        drawable.setColor(palette.monochrome ? palette.background : palette.accent);
         drawable.setCornerRadius(dp(context, 18));
-        drawable.setStroke(dp(context, 1), palette.accentStrong);
+        drawable.setStroke(dp(context, 1), palette.monochrome ? palette.accent : palette.accentStrong);
         return drawable;
     }
 
     public static GradientDrawable createDangerButtonDrawable(Context context, Palette palette) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(palette.danger);
+        drawable.setColor(palette.monochrome ? palette.background : palette.danger);
         drawable.setCornerRadius(dp(context, 18));
-        drawable.setStroke(dp(context, 1), withAlpha(palette.white, 65));
+        drawable.setStroke(dp(context, 1), palette.monochrome ? palette.accent : withAlpha(palette.white, 65));
         return drawable;
     }
 
     public static GradientDrawable createBadgeDrawable(Context context, Palette palette, boolean accent) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setCornerRadius(dp(context, 999));
-        drawable.setColor(accent ? withAlpha(palette.accent, 225) : withAlpha(palette.surfaceElevated, 250));
-        drawable.setStroke(dp(context, 1), accent ? withAlpha(palette.white, 90) : withAlpha(palette.outline, 165));
+        drawable.setColor(palette.monochrome ? palette.background : accent ? withAlpha(palette.accent, 225) : withAlpha(palette.surfaceElevated, 250));
+        drawable.setStroke(dp(context, 1), palette.monochrome ? palette.accent : accent ? withAlpha(palette.white, 90) : withAlpha(palette.outline, 165));
         return drawable;
     }
 
@@ -140,6 +140,9 @@ public final class AkitaTheme {
     }
 
     public static int statusColor(String status, Palette palette) {
+        if (palette.monochrome) {
+            return palette.accent;
+        }
         String lowerStatus = status == null ? "" : status.toLowerCase();
         if (lowerStatus.contains("connected") || lowerStatus.contains("ready") || lowerStatus.contains("good")) {
             return palette.success;
@@ -175,7 +178,8 @@ public final class AkitaTheme {
                 Color.parseColor("#C6A34A"),
                 Color.parseColor("#72B26F"),
                 Color.parseColor("#334150"),
-                Color.parseColor("#FFFFFF"));
+                Color.parseColor("#FFFFFF"),
+                false);
     }
 
     public static Palette lightPalette() {
@@ -196,28 +200,30 @@ public final class AkitaTheme {
                 Color.parseColor("#9B7A1F"),
                 Color.parseColor("#567C4F"),
                 Color.parseColor("#D2DAE1"),
-                Color.parseColor("#FFFFFF"));
+                Color.parseColor("#FFFFFF"),
+                false);
     }
 
     public static Palette nightRedPalette() {
         return new Palette(
-                Color.parseColor("#060000"),
-                Color.parseColor("#120202"),
-                Color.parseColor("#1D0505"),
-                Color.parseColor("#430909"),
-                Color.parseColor("#8F3A3A"),
-                Color.parseColor("#FFB1A8"),
-                Color.parseColor("#E07A6A"),
-                Color.parseColor("#A84B42"),
-                Color.parseColor("#C84A3D"),
-                Color.parseColor("#FF6B57"),
-                Color.parseColor("#4B0A0A"),
-                Color.parseColor("#FF8E7A"),
-                Color.parseColor("#FF4A3D"),
-                Color.parseColor("#D85D4B"),
-                Color.parseColor("#FF7B66"),
-                Color.parseColor("#3D0C0C"),
-                Color.parseColor("#FFD8CF"));
+                Color.parseColor("#000000"),
+                Color.parseColor("#000000"),
+                Color.parseColor("#000000"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                Color.parseColor("#FF3B30"),
+                true);
     }
 
     private static int dp(Context context, int value) {
@@ -243,6 +249,7 @@ public final class AkitaTheme {
         public final int success;
         public final int grid;
         public final int white;
+        public final boolean monochrome;
 
         private Palette(int background,
                         int surface,
@@ -260,7 +267,8 @@ public final class AkitaTheme {
                         int warning,
                         int success,
                         int grid,
-                        int white) {
+                        int white,
+                        boolean monochrome) {
             this.background = background;
             this.surface = surface;
             this.surfaceElevated = surfaceElevated;
@@ -278,6 +286,7 @@ public final class AkitaTheme {
             this.success = success;
             this.grid = grid;
             this.white = white;
+            this.monochrome = monochrome;
         }
     }
 }

@@ -425,26 +425,27 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 : palette.accentStrong;
 
         payloadBudgetProgressBar.setProgressTintList(ColorStateList.valueOf(progressColor));
-        payloadBudgetProgressBar.setProgressBackgroundTintList(ColorStateList.valueOf(AkitaTheme.withAlpha(palette.outline, 85)));
+        payloadBudgetProgressBar.setProgressBackgroundTintList(ColorStateList.valueOf(
+            palette.monochrome ? palette.background : AkitaTheme.withAlpha(palette.outline, 85)));
 
         payloadBudgetValueTextView.setText(String.format(Locale.US, "%d / %d B", payloadBytes, MAX_PAYLOAD_BYTES));
         if (payloadBytes == 0) {
-            payloadSummaryTextView.setText("Compose a message to see how it fits inside the radio envelope.");
+            payloadSummaryTextView.setText("Compose a secure message to verify how it fits inside the field radio envelope.");
             payloadMetricsTextView.setText("Draft size: 0 / 512 bytes");
             payloadMetricsTextView.setTextColor(palette.textSecondary);
             return;
         }
 
         if (payloadBytes > MAX_PAYLOAD_BYTES) {
-            payloadSummaryTextView.setText(String.format(Locale.US, "Draft exceeds the safe payload ceiling by %d bytes.", payloadBytes - MAX_PAYLOAD_BYTES));
+            payloadSummaryTextView.setText(String.format(Locale.US, "Secure frame exceeds the safe payload ceiling by %d bytes.", payloadBytes - MAX_PAYLOAD_BYTES));
         } else if (payloadBytes >= (MAX_PAYLOAD_BYTES * 0.75f)) {
-            payloadSummaryTextView.setText("Draft is nearing the radio payload ceiling. Consider trimming before release.");
+            payloadSummaryTextView.setText("Secure frame is nearing the radio payload ceiling. Consider trimming before release.");
         } else {
-            payloadSummaryTextView.setText("Draft fits comfortably inside the radio payload envelope.");
+            payloadSummaryTextView.setText("Secure frame fits comfortably inside the radio payload envelope.");
         }
 
         payloadMetricsTextView.setText(String.format(Locale.US,
-                "Prepared frame: %s • %d B • %d B remaining",
+                "Prepared secure frame: %s • %d B • %d B remaining",
                 getSelectedFormat(),
                 payloadBytes,
                 remainingBytes));
@@ -490,26 +491,26 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         if (AkitaMockSettings.isEnabled(preferences)) {
             if ("ble".equals(connectionMethod)) {
                 String deviceName = preferences.getString("ble_device_name", "AkitaNode01");
-                return "Mock transport active. BLE route is being simulated for " + deviceName + " so operators can validate UI flow without hardware.";
+                return "Mock secure transport active. BLE route is being simulated for " + deviceName + " so operators can validate encrypted ATAK interoperability without hardware.";
             }
             String baudRate = preferences.getString("serial_baud_rate", "115200");
             String portPath = preferences.getString("serial_port_path", "/dev/ttyUSB0");
-            return "Mock transport active. Serial route is being simulated on " + portPath + " at " + baudRate + " baud for no-hardware validation.";
+            return "Mock secure transport active. Serial route is being simulated on " + portPath + " at " + baudRate + " baud for interoperability validation without hardware.";
         }
         if ("ble".equals(connectionMethod)) {
             String deviceName = preferences.getString("ble_device_name", "AkitaNode01");
             if (bleService != null) {
-                return "BLE profile armed for " + deviceName + ". Draft traffic will route over the mesh radio when transmitted.";
+                return "Encrypted BLE mesh profile armed for " + deviceName + ". Secure ATAK and partner traffic will route over the mesh radio when transmitted.";
             }
-            return "BLE profile staged for " + deviceName + ". Waiting for the transport service to attach before release.";
+            return "Encrypted BLE mesh profile staged for " + deviceName + ". Waiting for the transport service to attach before release.";
         }
 
         String baudRate = preferences.getString("serial_baud_rate", "115200");
         String portPath = preferences.getString("serial_port_path", "/dev/ttyUSB0");
         if (serialService != null) {
-            return "Serial profile armed on " + portPath + " at " + baudRate + " baud for direct device exchange.";
+            return "Encrypted serial profile armed on " + portPath + " at " + baudRate + " baud for direct device exchange and partner-system interoperability.";
         }
-        return "Serial profile staged on " + portPath + " at " + baudRate + " baud. Waiting for the transport service to attach.";
+        return "Encrypted serial profile staged on " + portPath + " at " + baudRate + " baud. Waiting for the transport service to attach.";
     }
 
     private String buildDeliveryRatio() {
@@ -525,15 +526,15 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         long displayLastSendAt = getDisplayLastSendAt();
         if (displayLastSendAt <= 0) {
             if (failedSends > 0) {
-                return "Recent transmissions were blocked. Verify that the active route is connected before retrying.";
+                return "Recent secure transmissions were blocked. Verify that the active route is connected before retrying.";
             }
             if (useDemoDashboardState()) {
-                return "Mock telemetry is loaded to preview the dashboard. Any simulated transmit will replace the sample trend with local activity.";
+                return "Mock encrypted telemetry is loaded to preview the dashboard. Any simulated transmit will replace the sample trend with local activity.";
             }
             return "No transmissions recorded yet.";
         }
         return String.format(Locale.US,
-                "Last successful transmission: %s • %d B via %s • %s.",
+                "Last secure transmission: %s • %d B via %s • %s.",
                 TextUtils.isEmpty(getDisplayLastSendFormat()) ? "Plain Text" : getDisplayLastSendFormat(),
                 getDisplayLastSendBytes(),
                 TextUtils.isEmpty(getDisplayLastSendRoute()) ? "BLE" : getDisplayLastSendRoute().toUpperCase(Locale.US),
@@ -694,10 +695,10 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
 
     private String buildHistoryCaption() {
         if (useDemoDashboardState()) {
-            return "Demo command library loaded for mock operations. Send any frame to replace it with local history.";
+            return "Demo secure command library loaded for mock operations. Send any frame to replace it with local history.";
         }
         if (commandHistory.isEmpty()) {
-            return "Recent command snippets will appear here after transmission.";
+            return "Recent secure commands and interoperable frames will appear here after transmission.";
         }
         return String.format(Locale.US, "%d reusable commands ready for retransmission.", commandHistory.size());
     }

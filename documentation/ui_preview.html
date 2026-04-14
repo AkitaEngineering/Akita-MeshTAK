@@ -48,24 +48,24 @@
     }
 
     body.red {
-      --bg: #060000;
-      --surface: #120202;
-      --surface-elevated: #1d0505;
-      --outline: #8f3a3a;
-      --text: #ffb1a8;
-      --text-secondary: #e07a6a;
-      --text-muted: #a84b42;
-      --army: #c84a3d;
-      --army-strong: #ff6b57;
-      --navy: #4b0a0a;
-      --silver: #ff8e7a;
-      --danger: #ff4a3d;
-      --warning: #d85d4b;
-      --success: #ff7b66;
-      --grid: #3d0c0c;
-      --toolbar-accent: rgba(75, 10, 10, 0.88);
-      --accent-panel: linear-gradient(180deg, rgba(75, 10, 10, 0.96), rgba(18, 2, 2, 0.94));
-      --shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+      --bg: #000000;
+      --surface: #000000;
+      --surface-elevated: #000000;
+      --outline: #ff3b30;
+      --text: #ff3b30;
+      --text-secondary: #ff3b30;
+      --text-muted: #ff3b30;
+      --army: #ff3b30;
+      --army-strong: #ff3b30;
+      --navy: #ff3b30;
+      --silver: #ff3b30;
+      --danger: #ff3b30;
+      --warning: #ff3b30;
+      --success: #ff3b30;
+      --grid: #ff3b30;
+      --toolbar-accent: #000000;
+      --accent-panel: linear-gradient(180deg, #000000, #000000);
+      --shadow: none;
     }
 
     * {
@@ -84,10 +84,7 @@
     }
 
     body.red {
-      background:
-        radial-gradient(circle at top left, rgba(255, 107, 87, 0.15), transparent 32%),
-        radial-gradient(circle at top right, rgba(75, 10, 10, 0.35), transparent 26%),
-        linear-gradient(180deg, var(--bg), #140202);
+      background: #000000;
     }
 
     .shell {
@@ -138,6 +135,14 @@
       background: rgba(255, 255, 255, 0.7);
     }
 
+    body.red .pill,
+    body.red .mode-select {
+      background: #000000;
+      border-color: #ff3b30;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+
     .mode-select {
       color: var(--text);
       cursor: pointer;
@@ -157,6 +162,11 @@
       border-radius: 26px;
       box-shadow: var(--shadow);
       overflow: hidden;
+    }
+
+    body.red .panel {
+      border-color: #ff3b30;
+      box-shadow: none;
     }
 
     .toolbar {
@@ -203,6 +213,12 @@
       white-space: nowrap;
     }
 
+    body.red .badge {
+      background: #000000;
+      color: #ff3b30;
+      border-color: #ff3b30;
+    }
+
     .toolbar .stack,
     .summary,
     .card,
@@ -212,6 +228,16 @@
       border-radius: 18px;
       border: 1px solid rgba(122, 135, 148, 0.22);
       background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
+    }
+
+    body.red .toolbar .stack,
+    body.red .summary,
+    body.red .card,
+    body.red .stat,
+    body.red .input-frame,
+    body.red .history-card {
+      background: #000000;
+      border-color: #ff3b30;
     }
 
     .toolbar .stack {
@@ -236,6 +262,13 @@
       color: white;
       font-size: 15px;
       font-weight: 700;
+    }
+
+    body.red .toolbar .danger,
+    body.red .tx-button {
+      background: #000000;
+      color: #ff3b30;
+      border: 1px solid #ff3b30;
     }
 
     .dashboard {
@@ -284,6 +317,13 @@
       border-color: rgba(255, 255, 255, 0.18);
     }
 
+    body.red .chip,
+    body.red .chip.primary {
+      background: #000000;
+      color: #ff3b30;
+      border-color: #ff3b30;
+    }
+
     .summary {
       padding: 18px;
       background: linear-gradient(
@@ -291,6 +331,10 @@
         color-mix(in srgb, var(--navy) 88%, transparent),
         color-mix(in srgb, var(--surface-elevated) 94%, transparent)
       );
+    }
+
+    body.red .summary {
+      background: #000000;
     }
 
     .summary h3,
@@ -332,12 +376,21 @@
       overflow: hidden;
     }
 
+    body.red .progress {
+      background: #000000;
+      border: 1px solid #ff3b30;
+    }
+
     .progress > span {
       display: block;
       height: 100%;
       width: 62%;
       background: linear-gradient(90deg, var(--army), var(--army-strong));
       border-radius: inherit;
+    }
+
+    body.red .progress > span {
+      background: #ff3b30;
     }
 
     .cards-row {
@@ -359,6 +412,11 @@
       margin-top: 12px;
       position: relative;
       overflow: hidden;
+    }
+
+    body.red .chart {
+      background: #000000;
+      border-color: #ff3b30;
     }
 
     .chart svg {
@@ -402,6 +460,14 @@
       border-radius: 18px;
       padding: 14px 16px;
       font: inherit;
+    }
+
+    body.red .select,
+    body.red .textarea,
+    body.red .history-select {
+      background: #000000;
+      border-color: #ff3b30;
+      color: #ff3b30;
     }
 
     .textarea {
@@ -464,10 +530,10 @@
     <div class="topbar">
       <div class="titleblock">
         <h1>Akita MeshTAK Preview</h1>
-        <p>Static no-hardware mockup of the implemented toolbar and dashboard.</p>
+        <p>Static no-hardware mockup of the secure, interoperable toolbar and dashboard.</p>
       </div>
       <div class="controls">
-        <span class="pill">Palette: black, silver, navy, army green, grey, white</span>
+        <span class="pill">Operational palettes plus Night Red monochrome</span>
         <select id="themeModeSelect" class="mode-select" aria-label="Theme mode">
           <option value="dark" selected>Dark Ops</option>
           <option value="light">Light Ops</option>
@@ -481,13 +547,13 @@
         <div class="toolbar-head">
           <div>
             <h2>Akita MeshTAK</h2>
-            <p>Live link posture and emergency control</p>
+            <p>Encrypted mesh interoperability and emergency control</p>
           </div>
           <span class="badge" id="toolbarThemeBadge">Dark Ops</span>
         </div>
 
         <div class="stack">
-          <strong>Method: BLE • Target AkitaNode01</strong>
+          <strong>Secure route: BLE • Target AkitaNode01</strong>
         </div>
 
         <div class="row">
@@ -497,7 +563,7 @@
 
         <div class="row">
           <div class="stack"><strong style="color: var(--success);">Battery: 78% • Mission ready</strong></div>
-          <div class="stack"><strong style="color: var(--success);">Link health: Mission ready</strong></div>
+          <div class="stack"><strong style="color: var(--success);">Secure link: Mission ready</strong></div>
         </div>
 
         <button class="danger">Send SOS</button>
@@ -507,7 +573,7 @@
         <div class="dashboard-head">
           <div>
             <h2>Mission Link Console</h2>
-            <p>Transmission posture, payload budget, and recent link traffic.</p>
+            <p>Encrypted link posture, payload budget, and interoperable mission traffic.</p>
           </div>
           <span class="badge" id="dashThemeBadge">Dark Ops</span>
         </div>
@@ -520,7 +586,7 @@
         <div class="dashboard-body">
           <section class="summary">
             <h3>Operational Summary</h3>
-            <p class="summary-copy">BLE profile armed for AkitaNode01. Draft traffic will route over the mesh radio when transmitted.</p>
+            <p class="summary-copy">Encrypted BLE mesh profile armed for AkitaNode01. Secure ATAK and partner traffic will route over the mesh radio when transmitted.</p>
 
             <div class="stats">
               <div class="stat">
@@ -541,15 +607,15 @@
               </div>
             </div>
 
-            <p class="mini-copy">Draft fits comfortably inside the radio payload envelope.</p>
+            <p class="mini-copy">Secure frame fits comfortably inside the radio payload envelope.</p>
             <div class="progress"><span></span></div>
-            <p class="mini-copy">Last successful transmission: JSON • 318 B via BLE • 2m ago.</p>
+            <p class="mini-copy">Last secure transmission: JSON • 318 B via BLE • 2m ago.</p>
           </section>
 
           <div class="cards-row">
             <section class="card">
               <h3>Recent Payload Trend</h3>
-              <p class="section-subtitle">Last 12 successful transmissions measured against the 512-byte envelope.</p>
+              <p class="section-subtitle">Last 12 encrypted transmissions measured against the 512-byte field envelope.</p>
               <div class="chart">
                 <svg viewBox="0 0 640 260" aria-label="Payload trend chart">
                   <g fill="none" stroke="var(--grid)" stroke-width="2">
@@ -558,8 +624,6 @@
                     <path d="M20 180 H620" />
                     <path d="M20 235 H620" />
                   </g>
-                  <path d="M20 235 L20 170 L80 154 L140 188 L200 122 L260 144 L320 108 L380 132 L440 76 L500 96 L560 56 L620 84 L620 235 Z"
-                        fill="rgba(40,67,98,0.35)" />
                   <path d="M20 170 L80 154 L140 188 L200 122 L260 144 L320 108 L380 132 L440 76 L500 96 L560 56 L620 84"
                         stroke="var(--silver)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
                   <circle cx="620" cy="84" r="7" fill="var(--army)" />
@@ -572,13 +636,12 @@
 
             <section class="card">
               <h3>Format Distribution</h3>
-              <p class="section-subtitle">Actual traffic mix across Plain Text, JSON, and Custom frames.</p>
+              <p class="section-subtitle">Actual traffic mix across ATAK, JSON, and custom interoperability frames.</p>
               <div class="chart" style="display:flex;justify-content:center;align-items:center;min-height:292px;">
                 <svg viewBox="0 0 320 260" aria-label="Format distribution chart" style="max-width:320px;">
-                  <circle cx="160" cy="126" r="68" fill="none" stroke="var(--grid)" stroke-width="28" />
-                  <circle cx="160" cy="126" r="68" fill="none" stroke="var(--silver)" stroke-width="28" stroke-dasharray="126 428" stroke-dashoffset="0" transform="rotate(-90 160 126)" />
-                  <circle cx="160" cy="126" r="68" fill="none" stroke="var(--navy)" stroke-width="28" stroke-dasharray="200 354" stroke-dashoffset="-126" transform="rotate(-90 160 126)" />
-                  <circle cx="160" cy="126" r="68" fill="none" stroke="var(--army)" stroke-width="28" stroke-dasharray="102 452" stroke-dashoffset="-326" transform="rotate(-90 160 126)" />
+                  <circle cx="160" cy="126" r="74" fill="none" stroke="var(--silver)" stroke-width="14" stroke-dasharray="107 465" transform="rotate(-90 160 126)" />
+                  <circle cx="160" cy="126" r="52" fill="none" stroke="var(--navy)" stroke-width="14" stroke-dasharray="131 326" transform="rotate(-90 160 126)" />
+                  <circle cx="160" cy="126" r="30" fill="none" stroke="var(--army)" stroke-width="14" stroke-dasharray="47 141" transform="rotate(-90 160 126)" />
                   <text x="160" y="123" text-anchor="middle" fill="var(--text)" font-size="34" font-weight="800">24</text>
                   <text x="160" y="148" text-anchor="middle" fill="var(--text-secondary)" font-size="14">frames tracked</text>
                 </svg>
@@ -594,7 +657,7 @@
           <div class="two-col">
             <section class="card">
               <h3>Transmit Payload</h3>
-              <p class="section-subtitle">Prepare a frame and watch the budget meter before release.</p>
+              <p class="section-subtitle">Prepare a secure frame and verify payload budget before release.</p>
               <div class="form-grid" style="margin-top:14px;">
                 <select class="select">
                   <option>JSON</option>
@@ -602,14 +665,14 @@
                   <option>Custom</option>
                 </select>
                 <textarea class="textarea">{"type":"spotrep","grid":"11U PU 34567 89012","priority":"routine","summary":"Unit check-in and route status normal."}</textarea>
-                <div class="field-note">Prepared frame: JSON • 318 B • 194 B remaining</div>
+                <div class="field-note">Prepared secure frame: JSON • 318 B • 194 B remaining</div>
                 <button class="tx-button">Transmit</button>
               </div>
             </section>
 
             <section class="history-card">
               <h3>Rapid Reuse</h3>
-              <p class="section-subtitle">Recent command snippets will appear here after transmission.</p>
+              <p class="section-subtitle">Recent secure commands and interoperable frames will appear here after transmission.</p>
               <select class="history-select" style="margin-top:14px;">
                 <option>Reuse a recent command</option>
                 <option>ATAK Test Message!</option>

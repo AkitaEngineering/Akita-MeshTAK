@@ -100,11 +100,11 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
                 .getString("serial_port_path", "/dev/ttyUSB0");
 
         String routeLine = connectionMethod.equalsIgnoreCase("ble")
-                ? "Route: BLE • Target " + deviceName
-                : "Route: Serial • " + portPath + " @ " + baudRate;
+            ? "Secure route: BLE • Target " + deviceName
+            : "Secure route: Serial • " + portPath + " @ " + baudRate;
 
-        String freshnessLine = "Freshness: BLE " + formatAgeSeconds(lastBleUpdate)
-                + " • Serial " + formatAgeSeconds(lastSerialUpdate);
+        String freshnessLine = "Interoperability freshness: BLE " + formatAgeSeconds(lastBleUpdate)
+            + " • Serial " + formatAgeSeconds(lastSerialUpdate);
 
         float totalWidth = Math.max(320f * context.getResources().getDisplayMetrics().density, headerPaint.measureText(routeLine) + (textPadding * 2));
         float totalHeight = 220f * context.getResources().getDisplayMetrics().density;
@@ -126,7 +126,7 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
 
         y += subtitlePaint.getTextSize() * 1.45f;
         subtitlePaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText("Route picture", x, y, subtitlePaint);
+        canvas.drawText("Encrypted interoperability picture", x, y, subtitlePaint);
 
         y += textPaint.getTextSize() * 1.45f;
         canvas.drawText(routeLine, x, y, textPaint);
@@ -173,11 +173,12 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
         subtitlePaint.setColor(palette.textSecondary);
         textPaint.setColor(palette.textPrimary);
         mutedPaint.setColor(palette.textMuted);
-        backgroundPaint.setColor(AkitaTheme.withAlpha(palette.surface, 230));
-        strokePaint.setColor(AkitaTheme.withAlpha(palette.outline, 185));
-        accentPaint.setColor(AkitaTheme.withAlpha(palette.accentStrong, 225));
-        trackPaint.setColor(AkitaTheme.withAlpha(palette.grid, 210));
-        trackPaint.setStyle(Paint.Style.FILL);
+        backgroundPaint.setColor(palette.monochrome ? palette.background : AkitaTheme.withAlpha(palette.surface, 230));
+        strokePaint.setColor(palette.monochrome ? palette.accent : AkitaTheme.withAlpha(palette.outline, 185));
+        accentPaint.setColor(palette.monochrome ? palette.accent : AkitaTheme.withAlpha(palette.accentStrong, 225));
+        trackPaint.setColor(palette.monochrome ? palette.accent : AkitaTheme.withAlpha(palette.grid, 210));
+        trackPaint.setStyle(palette.monochrome ? Paint.Style.STROKE : Paint.Style.FILL);
+        trackPaint.setStrokeWidth(palette.monochrome ? 2f * context.getResources().getDisplayMetrics().density : 0f);
         statusPaint.setTypeface(Typeface.DEFAULT_BOLD);
     }
 
