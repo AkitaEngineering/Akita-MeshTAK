@@ -650,5 +650,5 @@ See Technical Manual: TM-AKITA-MESHTAK-001, Appendix A
 
 **END OF DOCUMENT**
 
-**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2026 Akita Engineering. All Rights Reserved.**
 

@@ -21,15 +21,17 @@ AkitaMeshTAK/
 ├── firmware/ # Firmware for Meshtastic devices
 │ ├── src/
 │ │ ├── main.cpp # Application entry point
-│ │ ├── config.h # CRITICAL: UUIDs / Commands
+│ │ ├── config.h # CRITICAL: UUIDs / provisioning / guards / commands
 │ │ ├── ble_setup.h/.cpp # BLE peripheral setup
 │ │ ├── meshtastic_setup.h/.cpp # Meshtastic mesh integration
 │ │ ├── serial_bridge.h/.cpp # Serial/USB communication
 │ │ ├── mqtt_client.h/.cpp # Optional MQTT client
+│ │ ├── payload_codec.h/.cpp # Shared BLE/Serial encrypted envelope helpers
+│ │ ├── mailbox_escape.h/.cpp # Shared mailbox payload escape helpers
 │ │ ├── cot_generation.h/.cpp # CoT XML generation
 │ │ ├── display_handler.h/.cpp # OLED display management
 │ │ ├── power_management.h/.cpp # Battery & power
-│ │ ├── security.h/.cpp # AES-256-GCM encryption / HMAC
+│ │ ├── security.h/.cpp # AES-256-GCM transport + PBKDF2-HMAC-SHA256 key derivation
 │ │ ├── audit_log.h/.cpp # Security audit logging
 │ │ └── input_validation.h/.cpp # Input sanitization
 │ └── platformio.ini # PlatformIO build config (Meshtastic-arduino v0.0.7)
@@ -37,15 +39,18 @@ AkitaMeshTAK/
 │ ├── src/
 │ │ ├── AkitaMeshTAKPlugin.java # Plugin lifecycle
 │ │ ├── com/akitaengineering/meshtak/
-│ │ │ ├── Config.java # CRITICAL: UUIDs / VIDs
+│ │ │ ├── Config.java # CRITICAL: UUIDs / VIDs / provisioning fallback
+│ │ │ ├── AkitaMissionControl.java # Mailbox queue, replay, and failover state
 │ │ │ ├── AuditLogger.java # Security audit logging
-│ │ │ ├── SecurityManager.java # AES-256-GCM encryption / HMAC
+│ │ │ ├── SecurityManager.java # AES-256-GCM transport + PBKDF2-HMAC-SHA256 key derivation
 │ │ │ └── VersionManager.java # Version management
 │ │ ├── services/
 │ │ │ ├── BLEService.java
 │ │ │ └── SerialService.java
 │ │ └── ui/
 │ │ ├── AkitaToolbar.java
+│ │ ├── AkitaOperationalReadiness.java
+│ │ ├── AkitaProvisioningManager.java
 │ │ ├── ConnectionStatusOverlay.java
 │ │ ├── SendDataView.java
 │ │ └── SettingsFragment.java
@@ -66,9 +71,10 @@ The firmware is built using **PlatformIO**.
 
 1. Install PlatformIO  
 2. Navigate to the `firmware/` directory  
-3. Configure UUIDs: edit `firmware/src/config.h`  
-4. Build: ```pio run```
-5. Upload: ```pio run -t upload```
+3. Configure `firmware/src/config.h`: UUIDs, `PROVISIONING_SECRET`, and MQTT credentials if `ENABLE_MQTT` is enabled  
+4. Placeholder BLE UUIDs, provisioning material, and MQTT credentials will fail the build unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for bench-only rehearsal  
+5. Build: ```pio run```
+6. Upload: ```pio run -t upload```
 
 ---
 
@@ -84,7 +90,7 @@ The ATAK plugin is built using **Android Studio** or the Gradle wrapper from the
    sdk.dir=/path/to/your/Android/Sdk
    ```  
    *Or* set the `ANDROID_HOME` environment variable instead. `local.properties` is gitignored and machine-specific.  
-4. Configure UUIDs & USB IDs: edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java`  
+4. Configure UUIDs & USB IDs in `atak_plugin/src/com/akitaengineering/meshtak/Config.java`; runtime provisioning from the settings UI is preferred over relying on the build-time fallback secret  
 5. Build:  
    - **Android Studio:** Build → Build Bundle(s) / APK(s) → Build APK(s)  
    - **Command line:** `cd atak_plugin && ./gradlew assembleDebug` (or `.\gradlew.bat assembleDebug` on Windows)
@@ -102,12 +108,24 @@ Requests battery status
 Requests firmware version  
 - `CMD:ALERT:SOS`  
 Triggers SOS alert broadcast  
+- `CMD:MAILBOX:PUT:<messageId>:<format>:<payload>`  
+Queues guaranteed-delivery mission traffic for relay by the firmware  
+- `CMD:PROV:STAGE:<secret>`  
+Stages runtime provisioning material to the connected device over a trusted local bearer  
 
 ## Firmware → ATAK
 - `STATUS:BATT:XX%`  
 Response to battery query (e.g., `STATUS:BATT:85%`)  
-- `VERSION:X.Y.Z`  
-Response to version query (e.g., `VERSION:0.2.0`)
+- `STATUS:VERSION:X.Y.Z`  
+Response to version query (e.g., `STATUS:VERSION:0.2.0`)  
+- `STATUS:MAILBOX:ACK:<messageId>:IN_FLIGHT|FAILED`  
+Local acknowledgement that a mailbox frame was accepted for relay or failed locally  
+- `STATUS:MAILBOX:ACK:<messageId>:DELIVERED:<peerNode>`  
+Peer mailbox receipt confirming end-to-end delivery across the mesh  
+- `STATUS:MAILBOX:RX:<originNode>:<messageId>:<format>:<payload>`  
+Inbound mission traffic received from the mesh  
+- `STATUS:PROV:STAGED:<version>:<key-id>` / `STATUS:PROV:FAILED:<version>:<key-id>`  
+Runtime provisioning stage result returned by firmware  
 
 All other received data is treated as **CoT XML**.
 
@@ -115,6 +133,8 @@ Protocol definitions exist in:
 
 - `firmware/src/config.h`  
 - `atak_plugin/src/com/akitaengineering/meshtak/Config.java`
+
+Shared transport helpers live in `firmware/src/payload_codec.h/.cpp` and `firmware/src/mailbox_escape.h/.cpp` so BLE and Serial paths stay consistent.
 
 ---
 
@@ -135,6 +155,6 @@ Protocol definitions exist in:
 This project is licensed under the **GNU General Public License v3.0**.  
 See the `LICENSE` and `COPYING` files in the root directory.
 
-**Copyright (C) 2025-2026 Akita Engineering**
+**Copyright (C) 2026 Akita Engineering**
 
 

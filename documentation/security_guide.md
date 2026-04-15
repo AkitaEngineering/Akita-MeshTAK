@@ -12,6 +12,7 @@ The current Android plugin security model is surfaced directly to operators thro
 ### 1. Encryption
 - **AES-256-GCM Encryption**: Sensitive BLE/Serial communications are encrypted using authenticated encryption
 - **Authenticated Integrity**: AES-GCM authentication tag verification is required during decryption
+- **PBKDF2 Key Derivation**: AES/HMAC transport keys are derived with PBKDF2-HMAC-SHA256 (100,000 iterations) from provisioning material using device/purpose salt
 - **Secure Key Management**: Keys should be provisioned securely (NOT hardcoded)
 - **Versioned Envelope**: Encrypted payloads use `ENC:v1:k1:<hex>` format for protocol versioning and key-id rotation
 
@@ -47,7 +48,10 @@ Follow these steps to enable end-to-end encryption:
 
 2. **Configure Firmware**
    - In `firmware/src/config.h`, replace the default `PROVISIONING_SECRET` with your generated secret.
-   - Set `DEFAULT_SECURITY_MODE` to `SECURITY_MODE_AES256_HMAC`.
+   - Replace the placeholder BLE UUIDs with deployment values that match the ATAK plugin.
+   - If MQTT is enabled, replace the placeholder Wi-Fi and MQTT credentials.
+   - The firmware initializes transport security with `SECURITY_MODE_AES256_HMAC` after valid provisioning material is loaded.
+   - The firmware build now fails if placeholder provisioning, BLE UUID, or enabled MQTT credential values remain in place unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for bench rehearsal.
    - Build and flash the firmware.
    - For trusted local runtime rotation, you can also stage the secret later with **Stage Secret To Connected Device** instead of rebuilding immediately.
 
@@ -79,6 +83,7 @@ Follow these steps to enable end-to-end encryption:
 - **Injection Prevention**: Protection against code injection attacks
 - **Length Limits**: Maximum message/command lengths enforced
 - **Character Sanitization**: Dangerous characters are filtered
+- **Transport Throttling**: BLE and Serial command handlers enforce a minimum acceptance interval to reduce command-flood abuse
 
 #### Implementation
 - Firmware: `firmware/src/input_validation.h` and `input_validation.cpp`
@@ -104,6 +109,8 @@ Follow these steps to enable end-to-end encryption:
 - SOS triggers (CRITICAL)
 - Configuration changes
 - Errors
+
+Firmware audit entries are only mirrored to the serial console when `DEBUG_AUDIT` is defined. The circular in-memory audit log remains active regardless.
 
 #### Operator Actions
 - **Export Audit Log** is available from **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**.
@@ -137,6 +144,7 @@ Follow these steps to enable end-to-end encryption:
    - MQTT credentials
    - Encryption keys
    - API keys
+   - If a rehearsal build must keep placeholders, gate it explicitly with `ALLOW_PLACEHOLDER_SECRET` and never field that image
 
 2. **Use Secure Storage**
    - Android Keystore for Android
@@ -199,8 +207,14 @@ Follow these steps to enable end-to-end encryption:
 
 In `firmware/src/config.h`:
 - Set secure UUIDs (not default values)
-- Configure security mode
+- Replace placeholder provisioning material and, when MQTT is enabled, replace placeholder Wi-Fi/MQTT credentials
+- Configure security mode and encrypted envelope metadata
 - Set maximum message lengths
+- Set `CMD_RATE_LIMIT_MS` if transport throttling requires controlled tuning
+
+In firmware build flags:
+- Define `DEBUG_AUDIT` only for laboratory or troubleshooting builds that need serial audit mirroring
+- Define `ALLOW_PLACEHOLDER_SECRET` only for bench rehearsal when placeholder values are intentionally retained
 
 ### Android Plugin Configuration
 
@@ -214,7 +228,7 @@ In the plugin settings UI:
 
 In `atak_plugin/src/com/akitaengineering/meshtak/Config.java`:
 - Set matching UUIDs
-- Maintain a valid build-time fallback provisioning secret only when required
+- Maintain a valid build-time fallback provisioning secret only when required; runtime provisioning from settings is preferred
 - Set validation parameters
 
 ---
@@ -293,5 +307,5 @@ If you discover a security vulnerability:
 
 ---
 
-**Copyright (C) 2025-2026 Akita Engineering**
+**Copyright (C) 2026 Akita Engineering**
 

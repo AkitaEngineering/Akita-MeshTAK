@@ -195,6 +195,7 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 - All security-relevant events logged
 - Event types: Connection, Command, Data Transfer, Security Violation
 - Severity levels: Info, Warning, Error, Critical
+- Firmware serial audit mirroring available only in builds compiled with `DEBUG_AUDIT`
 - Retention: 1000 entries (firmware), 10,000 entries (Android)
 
 ---
@@ -286,7 +287,7 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 
 #### 4.3.1 Encryption Specifications
 - **Algorithm**: AES-256-GCM
-- **Key Derivation**: Deterministic derivation from provisioning secret + device identity metadata
+- **Key Derivation**: PBKDF2-HMAC-SHA256, 100,000 iterations, using provisioning secret plus device/purpose salt
 - **Key Storage**: Secure storage required (Android Keystore, ESP32 NVS)
 - **Key Rotation**: Recommended every 90 days
 - **Nonce Generation**: Cryptographically secure random (96-bit)
@@ -303,6 +304,7 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 - **Android**: 10,000 entries (circular buffer) + file export
 - **Entry Size**: ~200 bytes
 - **Export Format**: Text file (CSV-like format)
+- **Serial Mirror**: Firmware audit events print to serial only when `DEBUG_AUDIT` is enabled
 - **Retention**: Configurable (recommended: 90 days minimum)
 
 ### 4.4 Environmental Specifications
@@ -357,9 +359,12 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
    - `BLE_SERVICE_UUID`: BLE service UUID
    - `BLE_COT_CHARACTERISTIC_UUID`: CoT characteristic UUID
    - `BLE_WRITE_CHARACTERISTIC_UUID`: Write characteristic UUID
+   - `PROVISIONING_SECRET`: Deployment provisioning secret
    - `LORA_REGION`: LoRa region (EU868, US915, etc.)
+   - `MQTT_SERVER`, `MQTT_WIFI_SSID`, `MQTT_WIFI_PASSWORD`, `MQTT_USERNAME`, `MQTT_PASSWORD`: Required if MQTT is enabled
+   - `CMD_RATE_LIMIT_MS`: Minimum accepted command interval on BLE/Serial transports
 
-**CRITICAL**: UUIDs must match between firmware and Android plugin.
+**CRITICAL**: UUIDs must match between firmware and Android plugin. Firmware builds fail if placeholder provisioning material, BLE UUIDs, or enabled MQTT credentials remain in place unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for bench-only rehearsal.
 
 #### 5.2.3 Build Procedure
 1. Connect device to computer via USB
@@ -514,9 +519,11 @@ Configure via ATAK settings:
 - Firmware default: Encryption is enabled (SECURITY_MODE_AES256_HMAC) when provisioning metadata is valid.
 - Android plugin default: Encryption policy is controlled by the `security_encryption_enabled` setting and is enabled unless an operator explicitly disables it.
 - Android plugin provisioning source: The plugin uses the runtime provisioning secret from settings when present, with `Config.PROVISIONING_SECRET` as a fallback.
+- Key derivation: Firmware and plugin derive transport keys with PBKDF2-HMAC-SHA256 using provisioning material plus device/purpose salt.
 - Air-gapped provisioning workflow: The plugin can generate/apply bundle material offline and runtime-stage it to firmware over a trusted local bearer.
 - Mission Assurance: Placeholder provisioning material is surfaced to the operator as a degraded posture even if rehearsal traffic is possible.
 - Firmware and plugin must share matching provisioning secret, envelope version, and key-id.
+- Placeholder BLE UUIDs, provisioning values, and enabled MQTT credentials are build-blocking unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined.
 - Encrypted payloads with unknown version/key-id are rejected and logged.
 
 #### 6.3.2 Encryption Configuration
@@ -1044,5 +1051,5 @@ See Section 6 for configuration examples.
 
 **END OF DOCUMENT**
 
-**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2026 Akita Engineering. All Rights Reserved.**
 

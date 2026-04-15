@@ -18,9 +18,9 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 
 ### IMPORTANT: READ BEFORE COMPILING
 
-- **Firmware**: You must set the correct UUIDs in `firmware/src/config.h`.  
-- **ATAK Plugin**: You must edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java` and fill in the placeholder UUIDs and USB IDs to match your firmware and hardware.  
-- **Provisioning Secret**: The plugin can now use a runtime provisioning secret from **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**. If you do not provide one there, the plugin falls back to `Config.PROVISIONING_SECRET`. Operators can also generate an air-gapped provisioning bundle, apply it locally, and stage the active secret to a connected device over a trusted local bearer. A placeholder secret is acceptable for rehearsal only and is not deployment-ready.  
+- **Firmware**: Set the BLE UUIDs, deployment provisioning secret, and any enabled MQTT credentials in `firmware/src/config.h`. Placeholder UUIDs, provisioning material, and MQTT credentials now fail the firmware build unless you explicitly define `ALLOW_PLACEHOLDER_SECRET` for bench rehearsal.  
+- **ATAK Plugin**: Edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java` and fill in the UUIDs and USB IDs to match your firmware and hardware. Runtime provisioning from **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning** is preferred; `Config.PROVISIONING_SECRET` is only a fallback.  
+- **Provisioning Secret**: Operators can generate an air-gapped provisioning bundle, apply it locally, and stage the active secret to a connected device over a trusted local bearer. Placeholder secrets are acceptable for rehearsal only and are surfaced as degraded posture in Mission Assurance.  
 
 ---
 
@@ -59,10 +59,13 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 - Mission assurance telemetry and tactical map overlays for critical information  
 
 **Security and Accountability**:
-- Preference-backed provisioning secret management with build-time fallback  
+- PBKDF2-HMAC-SHA256 transport key derivation from provisioning material with device/purpose salt  
+- Preference-backed provisioning secret management with runtime-first behavior and guarded build-time fallback  
 - Air-gapped provisioning bundle generation/apply plus trusted local stage-to-device workflow  
 - Encrypted transport enable/disable control from settings  
-- Audit log export and security state reload actions  
+- Firmware placeholder guards for provisioning, BLE UUIDs, and MQTT credentials  
+- Audit log export, debug-gated firmware serial mirroring, and security state reload actions  
+- BLE/Serial command rate limiting to blunt command-flood attempts  
 
 **Reliable Performance**:
 - Robust error handling, reconnection logic, and connection timeouts  
@@ -104,7 +107,7 @@ See the LICENSE and COPYING files for the full license text.
 ---
 
 ### Copyright
-© 2025 Akita Engineering  
+© 2026 Akita Engineering  
 
 ---
 

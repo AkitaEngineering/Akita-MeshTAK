@@ -661,10 +661,10 @@
     <div class="topbar">
       <div class="titleblock">
         <h1>Akita MeshTAK Preview</h1>
-        <p>Static no-hardware mockup of the secure, interoperable toolbar and dashboard.</p>
+        <p>Static no-hardware mockup of the secure, interoperable toolbar and dashboard with Mission Assurance release gating.</p>
       </div>
       <div class="controls">
-        <span class="pill">Mission profiles, mailbox receipts, provisioning ceremony, Night Red and Night Green monochrome</span>
+        <span class="pill">Mission profiles, mailbox receipts, provisioning ceremony, security-gated release, Night Red and Night Green monochrome</span>
         <select id="themeModeSelect" class="mode-select" aria-label="Theme mode">
           <option value="dark" selected>Dark Ops</option>
           <option value="light">Light Ops</option>
@@ -690,7 +690,7 @@
 
         <div class="row">
           <div class="stack"><strong>Profile: Search &amp; Rescue</strong></div>
-          <div class="stack"><strong style="color: var(--warning);">Security: Bundle staged • device apply pending</strong></div>
+          <div class="stack"><strong style="color: var(--warning);">Security: Hold live traffic • device staging pending</strong></div>
         </div>
 
         <div class="row">
@@ -699,8 +699,8 @@
         </div>
 
         <div class="row">
-          <div class="stack"><strong style="color: var(--success);">Battery: 78% • Mission ready</strong></div>
-          <div class="stack"><strong style="color: var(--success);">Secure link: Mailbox armed</strong></div>
+          <div class="stack"><strong style="color: var(--success);">Battery: 78% • Connected checks ready</strong></div>
+          <div class="stack"><strong style="color: var(--warning);">Secure link: Connected • release on hold</strong></div>
         </div>
 
         <button class="danger">Send SOS</button>
@@ -710,7 +710,7 @@
         <div class="dashboard-head">
           <div>
             <h2>Mission Link Console</h2>
-            <p>Mailbox delivery, payload budget, and interoperable mission traffic.</p>
+            <p>Mailbox delivery, payload budget, and security-gated interoperable mission traffic.</p>
           </div>
           <span class="badge" id="dashThemeBadge">Dark Ops</span>
         </div>
@@ -724,7 +724,7 @@
         <div class="dashboard-body">
           <section class="summary">
             <h3>Operational Summary</h3>
-            <p class="summary-copy">Search &amp; Rescue posture is armed over BLE for AkitaNode01. Traffic queues inside the guaranteed-delivery mailbox, reroutes with failover if Serial is the only live bearer, and closes only after a peer receipt comes back across the mesh.</p>
+            <p class="summary-copy">Search &amp; Rescue posture is connected over BLE for AkitaNode01, but Mission Assurance is holding live traffic until the staged bundle is applied to the device. Traffic queues inside the guaranteed-delivery mailbox, reroutes with failover if Serial is the only live bearer, and closes only after a peer receipt comes back across the mesh.</p>
 
             <div class="stats">
               <div class="stat">
@@ -745,14 +745,14 @@
               </div>
             </div>
 
-            <p class="mini-copy">Prepared mailbox frame fits comfortably inside the radio payload envelope.</p>
+            <p class="mini-copy">Prepared mailbox frame fits comfortably inside the radio payload envelope, but release remains blocked until security warnings clear.</p>
             <div class="progress"><span></span></div>
             <p class="mini-copy">Last mailbox relay: JSON • 318 B via BLE • peer receipt from 7A91C2B4 • 43s ago.</p>
           </section>
 
           <section class="card">
             <h3>Mission Assurance</h3>
-            <p class="section-subtitle">Search &amp; Rescue workflows can rotate secrets offline with an air-gapped bundle, then stage the active secret onto a connected device during a trusted local provisioning ceremony.</p>
+            <p class="section-subtitle">Search &amp; Rescue workflows can rotate secrets offline with an air-gapped bundle, then stage the active secret onto a connected device during a trusted local provisioning ceremony. Until staging completes, Mission Assurance holds live traffic.</p>
 
             <div class="stats">
               <div class="stat">
@@ -769,7 +769,7 @@
               </div>
               <div class="stat">
                 <label>Provisioning</label>
-                <strong style="font-size:18px;color: var(--warning);">Bundle staged • stage device next</strong>
+                <strong style="font-size:18px;color: var(--warning);">Hold traffic • stage device next</strong>
               </div>
             </div>
 
@@ -781,6 +781,7 @@
               <button class="secondary-button">Export Audit</button>
               <button class="secondary-button">Reload Security</button>
             </div>
+            <p class="field-note">Live traffic remains on hold until the connected device is staged and Mission Assurance clears the warning.</p>
           </section>
 
           <section class="card">
@@ -923,9 +924,9 @@
           <div class="two-col">
             <section class="card">
               <h3>Transmit Payload</h3>
-              <p class="section-subtitle">Prepare a mailbox frame and verify payload budget before release.</p>
+              <p class="section-subtitle">Prepare a mailbox frame, verify Mission Assurance, and release only when security posture is operational.</p>
               <div class="form-grid" style="margin-top:14px;">
-                <p class="field-note">Playbooks emphasize search progress, medical updates, and extraction coordination. The send action queues first, then dispatches when a bearer is ready.</p>
+                <p class="field-note">Playbooks emphasize search progress, medical updates, and extraction coordination. The send action queues first, then dispatches only when a bearer is ready and Mission Assurance has cleared live traffic.</p>
                 <div class="playbook-row">
                   <select class="select">
                     <option>Team Spot Report</option>
@@ -940,8 +941,9 @@
                   <option>Custom</option>
                 </select>
                 <textarea class="textarea">{"type":"spotrep","grid":"11U PU 34567 89012","priority":"routine","summary":"Unit check-in and route status normal."}</textarea>
-                <div class="field-note">Prepared mailbox frame: JSON • 318 B • 194 B remaining</div>
+                <div class="field-note">Prepared mailbox frame: JSON • 318 B • 194 B remaining • awaiting provisioning clearance</div>
                 <button class="tx-button">Queue + Transmit</button>
+                <div class="field-note">Do not release live traffic while Security or Mission Assurance shows a warning state.</div>
               </div>
             </section>
 
@@ -961,7 +963,7 @@
       </section>
     </div>
 
-    <p class="preview-note">This preview is a visual approximation of the implemented plugin UI, not a live ATAK render. The plugin now combines ATAK-native tactical overlays, guaranteed-delivery mailbox routing, provisioning ceremony controls, incident boards, and mission replay before device testing.</p>
+    <p class="preview-note">This preview is a visual approximation of the implemented plugin UI, not a live ATAK render. The warning state shown here is intentional: do not release live traffic until Mission Assurance clears provisioning warnings and encrypted transport remains enabled. The plugin combines ATAK-native tactical overlays, guaranteed-delivery mailbox routing, provisioning ceremony controls, incident boards, and mission replay before device testing.</p>
   </div>
 
   <script>

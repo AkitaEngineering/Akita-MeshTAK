@@ -265,5 +265,5 @@ For documentation questions or updates:
 
 ---
 
-**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2026 Akita Engineering. All Rights Reserved.**
 

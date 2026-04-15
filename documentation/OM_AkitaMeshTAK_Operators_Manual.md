@@ -111,7 +111,7 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
   - **Mission Profile**: Select the operational workflow for your team
   - **Dashboard Theme**: Select Dark Ops, Light Ops, Night Red, or Night Green
   - **Auto Bearer Failover**: Preserve queued traffic across BLE and Serial when the preferred bearer is unavailable
-  - **Security and Provisioning**: Confirm encrypted transport is enabled, generate/apply bundle material as needed, stage the connected device on a trusted local route, and replace any placeholder provisioning secret before live operations
+  - **Security and Provisioning**: Treat this as a go/no-go gate for live traffic. Confirm encrypted transport is enabled, generate/apply bundle material as needed, stage the connected device only on a trusted local route, and replace any placeholder provisioning secret before live operations
   - **Mock Transport Mode**: Enable only for rehearsal without hardware or for replay drills
 
 ### 3.2 Daily Startup
@@ -122,7 +122,8 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 3. Power on Android device
 4. Open ATAK
 5. Wait for connection (status shows "Connected" in green)
-6. Review Mission Assurance and confirm there is no placeholder-secret warning for deployment use
+6. Review Mission Assurance and confirm encrypted transport is enabled and there is no placeholder-secret warning for deployment use
+7. Do not transmit live traffic until Step 6 is satisfied
 
 #### For Serial Connection:
 1. Power on Meshtastic device
@@ -131,7 +132,8 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 4. Power on Android device
 5. Open ATAK
 6. Wait for connection (status shows "Connected" in green)
-7. Review Mission Assurance and confirm the route and security posture are operational
+7. Review Mission Assurance and confirm the route and security posture are operational with encrypted transport enabled
+8. Do not transmit live traffic until Step 7 is satisfied
 
 ---
 
@@ -163,15 +165,16 @@ The Akita MeshTAK toolbar shows:
 #### 4.2.1 Send Data View
 1. Open "Send Data" view from ATAK menu
 2. Review the **Operational Summary**, **Mission Assurance**, **Guaranteed Delivery Mailbox**, and **Incident Board** cards
-3. Optionally load a **Mission Playbook** or **Queue Action** from the active role pack
-4. Enter or review your message in the text field
-5. Select data format:
+3. Treat **Mission Assurance** as release authority for live traffic; if security is degraded, simulated, or placeholder-backed, stop and remediate before proceeding
+4. Optionally load a **Mission Playbook** or **Queue Action** from the active role pack
+5. Enter or review your message in the text field
+6. Select data format:
    - **Plain Text**: Standard text message
    - **JSON**: Structured data
    - **Custom**: Custom format
-6. Confirm payload budget, failover posture, and mailbox state
-7. Tap **Transmit** button to queue and dispatch the frame
-8. Verify the frame advances to **In Flight**; **Delivered** indicates a peer mailbox receipt
+7. Confirm payload budget, failover posture, mailbox state, and operational encryption/provisioning posture
+8. Tap **Transmit** button to queue and dispatch the frame
+9. Verify the frame advances to **In Flight**; **Delivered** indicates a peer mailbox receipt
 
 #### 4.2.2 Command History
 - Previously sent commands appear in dropdown
@@ -242,7 +245,7 @@ The Akita MeshTAK toolbar shows:
 
 #### 5.1.3 Mission and Security Indicators
 - **Profile**: Current mission profile badge and workflow context
-- **Security**: Provisioning and encrypted transport posture
+- **Security**: Provisioning and encrypted transport posture; degraded or placeholder-backed state is a no-transmit warning for live operations
 - **Secure Link**: Readiness summary for the active route
 
 #### 5.1.4 Battery Status Indicator
@@ -270,15 +273,15 @@ The Akita MeshTAK toolbar shows:
 - **Auto Bearer Failover**: Preserve queue and reroute between BLE/Serial when possible
 - **BLE Device Name**: Device identifier for BLE
 - **Serial Baud Rate**: Communication speed (default: 115200)
-- **Enable Encrypted Transport**: Enables or disables protected payload transport
-- **Provisioning Secret**: Runtime deployment secret for the plugin
+- **Enable Encrypted Transport**: Enables or disables protected payload transport; keep enabled for all operational traffic
+- **Provisioning Secret**: Runtime deployment secret for the plugin; placeholder values are rehearsal-only and not authorized for live traffic
 - **Air-Gapped Provisioning Bundle**: Staged bundle text field
 - **Rotate Provisioning Secret**: Generates a new plugin-side secret
 - **Generate Provisioning Bundle**: Creates an offline bundle from the active secret
 - **Apply Provisioning Bundle**: Loads staged bundle material into the plugin security profile
-- **Stage Secret To Connected Device**: Sends the trusted local runtime provisioning command
+- **Stage Secret To Connected Device**: Sends the trusted local runtime provisioning command over plaintext on a trusted local bearer; use only during a controlled provisioning ceremony
 - **Export Audit Log**: Saves the Android audit trail to file
-- **Reload Security State**: Re-applies current security settings to live services
+- **Reload Security State**: Re-applies current security settings to live services before traffic release
 - **Mock Transport Mode**: Rehearsal mode without hardware
 - **Send Test Message**: Test connection
 
@@ -383,6 +386,7 @@ The Akita MeshTAK toolbar shows:
 3. Confirm **Enable Encrypted Transport** is enabled
 4. Tap **Reload Security State**
 5. Re-check Mission Assurance before field use
+6. Do not resume live traffic until the warning clears
 
 #### Problem: Tactical Overlay Not Visible
 **Symptoms**: Team markers appear but no mission layer context is visible
@@ -438,6 +442,7 @@ The Akita MeshTAK toolbar shows:
 - **Encryption Keys**: Never share encryption keys with unauthorized personnel
 - **Audit Logs**: Audit logs may contain sensitive information. Secure storage required.
 - **Device Security**: Secure devices physically. Report lost or stolen devices immediately.
+- **Operational Priority**: Security and encrypted transport take precedence over convenience. If Mission Assurance is degraded, simulated, or placeholder-backed, do not transmit live mission data.
 - **Encryption Policy**: The Android plugin uses the active **Enable Encrypted Transport** setting and runtime provisioning secret from settings, with a build-time fallback only if no runtime secret is present. Placeholder secrets are acceptable for rehearsal only.
 - **Metadata Match Required**: Firmware and plugin must use matching provisioning secret and encrypted envelope metadata (`version`, `key-id`).
 - **Runtime Staging**: **Stage Secret To Connected Device** intentionally uses plaintext over a trusted local bearer. Use it only during controlled provisioning ceremonies.
@@ -471,12 +476,15 @@ The Akita MeshTAK toolbar shows:
 - [ ] Connection status shows "Connected" (green)
 - [ ] Mission profile verified
 - [ ] Mission Assurance reviewed
+- [ ] Encrypted transport enabled for live traffic
+- [ ] No placeholder or degraded security warning present
 - [ ] Battery status displaying
 
 #### Daily Operations Checklist
 - [ ] Verify connection status
 - [ ] Verify mission profile and role pack
 - [ ] Review Mission Assurance
+- [ ] Confirm security posture remains operational before traffic release
 - [ ] Check battery level
 - [ ] Test message sending
 - [ ] Verify location data receiving
@@ -527,5 +535,5 @@ The Akita MeshTAK toolbar shows:
 
 **END OF DOCUMENT**
 
-**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2026 Akita Engineering. All Rights Reserved.**
 

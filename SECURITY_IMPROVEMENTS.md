@@ -304,5 +304,5 @@ Protocol update note:
 
 ---
 
-**Copyright (C) 2025 Akita Engineering**
+**Copyright (C) 2026 Akita Engineering**
 

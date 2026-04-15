@@ -6,8 +6,9 @@ The **Akita MeshTAK ATAK Plugin** is an Android application that integrates Mesh
 It enables ATAK users to:
 
 - Send and receive data, including CoT (Cursor on Target) messages  
+- Queue mission traffic into a guaranteed-delivery mailbox with replayable acknowledgement state  
 - Send critical alerts  
-- Monitor device health  
+- Monitor device health and provisioning posture  
 
 **CRITICAL:** The plugin **must** be configured before compilation.
 
@@ -21,17 +22,18 @@ It enables ATAK users to:
 
 ## Data Exchange
 - Sends and receives CoT messages  
-- Supports sending arbitrary data
+- Supports arbitrary mission payloads with mailbox delivery tracking and peer receipts
 
 ## Tactical UI
 - SOS/Critical Alert button on the toolbar  
 - Device battery status displayed on the toolbar  
 - Displays BLE/Serial connection status in the toolbar and on the map  
-- Includes a dedicated view for sending data
+- Includes a dedicated view for sending data, mission replay, and provisioning actions
+- Mission Assurance readiness indicators for encryption, audit, interoperability, and placeholder-secret posture
 
 ## Configuration
 - Central `Config.java` for UUIDs and USB IDs  
-- In-app settings for runtime preferences (connection method, device name)
+- In-app settings for runtime preferences, provisioning secret management, and encrypted transport policy
 
 ---
 
@@ -86,6 +88,8 @@ Replace **all placeholder UUIDs and USB IDs** with the exact values from:
 
 Incorrect values **will prevent the plugin from connecting**.
 
+If you rely on `Config.PROVISIONING_SECRET` as a build-time fallback, replace the placeholder value before deployment. The preferred path is to provision the secret at runtime from the plugin settings UI.
+
 ### 5. Build the APK
 
 **Android Studio:**
@@ -135,5 +139,5 @@ See `documentation/dev_guide.md` for contribution guidelines.
 This project is licensed under the **GNU General Public License v3.0**.  
 See the `LICENSE` and `COPYING` files in the root directory.
 
-**Copyright (C) 2025 Akita Engineering**
+**Copyright (C) 2026 Akita Engineering**
 

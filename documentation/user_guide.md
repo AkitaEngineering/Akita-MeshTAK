@@ -49,14 +49,15 @@ Choose your connection method:
 - Set Serial Baud Rate (default: **115200**)
 
 ## Configure Mission and Security Settings
-In the same settings screen, review these operator-facing controls before field use:
+In the same settings screen, review these operator-facing controls before field use. Security is a go/no-go gate: do not release live traffic until Mission Assurance shows operational encryption and no placeholder-secret warning.
 
 - **Mission Profile**: Select Search & Rescue, Law Enforcement, Coast Guard, Military, or Private Security
 - **Dashboard Theme**: Select Dark Ops, Light Ops, Night Red, or Night Green
 - **Auto Bearer Failover**: Preserve queued traffic and reroute between BLE and Serial when the preferred bearer is unavailable
 - **Security and Provisioning**:
+  - Treat **Mission Assurance** as release authority for live traffic; if security is degraded, simulated, or placeholder-backed, stop and remediate before transmitting
   - Confirm **Enable Encrypted Transport** is on for operational use
-  - Enter a deployment-specific **Provisioning Secret** or use the build-time fallback only for lab/testing
+  - Enter a deployment-specific **Provisioning Secret**; use the build-time fallback only for lab/testing and never for field deployment
   - Use **Rotate Provisioning Secret** to generate a new secret in the plugin
   - Use **Generate Provisioning Bundle** to prepare an offline bundle for another device or operator
   - Use **Apply Provisioning Bundle** to load a staged bundle into the plugin
@@ -103,7 +104,7 @@ The **Send Data** view is now a mission dashboard rather than a simple send form
 It includes:
 
 - **Operational Summary**: Route, payload budget, last send, and peer receipt ratio
-- **Mission Assurance**: Encryption, audit, interoperability, and provisioning state
+- **Mission Assurance**: Encryption, audit, interoperability, and provisioning state; treat degraded or placeholder-backed state as a no-transmit condition for live traffic
 - **Guaranteed Delivery Mailbox**: Pending / In Flight / Delivered counts, failover posture, and replay checkpoint status
 - **Incident Board**: Role-pack aware incident title, tempo, and next action
 - **Mission Playbooks**: Profile-specific reusable payload templates
@@ -123,9 +124,11 @@ It includes:
    - JSON  
    - Custom  
 5. Review the payload budget, mission-assurance indicators, and mailbox state
-6. Tap **Transmit** to queue the frame for the active bearer
-7. Watch the mailbox move through **Pending**, **In Flight**, and **Delivered**; **Delivered** indicates a peer mailbox receipt returned over the mesh
-8. Command history entries can be reused from the dropdown
+6. Confirm Mission Assurance shows operational encryption/provisioning posture with no placeholder-secret warning
+7. If security is degraded, simulated, or placeholder-backed, stop and remediate before transmitting live traffic
+8. Tap **Transmit** to queue the frame for the active bearer
+9. Watch the mailbox move through **Pending**, **In Flight**, and **Delivered**; **Delivered** indicates a peer mailbox receipt returned over the mesh
+10. Command history entries can be reused from the dropdown
 
 ---
 
@@ -144,11 +147,14 @@ The plugin automatically receives:
 
 The plugin supports AES-256-GCM encrypted communication between the firmware and plugin. The plugin now uses a runtime provisioning secret from settings when available, with `Config.PROVISIONING_SECRET` only as a fallback. When **Enable Encrypted Transport** is on and both sides use matching metadata, BLE and serial traffic is protected with authenticated encryption. The provisioning workflow also supports air-gapped bundle generation/apply and a trusted local stage-to-device action for runtime reprovisioning.
 
+Operational priority: encryption and provisioning health take precedence over convenience. If Mission Assurance reports degraded, simulated, or placeholder-backed posture, do not send live mission traffic until the warning is cleared.
+
 Before field use:
 
+- Confirm Mission Assurance reports operational encryption and provisioning posture before traffic release
 - Replace any placeholder provisioning secret
 - If you rotate secrets in the field, use **Generate Provisioning Bundle**, **Apply Provisioning Bundle**, and **Stage Secret To Connected Device** only on a trusted local route
-- Keep encrypted transport enabled unless you are running a compatibility test
+- Keep encrypted transport enabled unless you are running a controlled compatibility test off-mission
 - Export audit logs as required by your operating procedure
 - Use mock mode only for rehearsal, not production traffic
 
@@ -166,6 +172,7 @@ Before field use:
 - Open **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**
 - Enter a deployment-specific provisioning secret or use **Rotate Provisioning Secret**
 - Use **Reload Security State** after changing the secret
+- Do not proceed with live traffic until Mission Assurance clears the warning and encrypted transport remains enabled
 
 ## Messages Stay "In Flight"
 - Wait for the peer mailbox receipt to return over the mesh

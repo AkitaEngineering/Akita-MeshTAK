@@ -11,12 +11,14 @@
 
 ## STARTUP PROCEDURE
 
+No live traffic is authorized until Mission Assurance shows operational encryption/provisioning posture and the security quick check passes.
+
 ### BLE Connection
 1. ☐ Power on Meshtastic device
 2. ☐ Power on Android device
 3. ☐ Open ATAK
 4. ☐ Verify "Connected" (green) in toolbar
-5. ☐ Verify Mission Assurance shows deployment-ready security posture
+5. ☐ Verify Mission Assurance shows operational encryption with no placeholder-secret warning
 
 ### Serial Connection
 1. ☐ Connect USB cable
@@ -25,7 +27,7 @@
 4. ☐ Grant USB permission
 5. ☐ Open ATAK
 6. ☐ Verify "Connected" (green) in toolbar
-7. ☐ Verify Secure Route and Security indicators are operational
+7. ☐ Verify Secure Route and Security indicators are operational and encrypted transport is enabled
 
 ---
 
@@ -99,6 +101,7 @@
 - ☐ Verify connection status (green)
 - ☐ Verify mission profile and role pack
 - ☐ Review Mission Assurance
+- ☐ Confirm encrypted transport remains enabled before traffic release
 - ☐ Review Guaranteed Delivery Mailbox for pending or in-flight frames
 - ☐ Check battery level
 - ☐ Test message sending
@@ -111,6 +114,7 @@
 
 ## SECURITY QUICK CHECK
 
+- ☐ No live traffic if Mission Assurance is degraded, simulated, or placeholder-backed
 - ☐ Confirm active provisioning secret is configured for this deployment and is not placeholder material
 - ☐ Confirm firmware/plugin encrypted metadata match (`v1`, `k1`)
 - ☐ Confirm firmware encryption enabled (default: on)
@@ -137,5 +141,5 @@
 
 ---
 
-**Copyright (C) 2025-2026 Akita Engineering. All Rights Reserved.**
+**Copyright (C) 2026 Akita Engineering. All Rights Reserved.**
 
