@@ -9,125 +9,8 @@
 #include "audit_log.h"        // For audit logging
 #include "input_validation.h" // For input validation
 #include "security.h"         // For payload encryption/decryption
+#include "payload_codec.h"    // Shared encode/decode utilities
 #include <string.h>
-
-static bool parseHexPayload(const String& hex, uint8_t* out, size_t outMax, size_t* outLen) {
-  if ((hex.length() % 2) != 0) {
-    return false;
-  }
-
-  size_t decodedLen = hex.length() / 2;
-  if (decodedLen > outMax) {
-    return false;
-  }
-
-  for (size_t i = 0; i < decodedLen; i++) {
-    char hi = hex.charAt(i * 2);
-    char lo = hex.charAt(i * 2 + 1);
-
-    auto hexValue = [](char c) -> int {
-      if (c >= '0' && c <= '9') return c - '0';
-      if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
-      if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-      return -1;
-    };
-
-    int v1 = hexValue(hi);
-    int v2 = hexValue(lo);
-    if (v1 < 0 || v2 < 0) {
-      return false;
-    }
-    out[i] = (uint8_t)((v1 << 4) | v2);
-  }
-
-  *outLen = decodedLen;
-  return true;
-}
-
-static String encodeHexPayload(const uint8_t* data, size_t len) {
-  static const char* HEX_CHARS = "0123456789abcdef";
-  String out = "";
-  out.reserve(len * 2);
-  for (size_t i = 0; i < len; i++) {
-    out += HEX_CHARS[(data[i] >> 4) & 0x0F];
-    out += HEX_CHARS[data[i] & 0x0F];
-  }
-  return out;
-}
-
-static bool decodeIncomingPayload(const String& input, String& output) {
-  if (!input.startsWith(ENCRYPTED_PAYLOAD_PREFIX)) {
-    output = input;
-    return true;
-  }
-
-  SecurityStatus status = getSecurityStatus();
-  if (!status.initialized || !status.encryption_enabled) {
-    return false;
-  }
-
-  String headerAndHex = input.substring(strlen(ENCRYPTED_PAYLOAD_PREFIX));
-  int firstSep = headerAndHex.indexOf(':');
-  int secondSep = headerAndHex.indexOf(':', firstSep + 1);
-  if (firstSep <= 0 || secondSep <= firstSep + 1) {
-    return false;
-  }
-
-  String version = headerAndHex.substring(0, firstSep);
-  String keyId = headerAndHex.substring(firstSep + 1, secondSep);
-  if (version != ENCRYPTED_PAYLOAD_VERSION || keyId != ENCRYPTED_KEY_ID) {
-    return false;
-  }
-
-  String hex = headerAndHex.substring(secondSep + 1);
-  uint8_t encryptedBuffer[MAX_MESSAGE_LENGTH * 2];
-  size_t encryptedLen = 0;
-  if (!parseHexPayload(hex, encryptedBuffer, sizeof(encryptedBuffer), &encryptedLen)) {
-    return false;
-  }
-
-  if (encryptedLen <= IV_SIZE + GCM_TAG_SIZE) {
-    return false;
-  }
-
-  const uint8_t* iv = encryptedBuffer;
-  const uint8_t* ciphertext = encryptedBuffer + IV_SIZE;
-  size_t ciphertextLen = encryptedLen - IV_SIZE;
-
-  uint8_t plaintext[MAX_MESSAGE_LENGTH + 1] = {0};
-  size_t plaintextLen = decryptData(ciphertext, ciphertextLen, iv, plaintext, MAX_MESSAGE_LENGTH);
-  if (plaintextLen == 0) {
-    return false;
-  }
-
-  plaintext[plaintextLen] = '\0';
-  output = String((const char*)plaintext);
-  output.trim();
-  return true;
-}
-
-static bool encodeOutgoingPayload(const uint8_t* data, size_t len, String& output) {
-  SecurityStatus status = getSecurityStatus();
-  if (!status.initialized || !status.encryption_enabled) {
-    output = String((const char*)data).substring(0, len);
-    return true;
-  }
-
-  uint8_t ciphertext[MAX_MESSAGE_LENGTH + GCM_TAG_SIZE] = {0};
-  uint8_t iv[IV_SIZE] = {0};
-  size_t encryptedLen = encryptData(data, len, ciphertext, sizeof(ciphertext), iv);
-  if (encryptedLen == 0) {
-    return false;
-  }
-
-  uint8_t envelope[IV_SIZE + MAX_MESSAGE_LENGTH + GCM_TAG_SIZE] = {0};
-  memcpy(envelope, iv, IV_SIZE);
-  memcpy(envelope + IV_SIZE, ciphertext, encryptedLen);
-
-  output = String(ENCRYPTED_PAYLOAD_PREFIX) + String(ENCRYPTED_PAYLOAD_VERSION) + ":" +
-           String(ENCRYPTED_KEY_ID) + ":" + encodeHexPayload(envelope, IV_SIZE + encryptedLen);
-  return true;
-}
 
 bool setupSerialBridge() {
   Serial.println("Initializing Serial Bridge...");
@@ -135,11 +18,26 @@ bool setupSerialBridge() {
   return true;
 }
 
+static unsigned long lastSerialCommandMs = 0;
+
 void loopSerialBridge() {
   if (Serial.available() > 0) {
     String receivedData = Serial.readStringUntil('\n');
     receivedData.trim(); // Clean up whitespace
+    if (receivedData.length() > MAX_SERIAL_LINE_LENGTH) {
+      logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 2, "SERIAL",
+                   "Dropped oversized serial line", false);
+      return;
+    }
     if (receivedData.length() > 0) {
+      // Rate limiting
+      unsigned long now = millis();
+      if ((now - lastSerialCommandMs) < CMD_RATE_LIMIT_MS) {
+        logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 1, "SERIAL",
+                     "Rate limit exceeded – command dropped", false);
+        return;
+      }
+      lastSerialCommandMs = now;
       String decodedData = "";
       if (!decodeIncomingPayload(receivedData, decodedData)) {
         logAuditEvent(AUDIT_EVENT_AUTHENTICATION_FAILURE, 2, "SERIAL",
@@ -168,7 +66,7 @@ void loopSerialBridge() {
 }
 
 // Function to send CoT or Status data to ATAK
-void sendDataSerial(const uint8_t* data, size_t len) {
+void sendDataSerial(const uint8_t* data, size_t len, bool forcePlaintext) {
   // Input validation for outgoing data
   if (len == 0 || len > MAX_MESSAGE_LENGTH) {
     logAuditEvent(AUDIT_EVENT_ERROR, 1, "SERIAL", "Send failed - invalid data length", false);
@@ -176,7 +74,9 @@ void sendDataSerial(const uint8_t* data, size_t len) {
   }
 
   String outgoingPayload = "";
-  if (!encodeOutgoingPayload(data, len, outgoingPayload)) {
+  if (forcePlaintext) {
+    outgoingPayload = String((const char*)data).substring(0, len);
+  } else if (!encodeOutgoingPayload(data, len, outgoingPayload)) {
     logAuditEvent(AUDIT_EVENT_ERROR, 2, "SERIAL", "Send failed - encryption error", false);
     return;
   }

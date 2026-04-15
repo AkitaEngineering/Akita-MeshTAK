@@ -100,6 +100,38 @@ ValidationResult validateCoTXml(const String& cotXml) {
         return VALIDATION_ERROR_MALFORMED;
     }
     
+    // Reject CDATA sections, processing instructions, and DOCTYPE declarations
+    // which could be used to embed arbitrary content.
+    String lower = cotXml;
+    lower.toLowerCase();
+    if (lower.indexOf("<![cdata[") >= 0 ||
+        lower.indexOf("<!doctype") >= 0 ||
+        lower.indexOf("<!entity") >= 0 ||
+        lower.indexOf("<?") >= 0) {
+        return VALIDATION_ERROR_INJECTION_ATTEMPT;
+    }
+
+    // Verify that every '<' has a matching '>' (basic well-formedness).
+    int depth = 0;
+    bool insideTag = false;
+    for (size_t i = 0; i < cotXml.length(); i++) {
+        char c = cotXml.charAt(i);
+        if (c == '<') {
+            if (insideTag) {
+                return VALIDATION_ERROR_MALFORMED;  // nested '<'
+            }
+            insideTag = true;
+        } else if (c == '>') {
+            if (!insideTag) {
+                return VALIDATION_ERROR_MALFORMED;  // unmatched '>'
+            }
+            insideTag = false;
+        }
+    }
+    if (insideTag) {
+        return VALIDATION_ERROR_MALFORMED;  // unclosed '<'
+    }
+    
     // Check for injection patterns
     if (containsInjectionPattern(cotXml)) {
         return VALIDATION_ERROR_INJECTION_ATTEMPT;

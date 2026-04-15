@@ -2,7 +2,7 @@
 
 The **Akita MeshTAK Plugin** allows your ATAK device to connect to Meshtastic networks, enabling off-grid communication, location tracking, emergency alerts, and device health monitoring.
 
-The current operator workflow also includes mission profiles, a mission-assurance dashboard, tactical ATAK overlay concepts, incident-board role packs, mock transport rehearsal mode, and Dark Ops / Light Ops / Night Red presentation themes.
+The current operator workflow also includes mission profiles, a mission-assurance dashboard, a guaranteed-delivery mailbox, air-gapped provisioning ceremony controls, tactical ATAK overlay concepts, incident-board role packs, mock transport rehearsal mode, digital-twin replay, and Dark Ops / Light Ops / Night Red / Night Green presentation themes.
 
 ---
 
@@ -52,14 +52,18 @@ Choose your connection method:
 In the same settings screen, review these operator-facing controls before field use:
 
 - **Mission Profile**: Select Search & Rescue, Law Enforcement, Coast Guard, Military, or Private Security
-- **Dashboard Theme**: Select Dark Ops, Light Ops, or Night Red
+- **Dashboard Theme**: Select Dark Ops, Light Ops, Night Red, or Night Green
+- **Auto Bearer Failover**: Preserve queued traffic and reroute between BLE and Serial when the preferred bearer is unavailable
 - **Security and Provisioning**:
   - Confirm **Enable Encrypted Transport** is on for operational use
   - Enter a deployment-specific **Provisioning Secret** or use the build-time fallback only for lab/testing
   - Use **Rotate Provisioning Secret** to generate a new secret in the plugin
+  - Use **Generate Provisioning Bundle** to prepare an offline bundle for another device or operator
+  - Use **Apply Provisioning Bundle** to load a staged bundle into the plugin
+  - Use **Stage Secret To Connected Device** on a trusted local bearer to runtime-reprovision firmware without a rebuild
   - Use **Export Audit Log** to save the current audit trail
   - Use **Reload Security State** after changing security settings
-- **Mock Transport Mode**: Enable when no radio is available and you need to rehearse UI and workflow behavior
+- **Mock Transport Mode**: Enable when no radio is available and you need to rehearse UI, replay, and workflow behavior
 
 ---
 
@@ -98,13 +102,14 @@ The **Send Data** view is now a mission dashboard rather than a simple send form
 
 It includes:
 
-- **Operational Summary**: Route, payload budget, last send, and delivery ratio
+- **Operational Summary**: Route, payload budget, last send, and peer receipt ratio
 - **Mission Assurance**: Encryption, audit, interoperability, and provisioning state
+- **Guaranteed Delivery Mailbox**: Pending / In Flight / Delivered counts, failover posture, and replay checkpoint status
 - **Incident Board**: Role-pack aware incident title, tempo, and next action
 - **Mission Playbooks**: Profile-specific reusable payload templates
 - **Role-Pack Actions**: Quick actions that queue directly into the secure composer
 - **Payload Trend / Format Distribution**: Charts for recent traffic and message type mix
-- **Rapid Reuse**: History of recent commands and frames
+- **Rapid Reuse**: History of recent mailbox frames and replayable checkpoints
 
 ---
 
@@ -117,9 +122,10 @@ It includes:
    - Plain Text  
    - JSON  
    - Custom  
-5. Review the payload budget and mission-assurance indicators
-6. Tap **Transmit**
-7. Command history entries can be reused from the dropdown
+5. Review the payload budget, mission-assurance indicators, and mailbox state
+6. Tap **Transmit** to queue the frame for the active bearer
+7. Watch the mailbox move through **Pending**, **In Flight**, and **Delivered**; **Delivered** indicates a peer mailbox receipt returned over the mesh
+8. Command history entries can be reused from the dropdown
 
 ---
 
@@ -129,17 +135,19 @@ The plugin automatically receives:
 
 - **CoT Location Data:** Other Meshtastic users appear as ATAK map markers  
 - **Battery Reports:** Toolbar battery indicator updates live  
+- **Mailbox Receipts:** Guaranteed-delivery frames advance from `IN_FLIGHT` to `DELIVERED` when a peer mailbox acknowledgement returns  
 - **Tactical Overlay Context:** The ATAK map can show a mission geofence, sector arcs, route health, and stale-marker callouts around the active team picture
 
 ---
 
 # Security
 
-The plugin supports AES-256-GCM encrypted communication between the firmware and plugin. The plugin now uses a runtime provisioning secret from settings when available, with `Config.PROVISIONING_SECRET` only as a fallback. When **Enable Encrypted Transport** is on and both sides use matching metadata, BLE and serial traffic is protected with authenticated encryption.
+The plugin supports AES-256-GCM encrypted communication between the firmware and plugin. The plugin now uses a runtime provisioning secret from settings when available, with `Config.PROVISIONING_SECRET` only as a fallback. When **Enable Encrypted Transport** is on and both sides use matching metadata, BLE and serial traffic is protected with authenticated encryption. The provisioning workflow also supports air-gapped bundle generation/apply and a trusted local stage-to-device action for runtime reprovisioning.
 
 Before field use:
 
 - Replace any placeholder provisioning secret
+- If you rotate secrets in the field, use **Generate Provisioning Bundle**, **Apply Provisioning Bundle**, and **Stage Secret To Connected Device** only on a trusted local route
 - Keep encrypted transport enabled unless you are running a compatibility test
 - Export audit logs as required by your operating procedure
 - Use mock mode only for rehearsal, not production traffic
@@ -159,8 +167,15 @@ Before field use:
 - Enter a deployment-specific provisioning secret or use **Rotate Provisioning Secret**
 - Use **Reload Security State** after changing the secret
 
+## Messages Stay "In Flight"
+- Wait for the peer mailbox receipt to return over the mesh
+- Confirm at least one peer node is reachable on the mesh
+- Review the **Guaranteed Delivery Mailbox** card for pending or failed frames
+- Use **Retry Queue** after bearer recovery or enable **Auto Bearer Failover**
+
 ## Dashboard Rehearsal Without Hardware
 - Enable **Mock Transport Mode** in plugin settings
+- Use **Replay Last Mission** to rehearse recent mailbox and provisioning checkpoints
 - Review the static preview in `documentation/ui_preview.html` if you need to validate layout and theme choices on a workstation
 
 ## No Battery Status

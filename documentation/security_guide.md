@@ -3,7 +3,7 @@
 ## Overview
 This document outlines the security features implemented in Akita MeshTAK for military, law enforcement, search and rescue, and security operations.
 
-The current Android plugin security model is surfaced directly to operators through the settings UI and mission-assurance dashboard so teams can verify provisioning, encrypted transport posture, audit readiness, and interoperability before live traffic is transmitted.
+The current Android plugin security model is surfaced directly to operators through the settings UI, mission-assurance dashboard, and runtime provisioning ceremony controls so teams can verify provisioning, encrypted transport posture, audit readiness, and interoperability before live traffic is transmitted.
 
 ---
 
@@ -19,6 +19,7 @@ The current Android plugin security model is surfaced directly to operators thro
 - **Firmware Default**: Encryption is enabled by default (`SECURITY_MODE_AES256_HMAC`). The firmware encrypts/decrypts all BLE and serial payloads when a valid provisioning secret is configured.
 - **Android Plugin Default**: The plugin reads `security_encryption_enabled` from settings and treats encrypted transport as enabled unless an operator explicitly disables it.
 - **Provisioning Source**: The active provisioning secret is read from plugin settings when present; `Config.PROVISIONING_SECRET` is used only as a fallback.
+- **Provisioning Ceremony**: The plugin can generate/apply air-gapped bundles and send a plaintext stage-to-device command over a trusted local bearer so firmware can adopt new provisioning material without a rebuild.
 - **Readiness Warning**: Placeholder secrets can support rehearsal and UI preview, but Mission Assurance will flag that posture as not deployment-ready.
 - **Enablement Requirement**: Firmware and plugin must use matching provisioning secret, version, and key-id metadata.
 - **Behavior**: Encrypted traffic uses AES-GCM with per-message nonce and authentication tag; malformed or mismatched encrypted envelopes are rejected.
@@ -42,16 +43,21 @@ Follow these steps to enable end-to-end encryption:
 1. **Generate a Provisioning Secret**
    - Create a strong random secret (32+ characters): `openssl rand -hex 32`
    - This secret will be shared between firmware and plugin.
+   - If the secret will move offline, generate an air-gapped provisioning bundle from the plugin after the secret is loaded.
 
 2. **Configure Firmware**
    - In `firmware/src/config.h`, replace the default `PROVISIONING_SECRET` with your generated secret.
    - Set `DEFAULT_SECURITY_MODE` to `SECURITY_MODE_AES256_HMAC`.
    - Build and flash the firmware.
+   - For trusted local runtime rotation, you can also stage the secret later with **Stage Secret To Connected Device** instead of rebuilding immediately.
 
 3. **Configure Android Plugin**
    - Preferred method: open **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**.
    - Enter the deployment secret in **Provisioning Secret**.
    - Confirm **Enable Encrypted Transport** is enabled.
+   - Use **Generate Provisioning Bundle** to create an offline bundle when another operator or device needs the same material.
+   - Use **Apply Provisioning Bundle** to load staged bundle material into the plugin.
+   - Use **Stage Secret To Connected Device** only on a trusted local bearer when runtime-provisioning firmware.
    - Tap **Reload Security State** after security changes.
    - If a fixed build-time fallback is required, set `atak_plugin/src/com/akitaengineering/meshtak/Config.java` `PROVISIONING_SECRET` to the same value.
 
@@ -63,7 +69,8 @@ Follow these steps to enable end-to-end encryption:
 
 5. **Key Rotation**
    - To rotate keys, change the provisioning secret on both firmware and plugin simultaneously.
-   - The plugin can generate a new runtime secret using **Rotate Provisioning Secret**, but the firmware must still be updated to match before deployment.
+   - The plugin can generate a new runtime secret using **Rotate Provisioning Secret**, package it with **Generate Provisioning Bundle**, and apply it offline with **Apply Provisioning Bundle**.
+   - Use **Stage Secret To Connected Device** during a trusted local ceremony so firmware adopts the same secret before deployment.
    - Update the key-id (e.g., `k1` → `k2`) to distinguish new keys from old ones.
    - Tap **Reload Security State** or restart the plugin after the change.
 
@@ -157,6 +164,7 @@ Follow these steps to enable end-to-end encryption:
    - Use strong, deployment-specific provisioning secrets
    - Replace placeholder secrets before live use
    - Rotate secrets periodically and synchronize firmware/plugin updates
+   - Use air-gapped bundles for offline transfer and stage secrets only over trusted local bearers
 
 2. **Monitor Audit Logs**
    - Review logs regularly
@@ -199,6 +207,8 @@ In `firmware/src/config.h`:
 In the plugin settings UI:
 - Configure **Enable Encrypted Transport**
 - Configure or rotate **Provisioning Secret**
+- Generate or apply **Air-Gapped Provisioning Bundle** material as required
+- Use **Stage Secret To Connected Device** only during controlled provisioning ceremonies
 - Export audit logs as required
 - Reload security state after changes
 
@@ -260,6 +270,7 @@ If you discover a security vulnerability:
 - **v0.3.0**: Runtime provisioning and mission-assurance update
    - Preference-backed provisioning secret with build-time fallback
    - Encrypted transport policy surfaced in settings
+   - Air-gapped provisioning bundle generation/apply and trusted local stage-to-device workflow
    - Audit export and security reload actions added to settings
    - Mission Assurance flags placeholder provisioning and degraded posture
 - **v0.2.0**: Initial security implementation

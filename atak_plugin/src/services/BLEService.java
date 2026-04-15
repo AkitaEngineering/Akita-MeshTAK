@@ -7,6 +7,7 @@ import android.bluetooth.*;
 import android.bluetooth.le.*;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
@@ -19,6 +20,7 @@ import com.atakmap.api.CotPoint;
 import com.atakmap.api.Point2;
 import com.atakmap.api.map.MapItem;
 import com.atakmap.api.map.Marker;
+import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.ui.AkitaMissionMarkerRegistry;
@@ -411,6 +413,10 @@ public class BLEService extends Service {
                 auditLogger.log(AuditLogger.EventType.DATA_RECEIVED, AuditLogger.Severity.INFO,
                                "BLE", "Data received, len: " + rawData.length, true);
             }
+
+            if (AkitaMissionControl.getInstance(getApplicationContext()).consumeIncomingStatus(decodedPayload, AkitaMissionControl.ROUTE_BLE)) {
+                return;
+            }
             
             processCotData(decodedPayload);
         }
@@ -500,13 +506,25 @@ public class BLEService extends Service {
         sendData((Config.CMD_ALERT_SOS + "\n").getBytes());
     }
     
-    public void sendData(byte[] data) {
+    public boolean sendPlaintextData(byte[] data) {
+      return sendData(data, true);
+    }
+
+    public boolean isReadyForTraffic() {
+      return bleConnectionStatus.equals("Connected") && bluetoothGatt != null;
+    }
+
+    public boolean sendData(byte[] data) {
+      return sendData(data, false);
+    }
+
+    public boolean sendData(byte[] data, boolean forcePlaintext) {
       if (!bleConnectionStatus.equals("Connected") || bluetoothGatt == null) {
           if (auditLogger != null) {
               auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.WARNING,
                              "BLE", "Send failed - not connected", false);
           }
-          return;
+          return false;
       }
       
       // Input validation
@@ -515,18 +533,18 @@ public class BLEService extends Service {
               auditLogger.log(AuditLogger.EventType.SECURITY_VIOLATION, AuditLogger.Severity.WARNING,
                              "BLE", "Invalid data length: " + (data != null ? data.length : 0), false);
           }
-          return;
+          return false;
       }
       
       // Optional: Encrypt data if security is enabled; default is plaintext for compatibility
       byte[] dataToSend = data;
-      if (securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
+      if (!forcePlaintext && securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
           String encryptedEnvelope = encodeEncryptedPayload(data);
           if (encryptedEnvelope != null) {
               dataToSend = encryptedEnvelope.getBytes(StandardCharsets.UTF_8);
           } else {
               Log.w(TAG, "Encryption failed, aborting send");
-              return;
+              return false;
           }
       }
       
@@ -536,7 +554,7 @@ public class BLEService extends Service {
               auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
                              "BLE", "Service not found", false);
           }
-          return;
+          return false;
       }
       
       BluetoothGattCharacteristic writeCharacteristic = service.getCharacteristic(WRITE_CHARACTERISTIC_UUID);
@@ -545,7 +563,7 @@ public class BLEService extends Service {
               auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
                              "BLE", "Characteristic not found", false);
           }
-          return;
+          return false;
       }
       
       writeCharacteristic.setValue(dataToSend);
@@ -556,6 +574,7 @@ public class BLEService extends Service {
           auditLogger.log(AuditLogger.EventType.DATA_SENT, AuditLogger.Severity.INFO,
                          "BLE", "Data sent, len: " + data.length, success);
       }
+            return success;
     }
     
     // --- External Setters and Getters ---

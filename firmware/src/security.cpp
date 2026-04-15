@@ -5,6 +5,7 @@
 #include "security.h"
 #include "config.h"
 #include <esp_random.h>
+#include <mbedtls/pkcs5.h>
 #include <string.h>
 
 // Security keys (should be provisioned securely - NOT hardcoded in production!)
@@ -16,6 +17,40 @@ static bool g_security_initialized = false;
 
 // Temporary IV storage
 static uint8_t g_iv[IV_SIZE];
+
+static void deriveProvisionedKey(const String& deviceId,
+                                 const String& sharedSecret,
+                                 const char* purpose,
+                                 uint8_t* outKey,
+                                 size_t outLen) {
+    if (outKey == nullptr || outLen == 0) {
+        return;
+    }
+
+    // Build salt from deviceId + purpose so each derived key is unique.
+    String salt = deviceId + ":" + String(purpose);
+
+    // PBKDF2-HMAC-SHA256 with 100 000 iterations.
+    mbedtls_md_context_t ctx;
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    mbedtls_md_init(&ctx);
+    mbedtls_md_setup(&ctx, md_info, 1); // HMAC mode
+    mbedtls_pkcs5_hmac_ext(
+        MBEDTLS_MD_SHA256,
+        reinterpret_cast<const unsigned char*>(sharedSecret.c_str()),
+        sharedSecret.length(),
+        reinterpret_cast<const unsigned char*>(salt.c_str()),
+        salt.length(),
+        100000,
+        outLen,
+        outKey);
+    mbedtls_md_free(&ctx);
+
+    // Best-effort wipe of the Arduino String holding secret material
+    for (unsigned int i = 0; i < salt.length(); i++) {
+        salt.setCharAt(i, '\0');
+    }
+}
 
 bool initSecurity(const uint8_t* aes_key, const uint8_t* hmac_key, uint8_t security_mode) {
     if (aes_key == nullptr || hmac_key == nullptr) {
@@ -33,6 +68,23 @@ bool initSecurity(const uint8_t* aes_key, const uint8_t* hmac_key, uint8_t secur
     generateAuthToken(g_auth_token);
     
     return true;
+}
+
+bool initSecurityFromProvisioning(const String& deviceId, const String& sharedSecret) {
+    if (deviceId.length() == 0 || sharedSecret.length() < 12) {
+        return false;
+    }
+
+    uint8_t aesKey[AES_KEY_SIZE] = {0};
+    uint8_t hmacKey[HMAC_KEY_SIZE] = {0};
+    deriveProvisionedKey(deviceId, sharedSecret, "aes", aesKey, sizeof(aesKey));
+    deriveProvisionedKey(deviceId, sharedSecret, "hmac", hmacKey, sizeof(hmacKey));
+
+    cleanupSecurity();
+    bool initialized = initSecurity(aesKey, hmacKey, SECURITY_MODE_AES256_HMAC);
+    memset(aesKey, 0, sizeof(aesKey));
+    memset(hmacKey, 0, sizeof(hmacKey));
+    return initialized;
 }
 
 size_t encryptData(const uint8_t* plaintext, size_t plaintext_len, 
@@ -159,9 +211,12 @@ bool verifyAuthToken(const uint8_t* token) {
     if (token == nullptr || !g_security_initialized) {
         return false;
     }
-    // In production, implement proper token validation logic
-    // For now, basic check
-    return (memcmp(token, g_auth_token, AUTH_TOKEN_SIZE) == 0);
+    // Constant-time comparison to prevent timing attacks
+    volatile uint8_t diff = 0;
+    for (size_t i = 0; i < AUTH_TOKEN_SIZE; i++) {
+        diff |= token[i] ^ g_auth_token[i];
+    }
+    return (diff == 0);
 }
 
 void secureRandom(uint8_t* buffer, size_t len) {

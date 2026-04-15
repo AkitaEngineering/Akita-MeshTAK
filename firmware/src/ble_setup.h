@@ -22,7 +22,7 @@
 
   bool setupBLE();
   void loopBLE();
-  void sendDataBLE(const uint8_t* data, size_t len);
+  void sendDataBLE(const uint8_t* data, size_t len, bool forcePlaintext = false);
 #endif
 
 #endif

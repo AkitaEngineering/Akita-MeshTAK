@@ -26,6 +26,11 @@
         android:title="@string/security_category_title">
 
         <SwitchPreferenceCompat
+            android:key="transport_auto_failover"
+            android:title="@string/auto_failover_title"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
             android:key="security_encryption_enabled"
             android:title="@string/encryption_enabled_title"
             android:defaultValue="true" />
@@ -38,6 +43,23 @@
         <Preference
             android:key="security_rotate_secret"
             android:title="@string/rotate_secret_title" />
+
+        <EditTextPreference
+            android:key="security_provisioning_bundle"
+            android:title="@string/provisioning_bundle_title"
+            android:defaultValue="" />
+
+        <Preference
+            android:key="security_generate_bundle"
+            android:title="@string/generate_bundle_title" />
+
+        <Preference
+            android:key="security_apply_bundle"
+            android:title="@string/apply_bundle_title" />
+
+        <Preference
+            android:key="security_stage_device"
+            android:title="@string/stage_device_title" />
 
         <Preference
             android:key="security_export_audit"

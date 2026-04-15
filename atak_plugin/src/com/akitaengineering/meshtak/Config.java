@@ -17,6 +17,11 @@ public final class Config {
     /** Replace with deployment-specific shared secret. Must match firmware PROVISIONING_SECRET. */
     public static final String PROVISIONING_SECRET = "REPLACE_WITH_DEPLOYMENT_SECRET";
 
+    /** Returns true when the provisioning secret is still set to the compile-time placeholder. */
+    public static boolean isPlaceholderSecret() {
+        return "REPLACE_WITH_DEPLOYMENT_SECRET".equals(PROVISIONING_SECRET);
+    }
+
     /** Prefix for encrypted payload envelopes exchanged over BLE/Serial. */
     public static final String ENCRYPTED_PAYLOAD_PREFIX = "ENC:";
 
@@ -53,6 +58,12 @@ public final class Config {
     /** Command sent to initiate a critical alert broadcast. */
     public static final String CMD_ALERT_SOS = "CMD:ALERT:SOS";
 
+    /** Command prefix used to queue mission traffic for device-side mailbox delivery. */
+    public static final String CMD_MAILBOX_PUT_PREFIX = "CMD:MAILBOX:PUT:";
+
+    /** Command prefix used to stage provisioning material onto a connected device. */
+    public static final String CMD_PROVISION_STAGE_PREFIX = "CMD:PROV:STAGE:";
+
     /** Prefix expected in the response string when receiving battery status. */
     public static final String STATUS_BATT_PREFIX = "STATUS:BATT:";
     
@@ -61,6 +72,18 @@ public final class Config {
     
     /** Prefix expected in the response string when receiving version. */
     public static final String STATUS_VERSION_PREFIX = "STATUS:VERSION:";
+
+    /** Prefix expected when the device acknowledges a mailbox message. */
+    public static final String STATUS_MAILBOX_ACK_PREFIX = "STATUS:MAILBOX:ACK:";
+
+    /** Prefix expected when the device forwards inbound non-CoT traffic from the mesh. */
+    public static final String STATUS_MAILBOX_RX_PREFIX = "STATUS:MAILBOX:RX:";
+
+    /** Prefix expected when a runtime provisioning stage succeeds on the device. */
+    public static final String STATUS_PROVISION_STAGED_PREFIX = "STATUS:PROV:STAGED:";
+
+    /** Prefix expected when a runtime provisioning stage fails on the device. */
+    public static final String STATUS_PROVISION_FAILED_PREFIX = "STATUS:PROV:FAILED:";
     
     // --- ATAK Rendering Defaults ---
     

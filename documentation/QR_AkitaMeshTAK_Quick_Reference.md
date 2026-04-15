@@ -3,7 +3,7 @@
 ## QUICK REFERENCE CARD
 
 **Document Number:** QR-AKITA-MESHTAK-001  
-**Revision:** 1.3  
+**Revision:** 1.4  
 **Date:** 2026-04-14  
 **Classification:** UNCLASSIFIED
 
@@ -49,6 +49,8 @@
 | `CMD:GET_BATT` | Request battery status |
 | `CMD:GET_VERSION` | Request firmware version |
 | `CMD:ALERT:SOS` | Send emergency alert |
+| `CMD:MAILBOX:PUT:<id>:<format>:<payload>` | Queue guaranteed-delivery mission traffic |
+| `CMD:PROV:STAGE:<secret>` | Runtime-stage provisioning on a trusted local bearer |
 
 ---
 
@@ -84,6 +86,12 @@
 - ☐ Verify other devices on network
 - ☐ Restart ATAK
 
+### Message Stuck In Flight
+- ☐ Confirm peer node is reachable on the mesh
+- ☐ Wait for peer mailbox acknowledgement to return
+- ☐ Review Guaranteed Delivery Mailbox for pending or failed frames
+- ☐ Use Retry Queue or enable Auto Bearer Failover
+
 ---
 
 ## DAILY CHECKLIST
@@ -91,10 +99,12 @@
 - ☐ Verify connection status (green)
 - ☐ Verify mission profile and role pack
 - ☐ Review Mission Assurance
+- ☐ Review Guaranteed Delivery Mailbox for pending or in-flight frames
 - ☐ Check battery level
 - ☐ Test message sending
 - ☐ Verify location data receiving
 - ☐ Review tactical overlay for stale-marker or route-health warnings
+- ☐ Confirm failover posture matches the mission plan
 - ☐ Review for errors
 
 ---
@@ -105,6 +115,7 @@
 - ☐ Confirm firmware/plugin encrypted metadata match (`v1`, `k1`)
 - ☐ Confirm firmware encryption enabled (default: on)
 - ☐ Confirm **Enable Encrypted Transport** remains enabled in plugin settings
+- ☐ If rotating in the field, verify the air-gapped bundle matches the deployment and stage only over a trusted local bearer
 - ☐ Confirm encrypted transport operational (envelope format: `ENC:v1:k1:<hex>`)
 - ☐ Export audit log after mission or exercise if required by SOP
 - ☐ If encrypted payloads are rejected, verify version/key-id alignment before field use
@@ -122,7 +133,7 @@
 
 **Firmware**: 0.2.0  
 **Plugin**: 0.2.0  
-**Document**: QR-AKITA-MESHTAK-001 Rev 1.3
+**Document**: QR-AKITA-MESHTAK-001 Rev 1.4
 
 ---
 

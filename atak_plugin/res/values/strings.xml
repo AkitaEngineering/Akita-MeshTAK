@@ -9,9 +9,14 @@
     <string name="ui_theme_title">Dashboard Theme</string>
     <string name="mission_profile_title">Mission Profile</string>
     <string name="security_category_title">Security and Provisioning</string>
+    <string name="auto_failover_title">Auto Bearer Failover</string>
     <string name="provisioning_secret_title">Provisioning Secret</string>
+    <string name="provisioning_bundle_title">Air-Gapped Provisioning Bundle</string>
     <string name="encryption_enabled_title">Enable Encrypted Transport</string>
     <string name="rotate_secret_title">Rotate Provisioning Secret</string>
+    <string name="generate_bundle_title">Generate Provisioning Bundle</string>
+    <string name="apply_bundle_title">Apply Provisioning Bundle</string>
+    <string name="stage_device_title">Stage Secret To Connected Device</string>
     <string name="export_audit_title">Export Audit Log</string>
     <string name="reload_security_title">Reload Security State</string>
     <string name="history_spinner_prompt">Reuse a recent command</string>

@@ -3,6 +3,8 @@ package com.akitaengineering.meshtak.ui;
 import android.content.res.ColorStateList;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -22,6 +24,7 @@ import android.widget.Toast;
 import androidx.preference.PreferenceManager;
 
 import com.atakmap.android.maps.MapView;
+import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.akitaengineering.meshtak.R;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
@@ -66,6 +69,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private TextView operationalSummaryTextView;
     private TextView payloadSummaryTextView;
     private TextView assuranceSummaryTextView;
+    private TextView mailboxSummaryTextView;
     private TextView incidentBoardSummaryTextView;
     private TextView incidentTitleValueTextView;
     private TextView incidentRolePackValueTextView;
@@ -76,6 +80,11 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private TextView auditStatusValueTextView;
     private TextView interoperabilityStatusValueTextView;
     private TextView provisioningStatusValueTextView;
+    private TextView mailboxPendingValueTextView;
+    private TextView mailboxInFlightValueTextView;
+    private TextView mailboxDeliveredValueTextView;
+    private TextView mailboxFailoverValueTextView;
+    private TextView mailboxReplayValueTextView;
     private TextView templateHintTextView;
     private TextView activeRouteValueTextView;
     private TextView payloadBudgetValueTextView;
@@ -93,6 +102,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private View dashboardContent;
     private View summaryCard;
     private View assuranceCard;
+    private View mailboxCard;
     private View incidentBoardCard;
     private View trendCard;
     private View formatCard;
@@ -106,6 +116,11 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private View assuranceAuditCard;
     private View assuranceInteroperabilityCard;
     private View assuranceProvisioningCard;
+    private View mailboxPendingCard;
+    private View mailboxInFlightCard;
+    private View mailboxDeliveredCard;
+    private View mailboxFailoverCard;
+    private View mailboxReplayCard;
     private View incidentTitleCard;
     private View incidentRolePackCard;
     private View incidentTempoCard;
@@ -116,20 +131,27 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private BLEService bleService;
     private SerialService serialService;
     private String connectionMethod;
+    private Button retryMailboxButton;
+    private Button replayMissionButton;
     private final List<String> commandHistory = new ArrayList<>();
     private final List<Integer> recentPayloadSizes = new ArrayList<>();
     private final List<String> dataFormats = new ArrayList<>();
     private final List<AkitaMissionProfile.TemplatePreset> templatePresets = new ArrayList<>();
     private final List<AkitaIncidentBoard.RoleAction> roleActions = new ArrayList<>();
+    private final List<AkitaMissionControl.ReplayEvent> replayTimeline = new ArrayList<>();
     private ThemedSpinnerAdapter formatAdapter;
     private ThemedSpinnerAdapter templateAdapter;
     private ThemedSpinnerAdapter roleActionAdapter;
     private ThemedSpinnerAdapter historyAdapter;
     private final Context context;
     private final SharedPreferences preferences;
+    private final AkitaMissionControl missionControl;
+    private final Handler replayHandler = new Handler(Looper.getMainLooper());
+    private final Runnable replayStepRunnable = this::advanceReplayStep;
     private static final int MAX_HISTORY = 20;
     private static final int MAX_PAYLOAD_BYTES = 512;
     private static final int MAX_TREND_POINTS = 12;
+    private static final long REPLAY_STEP_DELAY_MS = 1400L;
     private int successfulSends;
     private int failedSends;
     private int bleRouteCount;
@@ -141,12 +163,15 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private int lastSendBytes;
     private String lastSendFormat = "";
     private String lastSendRoute = "";
+    private boolean replayActive;
+    private int replayIndex;
 
     public SendDataView(Context context, MapView mapView, BLEService bleService, SerialService serialService) {
         super(context);
         this.context = context;
         this.mapView = mapView;
         this.preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        this.missionControl = AkitaMissionControl.getInstance(context);
         this.bleService = bleService;
         this.serialService = serialService;
         this.connectionMethod = preferences.getString("connection_method", "ble");
@@ -175,6 +200,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     public void setServices(BLEService bleService, SerialService serialService) {
         this.bleService = bleService;
         this.serialService = serialService;
+        flushPendingMailbox(false);
         refreshDashboard();
     }
 
@@ -194,6 +220,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         operationalSummaryTextView = findViewById(R.id.operational_summary);
         payloadSummaryTextView = findViewById(R.id.payload_summary);
         assuranceSummaryTextView = findViewById(R.id.assurance_summary);
+        mailboxSummaryTextView = findViewById(R.id.mailbox_summary);
         incidentBoardSummaryTextView = findViewById(R.id.incident_board_summary);
         incidentTitleValueTextView = findViewById(R.id.incident_title_value);
         incidentRolePackValueTextView = findViewById(R.id.incident_role_pack_value);
@@ -204,6 +231,11 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         auditStatusValueTextView = findViewById(R.id.assurance_audit_value);
         interoperabilityStatusValueTextView = findViewById(R.id.assurance_interop_value);
         provisioningStatusValueTextView = findViewById(R.id.assurance_provisioning_value);
+        mailboxPendingValueTextView = findViewById(R.id.mailbox_pending_value);
+        mailboxInFlightValueTextView = findViewById(R.id.mailbox_in_flight_value);
+        mailboxDeliveredValueTextView = findViewById(R.id.mailbox_delivered_value);
+        mailboxFailoverValueTextView = findViewById(R.id.mailbox_failover_value);
+        mailboxReplayValueTextView = findViewById(R.id.mailbox_replay_value);
         templateHintTextView = findViewById(R.id.template_hint);
         activeRouteValueTextView = findViewById(R.id.stat_active_route_value);
         payloadBudgetValueTextView = findViewById(R.id.stat_payload_value);
@@ -221,6 +253,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         dashboardContent = findViewById(R.id.dashboard_content);
         summaryCard = findViewById(R.id.summary_card);
         assuranceCard = findViewById(R.id.assurance_card);
+        mailboxCard = findViewById(R.id.mailbox_card);
         incidentBoardCard = findViewById(R.id.incident_board_card);
         trendCard = findViewById(R.id.trend_card);
         formatCard = findViewById(R.id.format_card);
@@ -234,6 +267,11 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         assuranceAuditCard = findViewById(R.id.assurance_audit_card);
         assuranceInteroperabilityCard = findViewById(R.id.assurance_interop_card);
         assuranceProvisioningCard = findViewById(R.id.assurance_provisioning_card);
+        mailboxPendingCard = findViewById(R.id.mailbox_pending_card);
+        mailboxInFlightCard = findViewById(R.id.mailbox_in_flight_card);
+        mailboxDeliveredCard = findViewById(R.id.mailbox_delivered_card);
+        mailboxFailoverCard = findViewById(R.id.mailbox_failover_card);
+        mailboxReplayCard = findViewById(R.id.mailbox_replay_card);
         incidentTitleCard = findViewById(R.id.incident_title_card);
         incidentRolePackCard = findViewById(R.id.incident_role_pack_card);
         incidentTempoCard = findViewById(R.id.incident_tempo_card);
@@ -241,6 +279,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         plainLegendDot = findViewById(R.id.plain_legend_dot);
         jsonLegendDot = findViewById(R.id.json_legend_dot);
         customLegendDot = findViewById(R.id.custom_legend_dot);
+        retryMailboxButton = findViewById(R.id.retry_mailbox_button);
+        replayMissionButton = findViewById(R.id.replay_mission_button);
     }
 
     private void setupFormatSpinner() {
@@ -317,11 +357,14 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         loadTemplateButton.setOnClickListener(v -> loadSelectedTemplate());
         loadRoleActionButton.setOnClickListener(v -> loadSelectedRoleAction());
         sendButton.setOnClickListener(v -> sendCurrentPayload());
+        retryMailboxButton.setOnClickListener(v -> flushPendingMailbox(true));
+        replayMissionButton.setOnClickListener(v -> toggleReplay());
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        replayHandler.removeCallbacks(replayStepRunnable);
         preferences.unregisterOnSharedPreferenceChangeListener(this);
     }
 
@@ -329,6 +372,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
         if ("connection_method".equals(key)) {
             connectionMethod = sharedPreferences.getString(key, "ble");
+            flushPendingMailbox(false);
             refreshDashboard();
             return;
         }
@@ -339,11 +383,15 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
             return;
         }
         if (AkitaMockSettings.PREF_MOCK_MODE.equals(key)
+            || AkitaMissionControl.PREF_MAILBOX_RECORDS.equals(key)
+            || AkitaMissionControl.PREF_REPLAY_EVENTS.equals(key)
+            || AkitaMissionControl.PREF_AUTO_FAILOVER.equals(key)
                 || AkitaMockSettings.PREF_MOCK_BLE_STATUS.equals(key)
                 || AkitaMockSettings.PREF_MOCK_SERIAL_STATUS.equals(key)
                 || AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)
                 || AkitaMissionProfile.PREF_MISSION_PROFILE.equals(key)
                 || AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
+            || AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE.equals(key)
                 || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)
                 || "ble_device_name".equals(key)
                 || "serial_baud_rate".equals(key)
@@ -356,22 +404,11 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     }
 
     private byte[] formatData(String format, String data) {
-        String formattedString;
-        switch (format) {
-            case "Plain Text":
-                formattedString = "TXT:" + data;
-                break;
-            case "JSON":
-                formattedString = "JSON:" + data;
-                break;
-            case "Custom":
-                formattedString = "CUSTOM:" + data;
-                break;
-            default:
-                formattedString = data;
-                break;
+        String normalizedData = data == null ? "" : data;
+        if ("Plain Text".equals(format)) {
+            normalizedData = normalizedData.trim();
         }
-        return formattedString.getBytes(StandardCharsets.UTF_8);
+        return normalizedData.getBytes(StandardCharsets.UTF_8);
     }
 
     private boolean sendDataToDevice(byte[] data) {
@@ -416,32 +453,38 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         }
 
         String selectedFormat = getSelectedFormat();
-        byte[] formattedData = formatData(selectedFormat, data);
-        if (formattedData.length > MAX_PAYLOAD_BYTES) {
+        String payload = new String(formatData(selectedFormat, data), StandardCharsets.UTF_8);
+        int preparedBytes = AkitaMissionControl.getPreparedMailboxCommandBytes(selectedFormat, payload);
+        if (preparedBytes > MAX_PAYLOAD_BYTES) {
             recordFailedSend();
             Toast.makeText(context, "Payload too large (max " + MAX_PAYLOAD_BYTES + " bytes).", Toast.LENGTH_SHORT).show();
             updatePayloadInsights();
             return;
         }
 
-        if (sendDataToDevice(formattedData)) {
-            recordSuccessfulSend(selectedFormat, formattedData.length);
-            addToCommandHistory(data);
-            dataToSendEditText.getText().clear();
-        } else {
+        missionControl.queueMessage(selectedFormat, payload, connectionMethod);
+        AkitaMissionControl.DispatchBatchResult dispatchResult = flushPendingMailbox(false);
+
+        addToCommandHistory(data);
+        dataToSendEditText.getText().clear();
+        if (dispatchResult.dispatchedCount > 0) {
+            recordSuccessfulSend(selectedFormat, preparedBytes, dispatchResult.lastRoute);
+        } else if (dispatchResult.anyFailures && dispatchResult.queuedCount == 0) {
             recordFailedSend();
         }
+
+        Toast.makeText(context, dispatchResult.summary, Toast.LENGTH_SHORT).show();
         refreshDashboard();
     }
 
-    private void recordSuccessfulSend(String format, int payloadBytes) {
+    private void recordSuccessfulSend(String format, int payloadBytes, String routeUsed) {
         successfulSends++;
         lastSendAt = System.currentTimeMillis();
         lastSendBytes = payloadBytes;
         lastSendFormat = format;
-        lastSendRoute = connectionMethod;
+        lastSendRoute = TextUtils.isEmpty(routeUsed) ? connectionMethod : routeUsed;
 
-        if ("ble".equals(connectionMethod)) {
+        if ("ble".equalsIgnoreCase(lastSendRoute)) {
             bleRouteCount++;
         } else {
             serialRouteCount++;
@@ -470,6 +513,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
 
     private void refreshDashboard() {
         boolean mockModeEnabled = AkitaMockSettings.isEnabled(preferences);
+        AkitaMissionControl.QueueSnapshot mailboxSnapshot = missionControl.getQueueSnapshot(AkitaMissionControl.isAutoFailoverEnabled(preferences));
         String routeLabel = "ble".equals(connectionMethod) ? "BLE" : "Serial";
         routeChip.setText((mockModeEnabled ? "Simulated route: " : "Active route: ") + routeLabel);
         endpointChip.setText(buildEndpointDescription());
@@ -477,11 +521,12 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         operationalSummaryTextView.setText(buildOperationalSummary());
         assuranceSummaryTextView.setText(AkitaOperationalReadiness.getAssuranceSummary(context, isActiveTransportAttached(), mapView != null));
         refreshIncidentBoard();
+        refreshMailboxCard(mailboxSnapshot);
         activeRouteValueTextView.setText(routeLabel);
         long displayLastSendAt = getDisplayLastSendAt();
         lastSendValueTextView.setText(displayLastSendAt > 0 ? formatRelativeTime(displayLastSendAt) : "Never");
-        deliveryRatioValueTextView.setText(buildDeliveryRatio());
-        lastOperationTextView.setText(buildLastOperationText());
+        deliveryRatioValueTextView.setText(buildDeliveryRatio(mailboxSnapshot));
+        lastOperationTextView.setText(buildLastOperationText(mailboxSnapshot));
         historyCaptionTextView.setText(buildHistoryCaption());
 
         setAssuranceStatus(encryptionStatusValueTextView,
@@ -523,22 +568,22 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
 
         payloadBudgetValueTextView.setText(String.format(Locale.US, "%d / %d B", payloadBytes, MAX_PAYLOAD_BYTES));
         if (payloadBytes == 0) {
-            payloadSummaryTextView.setText("Compose a secure message to verify how it fits inside the field radio envelope.");
+            payloadSummaryTextView.setText("Compose a mailbox frame to verify how it fits inside the field radio envelope.");
             payloadMetricsTextView.setText("Draft size: 0 / 512 bytes");
             payloadMetricsTextView.setTextColor(palette.textSecondary);
             return;
         }
 
         if (payloadBytes > MAX_PAYLOAD_BYTES) {
-            payloadSummaryTextView.setText(String.format(Locale.US, "Secure frame exceeds the safe payload ceiling by %d bytes.", payloadBytes - MAX_PAYLOAD_BYTES));
+            payloadSummaryTextView.setText(String.format(Locale.US, "Mailbox frame exceeds the safe payload ceiling by %d bytes.", payloadBytes - MAX_PAYLOAD_BYTES));
         } else if (payloadBytes >= (MAX_PAYLOAD_BYTES * 0.75f)) {
-            payloadSummaryTextView.setText("Secure frame is nearing the radio payload ceiling. Consider trimming before release.");
+            payloadSummaryTextView.setText("Mailbox frame is nearing the radio payload ceiling. Consider trimming before release.");
         } else {
-            payloadSummaryTextView.setText("Secure frame fits comfortably inside the radio payload envelope.");
+            payloadSummaryTextView.setText("Mailbox frame fits comfortably inside the radio payload envelope.");
         }
 
         payloadMetricsTextView.setText(String.format(Locale.US,
-                "Prepared secure frame: %s • %d B • %d B remaining",
+                "Prepared mailbox frame: %s • %d B • %d B remaining",
                 getSelectedFormat(),
                 payloadBytes,
                 remainingBytes));
@@ -550,7 +595,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         if (TextUtils.isEmpty(draft.trim())) {
             return 0;
         }
-        return formatData(getSelectedFormat(), draft).length;
+        String payload = new String(formatData(getSelectedFormat(), draft), StandardCharsets.UTF_8);
+        return AkitaMissionControl.getPreparedMailboxCommandBytes(getSelectedFormat(), payload);
     }
 
     private String getSelectedFormat() {
@@ -707,16 +753,32 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         return profileLabel + " posture is staged on serial route " + portPath + " at " + baudRate + " baud. Waiting for the transport service to attach.";
     }
 
-    private String buildDeliveryRatio() {
-        int attempts = getDisplaySuccessfulSends() + getDisplayFailedSends();
+    private String buildDeliveryRatio(AkitaMissionControl.QueueSnapshot mailboxSnapshot) {
+        int attempts = mailboxSnapshot.deliveredCount + mailboxSnapshot.failedCount;
+        if (attempts <= 0) {
+            attempts = getDisplaySuccessfulSends() + getDisplayFailedSends();
+        }
         if (attempts <= 0) {
             return "Awaiting";
         }
-        int ratio = Math.round((getDisplaySuccessfulSends() * 100f) / attempts);
+        int successes = mailboxSnapshot.deliveredCount > 0 || mailboxSnapshot.failedCount > 0
+                ? mailboxSnapshot.deliveredCount
+                : getDisplaySuccessfulSends();
+        int ratio = Math.round((successes * 100f) / attempts);
         return ratio + "%";
     }
 
-    private String buildLastOperationText() {
+    private String buildLastOperationText(AkitaMissionControl.QueueSnapshot mailboxSnapshot) {
+        if (replayActive && !replayTimeline.isEmpty()) {
+            int currentStep = Math.min(replayIndex, replayTimeline.size());
+            return String.format(Locale.US,
+                    "Digital twin replay active • checkpoint %d of %d.",
+                    currentStep,
+                    replayTimeline.size());
+        }
+        if (mailboxSnapshot.pendingCount > 0 || mailboxSnapshot.inFlightCount > 0) {
+            return mailboxSnapshot.summary;
+        }
         long displayLastSendAt = getDisplayLastSendAt();
         if (displayLastSendAt <= 0) {
             if (failedSends > 0) {
@@ -763,6 +825,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
 
         applyPanel(summaryCard, AkitaTheme.createAccentPanelDrawable(context, palette));
         applyPanel(assuranceCard, AkitaTheme.createPanelDrawable(context, palette, true));
+        applyPanel(mailboxCard, AkitaTheme.createPanelDrawable(context, palette, true));
         applyPanel(incidentBoardCard, AkitaTheme.createPanelDrawable(context, palette, true));
         applyPanel(trendCard, AkitaTheme.createPanelDrawable(context, palette, true));
         applyPanel(formatCard, AkitaTheme.createPanelDrawable(context, palette, true));
@@ -777,6 +840,11 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         applyPanel(assuranceAuditCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(assuranceInteroperabilityCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(assuranceProvisioningCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(mailboxPendingCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(mailboxInFlightCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(mailboxDeliveredCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(mailboxFailoverCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(mailboxReplayCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(incidentTitleCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(incidentRolePackCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(incidentTempoCard, AkitaTheme.createStatTileDrawable(context, palette));
@@ -795,6 +863,10 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         loadTemplateButton.setTextColor(palette.textPrimary);
         loadRoleActionButton.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
         loadRoleActionButton.setTextColor(palette.textPrimary);
+        retryMailboxButton.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+        retryMailboxButton.setTextColor(palette.textPrimary);
+        replayMissionButton.setBackground(AkitaTheme.createAccentButtonDrawable(context, palette));
+        replayMissionButton.setTextColor(palette.white);
 
         dataToSendEditText.setBackground(AkitaTheme.createInputDrawable(context, palette));
         dataToSendEditText.setTextColor(palette.textPrimary);
@@ -820,6 +892,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.dashboard_title,
                 R.id.summary_card_title,
                 R.id.assurance_card_title,
+            R.id.mailbox_card_title,
                 R.id.incident_board_title,
                 R.id.stat_active_route_value,
                 R.id.stat_payload_value,
@@ -829,6 +902,11 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.assurance_audit_value,
                 R.id.assurance_interop_value,
                 R.id.assurance_provisioning_value,
+            R.id.mailbox_pending_value,
+            R.id.mailbox_in_flight_value,
+            R.id.mailbox_delivered_value,
+            R.id.mailbox_failover_value,
+            R.id.mailbox_replay_value,
                 R.id.incident_title_value,
                 R.id.incident_role_pack_value,
                 R.id.incident_tempo_value,
@@ -843,6 +921,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.operational_summary,
                 R.id.payload_summary,
                 R.id.assurance_summary,
+            R.id.mailbox_summary,
                 R.id.incident_board_summary,
                 R.id.last_operation_text,
                 R.id.trend_card_subtitle,
@@ -863,6 +942,11 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.assurance_audit_label,
                 R.id.assurance_interop_label,
                 R.id.assurance_provisioning_label,
+                R.id.mailbox_pending_label,
+                R.id.mailbox_in_flight_label,
+                R.id.mailbox_delivered_label,
+                R.id.mailbox_failover_label,
+                R.id.mailbox_replay_label,
                 R.id.incident_title_label,
                 R.id.incident_role_pack_label,
                 R.id.incident_tempo_label,
@@ -939,6 +1023,128 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
             return "Recent secure commands and interoperable frames will appear here after transmission.";
         }
         return String.format(Locale.US, "%d reusable commands ready for retransmission.", commandHistory.size());
+    }
+
+    private AkitaMissionControl.RouteSender buildRouteSender(boolean mockMode) {
+        return new AkitaMissionControl.RouteSender() {
+            @Override
+            public boolean isRouteAvailable(String route) {
+                if (mockMode) {
+                    return true;
+                }
+                if (AkitaMissionControl.ROUTE_SERIAL.equalsIgnoreCase(route)) {
+                    return serialService != null && serialService.isReadyForTraffic();
+                }
+                return bleService != null && bleService.isReadyForTraffic();
+            }
+
+            @Override
+            public boolean send(String route, byte[] data) {
+                if (mockMode) {
+                    return true;
+                }
+                if (AkitaMissionControl.ROUTE_SERIAL.equalsIgnoreCase(route)) {
+                    return serialService != null && serialService.sendData(data);
+                }
+                return bleService != null && bleService.sendData(data);
+            }
+        };
+    }
+
+    private AkitaMissionControl.DispatchBatchResult flushPendingMailbox(boolean showToast) {
+        boolean mockMode = AkitaMockSettings.isEnabled(preferences);
+        AkitaMissionControl.DispatchBatchResult result = missionControl.dispatchPendingMessages(
+                buildRouteSender(mockMode),
+                AkitaMissionControl.isAutoFailoverEnabled(preferences),
+                mockMode);
+        if (showToast) {
+            Toast.makeText(context, result.summary, Toast.LENGTH_SHORT).show();
+        }
+        return result;
+    }
+
+    private void refreshMailboxCard(AkitaMissionControl.QueueSnapshot snapshot) {
+        mailboxSummaryTextView.setText(replayActive
+                ? String.format(Locale.US, "Digital twin replay is active with %d checkpoint(s) loaded.", replayTimeline.size())
+                : snapshot.summary);
+        mailboxPendingValueTextView.setText(String.valueOf(snapshot.pendingCount));
+        mailboxInFlightValueTextView.setText(String.valueOf(snapshot.inFlightCount));
+        mailboxDeliveredValueTextView.setText(String.valueOf(snapshot.deliveredCount));
+        mailboxFailoverValueTextView.setText(snapshot.failoverSummary);
+        mailboxReplayValueTextView.setText(String.format(Locale.US,
+                "%d checkpoints • %s",
+                snapshot.replayCheckpointCount,
+                snapshot.lastEventSummary));
+
+        boolean hasRetryWork = snapshot.pendingCount > 0 || snapshot.failedCount > 0;
+        retryMailboxButton.setEnabled(hasRetryWork);
+        retryMailboxButton.setAlpha(hasRetryWork ? 1f : 0.65f);
+
+        boolean hasReplayData = replayActive || !missionControl.getReplayableTimeline().isEmpty();
+        replayMissionButton.setEnabled(hasReplayData);
+        replayMissionButton.setAlpha(hasReplayData ? 1f : 0.65f);
+        replayMissionButton.setText(replayActive ? "Stop Replay" : "Replay Last Mission");
+    }
+
+    private void toggleReplay() {
+        if (replayActive) {
+            stopReplay(false);
+            refreshDashboard();
+            return;
+        }
+
+        if (!AkitaMockSettings.isEnabled(preferences)) {
+            Toast.makeText(context, "Enable Mock Transport Mode to rehearse the last mission timeline.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        replayTimeline.clear();
+        replayTimeline.addAll(missionControl.getReplayableTimeline());
+        if (replayTimeline.isEmpty()) {
+            Toast.makeText(context, "No replay checkpoints are available yet.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        replayActive = true;
+        replayIndex = 0;
+        replayHandler.removeCallbacks(replayStepRunnable);
+        advanceReplayStep();
+    }
+
+    private void advanceReplayStep() {
+        if (!replayActive) {
+            return;
+        }
+        if (replayIndex >= replayTimeline.size()) {
+            stopReplay(true);
+            return;
+        }
+
+        AkitaMissionControl.ReplayEvent event = replayTimeline.get(replayIndex);
+        replayIndex++;
+        applyReplayEvent(event);
+        refreshDashboard();
+        replayHandler.postDelayed(replayStepRunnable, REPLAY_STEP_DELAY_MS);
+    }
+
+    private void stopReplay(boolean completed) {
+        replayActive = false;
+        replayHandler.removeCallbacks(replayStepRunnable);
+        if (completed) {
+            Toast.makeText(context, "Mission replay completed.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void applyReplayEvent(AkitaMissionControl.ReplayEvent event) {
+        int formatIndex = dataFormats.indexOf(event.format);
+        if (formatIndex >= 0) {
+            dataFormatSpinner.setSelection(formatIndex, false);
+        }
+        if (!TextUtils.isEmpty(event.payload)) {
+            dataToSendEditText.setText(event.payload);
+            dataToSendEditText.setSelection(event.payload.length());
+        }
+        updatePayloadInsights();
     }
 
     private void applyPanel(View view, android.graphics.drawable.Drawable drawable) {

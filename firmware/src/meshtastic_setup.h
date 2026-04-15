@@ -9,5 +9,6 @@ bool setupMeshtastic();
 void loopMeshtastic();
 String getNodeId(uint32_t from);
 String getLocalNodeId();
+bool sendMailboxPayloadOverMesh(const String& messageId, const String& format, const String& payload);
 
 #endif

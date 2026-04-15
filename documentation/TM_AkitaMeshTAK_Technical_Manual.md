@@ -3,7 +3,7 @@
 ## TECHNICAL MANUAL
 
 **Document Number:** TM-AKITA-MESHTAK-001  
-**Revision:** 1.3  
+**Revision:** 1.4  
 **Date:** 2026-04-14  
 **Classification:** UNCLASSIFIED  
 **Prepared By:** Akita Engineering  
@@ -17,7 +17,7 @@
 |------|-------------|
 | Document Title | Akita MeshTAK System Technical Manual |
 | Document Number | TM-AKITA-MESHTAK-001 |
-| Revision | 1.3 |
+| Revision | 1.4 |
 | Date | 2026-04-14 |
 | Classification | UNCLASSIFIED |
 | Distribution | As Required |
@@ -110,7 +110,7 @@ Users of this manual are responsible for:
 ## 3. SYSTEM DESCRIPTION
 
 ### 3.1 System Overview
-The Akita MeshTAK System is a secure communication and situational awareness platform that integrates Meshtastic mesh networking with the Android Tactical Assault Kit (ATAK). The system enables off-grid communication, location tracking, emergency alerts, and device health monitoring in environments where traditional communication infrastructure is unavailable or compromised.
+The Akita MeshTAK System is a secure communication and situational awareness platform that integrates Meshtastic mesh networking with the Android Tactical Assault Kit (ATAK). The system enables off-grid communication, location tracking, emergency alerts, device health monitoring, guaranteed-delivery mailbox routing, failover preservation between BLE and Serial, and runtime provisioning ceremonies in environments where traditional communication infrastructure is unavailable or compromised.
 
 ### 3.2 System Components
 
@@ -157,15 +157,20 @@ The Akita MeshTAK System is a secure communication and situational awareness pla
        +---> [MQTT Service] <---> [WiFi/MQTT] <---> [Firmware] (Optional)
 ```
 
+Mission Control inside the plugin persists mailbox queue records, replay checkpoints, and failover state before traffic reaches the active bearer. The provisioning manager handles air-gapped bundle generation, local bundle application, and trusted local stage-to-device actions.
+
 #### 3.3.2 Data Flow
 1. **Location Data (CoT)**
    - Meshtastic Network → Firmware → Plugin → ATAK Map
 
-2. **Commands**
-   - ATAK → Plugin → Firmware → Meshtastic Network
+2. **Guaranteed Delivery Mailbox**
+   - ATAK → Plugin mailbox queue → BLE/Serial bearer → Firmware mailbox relay → Meshtastic Network → peer mailbox acknowledgement → Firmware → Plugin dashboard
 
-3. **Status Information**
-   - Firmware → Plugin → ATAK Toolbar
+3. **Provisioning Ceremony**
+   - ATAK Settings → air-gapped bundle generation/apply → trusted local stage command → Firmware runtime security initialization → status returned to Plugin
+
+4. **Status Information**
+   - Firmware → Plugin → ATAK Toolbar and mission dashboard
 
 ### 3.4 Security Architecture
 
@@ -241,6 +246,14 @@ The Akita MeshTAK System is a secure communication and situational awareness pla
   - Spreading Factor: 7-12 (adaptive)
   - Bandwidth: 125 kHz, 250 kHz, 500 kHz
   - Range: 1-10 km (terrain dependent)
+
+- **Mission Mailbox / Provisioning Control**:
+   - Queue command: `CMD:MAILBOX:PUT:<messageId>:<format>:<payload>`
+   - Local relay acknowledgement: `STATUS:MAILBOX:ACK:<messageId>:IN_FLIGHT|FAILED`
+   - Peer delivery acknowledgement: `STATUS:MAILBOX:ACK:<messageId>:DELIVERED:<peerNode>`
+   - Inbound mission traffic: `STATUS:MAILBOX:RX:<originNode>:<messageId>:<format>:<payload>`
+   - Runtime staging command: `CMD:PROV:STAGE:<secret>`
+   - Runtime staging status: `STATUS:PROV:STAGED:<version>:<key-id>` or `STATUS:PROV:FAILED:<version>:<key-id>`
 
 ### 4.2 Android Plugin Specifications
 
@@ -470,13 +483,15 @@ Configure via ATAK settings:
 3. Configure:
    - Connection Method: BLE or Serial
    - Mission Profile: Operational workflow selection
-   - Dashboard Theme: Dark Ops, Light Ops, or Night Red
+   - Dashboard Theme: Dark Ops, Light Ops, Night Red, or Night Green
    - BLE Device Name: Device identifier
    - Serial Baud Rate: 115200 (default)
+   - Auto Bearer Failover: Preserve queued traffic and reroute between BLE/Serial when required
    - Enable Encrypted Transport: Protected transport policy
    - Provisioning Secret: Runtime deployment secret override
-   - Rotate Provisioning Secret / Reload Security State: Security lifecycle controls
-   - Mock Transport Mode: No-hardware rehearsal mode
+   - Air-Gapped Provisioning Bundle: Offline bundle staging field
+   - Rotate Provisioning Secret / Generate Provisioning Bundle / Apply Provisioning Bundle / Stage Secret To Connected Device / Reload Security State: Security lifecycle controls
+   - Mock Transport Mode: No-hardware rehearsal and replay mode
 
 ### 6.3 Security Configuration
 
@@ -489,14 +504,17 @@ Configure via ATAK settings:
 3. Implement key rotation policy (recommended: 90 days)
 
 **Android Plugin**:
-1. Use matching provisioning secret and key-id metadata
+1. Use matching provisioning secret and key-id metadata or prepare an air-gapped provisioning bundle
 2. Store keys in Android Keystore
-3. Implement key rotation policy
+3. Apply staged bundle material locally before live use when required
+4. Use **Stage Secret To Connected Device** only on a trusted local bearer for runtime reprovisioning
+5. Implement key rotation policy
 
 **Encryption Activation (Current Behavior)**:
 - Firmware default: Encryption is enabled (SECURITY_MODE_AES256_HMAC) when provisioning metadata is valid.
 - Android plugin default: Encryption policy is controlled by the `security_encryption_enabled` setting and is enabled unless an operator explicitly disables it.
 - Android plugin provisioning source: The plugin uses the runtime provisioning secret from settings when present, with `Config.PROVISIONING_SECRET` as a fallback.
+- Air-gapped provisioning workflow: The plugin can generate/apply bundle material offline and runtime-stage it to firmware over a trusted local bearer.
 - Mission Assurance: Placeholder provisioning material is surfaced to the operator as a degraded posture even if rehearsal traffic is possible.
 - Firmware and plugin must share matching provisioning secret, envelope version, and key-id.
 - Encrypted payloads with unknown version/key-id are rejected and logged.
@@ -555,12 +573,12 @@ Configure via ATAK settings:
 
 #### 7.2.2 Sending Data
 1. Open "Send Data" view from ATAK menu
-2. Review the operational summary, mission assurance, and incident board cards
+2. Review the operational summary, mission assurance, guaranteed delivery mailbox, and incident board cards
 3. Optionally load a mission playbook or role-pack queue action
 4. Enter message text
 5. Select data format (Plain Text, JSON, Custom)
-6. Tap "Transmit" button
-7. Verify message sent (toast notification)
+6. Tap "Transmit" button to queue the frame for the active bearer
+7. Verify status advances through Pending and In Flight; Delivered indicates a peer mailbox receipt
 
 #### 7.2.3 Receiving Data
 - CoT location data automatically appears on ATAK map
@@ -715,12 +733,14 @@ Maintain maintenance log with:
 1. Command format invalid
 2. Input validation failure
 3. Connection lost during transmission
+4. Peer acknowledgement not yet returned for mailbox traffic
 
 **Corrective Actions**:
-1. Verify command format (see Section 10.2)
+1. Verify command format (see Section 10.1)
 2. Check audit logs for validation errors
 3. Verify connection status
-4. Retry command
+4. Review mailbox Pending / In Flight / Failed state in the dashboard
+5. Retry command or use queue retry after bearer recovery
 
 ### 9.3 Security Issues
 
@@ -801,12 +821,28 @@ CMD:ALERT:SOS
 ```
 **Response**: Alert broadcast on Meshtastic network
 
+**Guaranteed Delivery Mailbox Queue**:
+```
+CMD:MAILBOX:PUT:<messageId>:<format>:<payload>
+```
+**Response**: `STATUS:MAILBOX:ACK:<messageId>:IN_FLIGHT|FAILED` followed by `STATUS:MAILBOX:ACK:<messageId>:DELIVERED:<peerNode>` when a peer mailbox receipt returns. `payload` is percent-escaped (`%25`, `%0D`, `%0A`) to preserve ASCII framing.
+
+**Runtime Provisioning Stage**:
+```
+CMD:PROV:STAGE:<secret>
+```
+**Response**: `STATUS:PROV:STAGED:<version>:<key-id>` or `STATUS:PROV:FAILED:<version>:<key-id>`
+
 #### 10.1.3 Status Responses
-**Format**: `STATUS:<TYPE>:<VALUE>`
+**Format**: `STATUS:<TYPE>:<VALUE...>`
 
 **Types**:
 - `BATT`: Battery percentage (0-100)
 - `VERSION`: Firmware version (X.Y.Z)
+- `MAILBOX:ACK`: Local relay acknowledgement or peer delivery acknowledgement
+- `MAILBOX:RX`: Inbound mission traffic forwarded from the mesh to ATAK
+- `PROV:STAGED`: Runtime provisioning ceremony completed successfully
+- `PROV:FAILED`: Runtime provisioning ceremony failed
 
 ### 10.2 CoT (Cursor on Target) Protocol
 
@@ -998,6 +1034,7 @@ See Section 6 for configuration examples.
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
+| 1.4 | 2026-04-14 | Added guaranteed-delivery mailbox, peer receipt protocol, air-gapped provisioning ceremony, failover controls, replay workflow, and Night Green configuration details | Akita Engineering |
 | 1.3 | 2026-04-14 | Updated runtime provisioning workflow, mission-assurance behavior, mission profile settings, and tactical overlay operation notes | Akita Engineering |
 | 1.2 | 2026-03-13 | Updated Meshtastic library version; fixed APK output path; corrected encryption default state for Android plugin; updated document revision | Akita Engineering |
 | 1.1 | 2026-03-12 | Updated security architecture/specifications to AES-256-GCM and versioned key-id encrypted envelope model | Akita Engineering |

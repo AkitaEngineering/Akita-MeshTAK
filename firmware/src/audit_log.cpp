@@ -58,13 +58,16 @@ void logAuditEvent(AuditEventType event_type, uint8_t severity,
         g_audit_log_count++;
     }
     
-    // Also output to Serial for immediate monitoring (can be disabled in production)
+    // Output to Serial for immediate monitoring – gated so production builds
+    // do not leak operational detail over the debug port.
+#if defined(DEBUG_AUDIT)
     Serial.printf("[AUDIT] T:%lu E:%d S:%d Src:%s Det:%s Res:%s\n",
                    g_audit_log[index].timestamp,
                    event_type, severity,
                    g_audit_log[index].source,
                    g_audit_log[index].details,
                    success ? "OK" : "FAIL");
+#endif
 }
 
 uint32_t getAuditLogCount() {

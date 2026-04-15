@@ -46,12 +46,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 void connectWiFi() {
   Serial.print("Connecting to WiFi...");
-  // SECURITY: WiFi credentials should be stored securely, not hardcoded
-  // In production, use secure storage or provisioning
-  const char* ssid = "your_SSID";     // MUST be replaced with secure storage
-  const char* password = "your_PASSWORD"; // MUST be replaced with secure storage
-  
-  WiFi.begin(ssid, password);
+  WiFi.begin(MQTT_WIFI_SSID, MQTT_WIFI_PASSWORD);
   unsigned long startTime = millis();
   const unsigned long timeout = 30000; // 30 second timeout
   
@@ -71,15 +66,11 @@ void connectWiFi() {
 
 void connectMQTT() {
   Serial.print("Connecting to MQTT...");
-  // SECURITY: MQTT credentials should be stored securely, not hardcoded
-  // In production, use secure storage or certificate-based authentication
-  const char* mqttUser = "MQTT_USERNAME";   // MUST be replaced with secure storage
-  const char* mqttPass = "MQTT_PASSWORD";   // MUST be replaced with secure storage
   
   unsigned long startTime = millis();
   const unsigned long timeout = 30000; // 30 second timeout
   
-  while (!client.connect(DEVICE_ID, mqttUser, mqttPass) && (millis() - startTime) < timeout) {
+  while (!client.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD) && (millis() - startTime) < timeout) {
     Serial.print("failed, rc=");
     Serial.print(client.state());
     Serial.println(" try again in 5 seconds");

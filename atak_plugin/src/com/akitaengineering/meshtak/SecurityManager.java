@@ -8,10 +8,13 @@ import android.util.Log;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.security.spec.KeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -30,9 +33,9 @@ public class SecurityManager {
     
     private SecretKey aesKey;
     private SecretKey hmacKey;
-    private boolean initialized = false;
+    private volatile boolean initialized = false;
     // Default to false to avoid breaking compatibility until a secure handshake/key exchange exists
-    private boolean encryptionEnabled = false;
+    private volatile boolean encryptionEnabled = false;
     
     // Security statistics
     private long messagesEncrypted = 0;
@@ -112,6 +115,11 @@ public class SecurityManager {
             return false;
         }
 
+        if (Config.isPlaceholderSecret() && Config.PROVISIONING_SECRET.equals(sharedSecret)) {
+            Log.w(TAG, "SECURITY WARNING: Provisioning secret is still set to the compile-time placeholder. "
+                    + "Replace Config.PROVISIONING_SECRET before deploying to production.");
+        }
+
         try {
             byte[] aesKeyBytes = deriveKeyMaterial(deviceId, sharedSecret, "aes");
             byte[] hmacKeyBytes = deriveKeyMaterial(deviceId, sharedSecret, "hmac");
@@ -123,9 +131,16 @@ public class SecurityManager {
     }
 
     private byte[] deriveKeyMaterial(String deviceId, String sharedSecret, String purpose) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        String input = sharedSecret + ":" + deviceId + ":" + purpose;
-        return digest.digest(input.getBytes(StandardCharsets.UTF_8));
+        // PBKDF2-HMAC-SHA256 with 100 000 iterations — matches firmware security.cpp.
+        String salt = deviceId + ":" + purpose;
+        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        KeySpec spec = new PBEKeySpec(
+                sharedSecret.toCharArray(),
+                salt.getBytes(StandardCharsets.UTF_8),
+                100000,
+                256);
+        SecretKey derived = factory.generateSecret(spec);
+        return derived.getEncoded();
     }
     
     /**
@@ -139,6 +154,7 @@ public class SecurityManager {
 
         // Compatibility: if encryption is not enabled, return plaintext copy
         if (!encryptionEnabled) {
+            Log.w(TAG, "Encryption disabled – returning plaintext copy");
             byte[] copy = Arrays.copyOf(plaintext, plaintext.length);
             return copy;
         }
@@ -177,6 +193,7 @@ public class SecurityManager {
 
         // Compatibility: if encryption is not enabled, return ciphertext copy
         if (!encryptionEnabled) {
+            Log.w(TAG, "Encryption disabled – returning data without decryption");
             byte[] copy = Arrays.copyOf(ciphertext, ciphertext.length);
             return copy;
         }

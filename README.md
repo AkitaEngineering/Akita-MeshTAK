@@ -20,7 +20,7 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 
 - **Firmware**: You must set the correct UUIDs in `firmware/src/config.h`.  
 - **ATAK Plugin**: You must edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java` and fill in the placeholder UUIDs and USB IDs to match your firmware and hardware.  
-- **Provisioning Secret**: The plugin can now use a runtime provisioning secret from **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**. If you do not provide one there, the plugin falls back to `Config.PROVISIONING_SECRET`. A placeholder secret is acceptable for rehearsal only and is not deployment-ready.  
+- **Provisioning Secret**: The plugin can now use a runtime provisioning secret from **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**. If you do not provide one there, the plugin falls back to `Config.PROVISIONING_SECRET`. Operators can also generate an air-gapped provisioning bundle, apply it locally, and stage the active secret to a connected device over a trusted local bearer. A placeholder secret is acceptable for rehearsal only and is not deployment-ready.  
 
 ---
 
@@ -33,10 +33,14 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 - **Device Health Monitoring**: Displays the battery percentage of the connected Meshtastic device directly in the ATAK toolbar.  
 - **Mission Profiles**: Tailor the workflow for Search and Rescue, Law Enforcement, Coast Guard, Military, or Private Security operations.  
 - **Mission Assurance Dashboard**: Surface encryption, audit, interoperability, and provisioning posture before release of field traffic.  
+- **Guaranteed Delivery Mailbox**: Queue mission traffic until a bearer is available, transition frames to `IN_FLIGHT` when the radio accepts them, and close delivery only when a peer mailbox receipt returns across the mesh.  
+- **Bearer Failover With Queue Preservation**: Preserve queued traffic and reroute between BLE and Serial when the preferred bearer is unavailable.  
+- **Air-Gapped Provisioning Ceremony**: Generate and apply offline provisioning bundles, then runtime-stage the active secret to a connected device over a trusted local route.  
+- **Mission Replay and Digital Twin**: Rehearse the last mailbox timeline in Mock Transport Mode, including queued frames, peer acknowledgements, and provisioning events.  
 - **Incident Board and Role Packs**: Queue profile-specific quick actions and mission playbooks directly into the secure composer.  
 - **Tactical ATAK Map Layer**: Adds route-health context, mission geofences, search sectors, and stale-marker callouts directly to the ATAK map.  
-- **Operational Themes**: Dark Ops, Light Ops, and strict monochrome Night Red modes are available for different field environments.  
-- **No-Hardware Rehearsal Mode**: Mock transport mode and the static UI preview allow workflow validation without a radio on hand.  
+- **Operational Themes**: Dark Ops, Light Ops, strict monochrome Night Red, and strict monochrome Night Green modes are available for different field environments.  
+- **No-Hardware Rehearsal Mode**: Mock transport mode, mission replay, and the static UI preview allow workflow validation without a radio on hand.  
 
 **Versatile Connectivity Options**:
 - Bluetooth Low Energy (BLE)  
@@ -45,8 +49,10 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 
 **Intuitive Data Management**:
 - Data Format Selection (Plain Text, JSON, Custom)  
+- Guaranteed-delivery mailbox queue with Pending / In Flight / Delivered states  
 - Command History for frequently sent messages  
 - Mission playbook templates and role-pack quick actions  
+- Rapid reuse plus replay checkpoints for mock-mode digital twin rehearsal  
 
 **Enhanced Situational Awareness**:
 - Clear connection status in the toolbar and on the map  
@@ -54,6 +60,7 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 
 **Security and Accountability**:
 - Preference-backed provisioning secret management with build-time fallback  
+- Air-gapped provisioning bundle generation/apply plus trusted local stage-to-device workflow  
 - Encrypted transport enable/disable control from settings  
 - Audit log export and security state reload actions  
 
@@ -105,4 +112,3 @@ See the LICENSE and COPYING files for the full license text.
 - **Website**: [www.akitaengineering.com](http://www.akitaengineering.com)
 - **Support**: support@akitaengineering.com
 - **Security**: security@akitaengineering.com
-```

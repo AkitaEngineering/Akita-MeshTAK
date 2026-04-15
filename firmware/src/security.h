@@ -38,6 +38,9 @@ typedef struct {
 // Keys should be provisioned securely during device setup
 bool initSecurity(const uint8_t* aes_key, const uint8_t* hmac_key, uint8_t security_mode);
 
+// Initialize security module from runtime provisioning material.
+bool initSecurityFromProvisioning(const String& deviceId, const String& sharedSecret);
+
 // Encrypt data with AES-256-GCM
 // Returns encrypted data length, or 0 on error
 size_t encryptData(const uint8_t* plaintext, size_t plaintext_len, 

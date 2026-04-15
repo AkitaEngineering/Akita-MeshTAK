@@ -664,7 +664,7 @@
         <p>Static no-hardware mockup of the secure, interoperable toolbar and dashboard.</p>
       </div>
       <div class="controls">
-        <span class="pill">Mission profiles, assurance telemetry, Night Red and Night Green monochrome</span>
+        <span class="pill">Mission profiles, mailbox receipts, provisioning ceremony, Night Red and Night Green monochrome</span>
         <select id="themeModeSelect" class="mode-select" aria-label="Theme mode">
           <option value="dark" selected>Dark Ops</option>
           <option value="light">Light Ops</option>
@@ -690,7 +690,7 @@
 
         <div class="row">
           <div class="stack"><strong>Profile: Search &amp; Rescue</strong></div>
-          <div class="stack"><strong style="color: var(--danger);">Security: Rotate deployment secret</strong></div>
+          <div class="stack"><strong style="color: var(--warning);">Security: Bundle staged • device apply pending</strong></div>
         </div>
 
         <div class="row">
@@ -700,7 +700,7 @@
 
         <div class="row">
           <div class="stack"><strong style="color: var(--success);">Battery: 78% • Mission ready</strong></div>
-          <div class="stack"><strong style="color: var(--success);">Secure link: Mission ready</strong></div>
+          <div class="stack"><strong style="color: var(--success);">Secure link: Mailbox armed</strong></div>
         </div>
 
         <button class="danger">Send SOS</button>
@@ -710,7 +710,7 @@
         <div class="dashboard-head">
           <div>
             <h2>Mission Link Console</h2>
-            <p>Encrypted link posture, payload budget, and interoperable mission traffic.</p>
+            <p>Mailbox delivery, payload budget, and interoperable mission traffic.</p>
           </div>
           <span class="badge" id="dashThemeBadge">Dark Ops</span>
         </div>
@@ -724,7 +724,7 @@
         <div class="dashboard-body">
           <section class="summary">
             <h3>Operational Summary</h3>
-            <p class="summary-copy">Search &amp; Rescue posture is armed over BLE for AkitaNode01. Secure ATAK and partner traffic will route over the mesh radio for search grids, casualty updates, and extraction coordination.</p>
+            <p class="summary-copy">Search &amp; Rescue posture is armed over BLE for AkitaNode01. Traffic queues inside the guaranteed-delivery mailbox, reroutes with failover if Serial is the only live bearer, and closes only after a peer receipt comes back across the mesh.</p>
 
             <div class="stats">
               <div class="stat">
@@ -737,22 +737,22 @@
               </div>
               <div class="stat">
                 <label>Last Send</label>
-                <strong>2m ago</strong>
+                <strong>43s ago</strong>
               </div>
               <div class="stat">
-                <label>Delivery Ratio</label>
-                <strong>92%</strong>
+                <label>Peer Receipt Ratio</label>
+                <strong>96%</strong>
               </div>
             </div>
 
-            <p class="mini-copy">Secure frame fits comfortably inside the radio payload envelope.</p>
+            <p class="mini-copy">Prepared mailbox frame fits comfortably inside the radio payload envelope.</p>
             <div class="progress"><span></span></div>
-            <p class="mini-copy">Last secure transmission: JSON • 318 B via BLE • 2m ago.</p>
+            <p class="mini-copy">Last mailbox relay: JSON • 318 B via BLE • peer receipt from 7A91C2B4 • 43s ago.</p>
           </section>
 
           <section class="card">
             <h3>Mission Assurance</h3>
-            <p class="section-subtitle">Search &amp; Rescue workflows are rehearsable, but the deployment secret is still placeholder material. Rotate provisioning before field use.</p>
+            <p class="section-subtitle">Search &amp; Rescue workflows can rotate secrets offline with an air-gapped bundle, then stage the active secret onto a connected device during a trusted local provisioning ceremony.</p>
 
             <div class="stats">
               <div class="stat">
@@ -769,14 +769,48 @@
               </div>
               <div class="stat">
                 <label>Provisioning</label>
-                <strong style="font-size:18px;color: var(--danger);">Rotate deployment secret</strong>
+                <strong style="font-size:18px;color: var(--warning);">Bundle staged • stage device next</strong>
               </div>
             </div>
 
             <div class="action-row">
               <button class="secondary-button">Rotate Secret</button>
+              <button class="secondary-button">Generate Bundle</button>
+              <button class="secondary-button">Apply Bundle</button>
+              <button class="secondary-button">Stage Device</button>
               <button class="secondary-button">Export Audit</button>
               <button class="secondary-button">Reload Security</button>
+            </div>
+          </section>
+
+          <section class="card">
+            <h3>Guaranteed Delivery Mailbox</h3>
+            <p class="section-subtitle">The selected bearer writes locally first, returns IN_FLIGHT once the radio accepts the frame, and closes DELIVERED only after a peer mailbox acknowledgement returns over the mesh.</p>
+
+            <div class="stats">
+              <div class="stat">
+                <label>Pending</label>
+                <strong style="font-size:18px;">1</strong>
+              </div>
+              <div class="stat">
+                <label>In Flight</label>
+                <strong style="font-size:18px;">2</strong>
+              </div>
+              <div class="stat">
+                <label>Delivered</label>
+                <strong style="font-size:18px;">17</strong>
+              </div>
+              <div class="stat">
+                <label>Replay</label>
+                <strong style="font-size:18px;">14 checkpoints</strong>
+              </div>
+            </div>
+
+            <p class="field-note">Auto failover is armed. Last peer receipt closed MSGD41A72B from node 7A91C2B4 after the queue preserved the frame.</p>
+
+            <div class="action-row">
+              <button class="secondary-button">Retry Queue</button>
+              <button class="secondary-button">Replay Last Mission</button>
             </div>
           </section>
 
@@ -832,7 +866,7 @@
                   <strong style="font-size:18px;">Prepare extraction update</strong>
                 </div>
               </div>
-              <p class="field-note">Queue SAR Field Team actions into the secure composer.</p>
+              <p class="field-note">Queue SAR Field Team actions into the guaranteed-delivery composer.</p>
               <div class="playbook-row">
                 <select class="select">
                   <option>Extraction Update</option>
@@ -889,9 +923,9 @@
           <div class="two-col">
             <section class="card">
               <h3>Transmit Payload</h3>
-              <p class="section-subtitle">Prepare a secure frame and verify payload budget before release.</p>
+              <p class="section-subtitle">Prepare a mailbox frame and verify payload budget before release.</p>
               <div class="form-grid" style="margin-top:14px;">
-                <p class="field-note">Playbooks emphasize search progress, medical updates, and extraction coordination.</p>
+                <p class="field-note">Playbooks emphasize search progress, medical updates, and extraction coordination. The send action queues first, then dispatches when a bearer is ready.</p>
                 <div class="playbook-row">
                   <select class="select">
                     <option>Team Spot Report</option>
@@ -906,28 +940,28 @@
                   <option>Custom</option>
                 </select>
                 <textarea class="textarea">{"type":"spotrep","grid":"11U PU 34567 89012","priority":"routine","summary":"Unit check-in and route status normal."}</textarea>
-                <div class="field-note">Prepared secure frame: JSON • 318 B • 194 B remaining</div>
-                <button class="tx-button">Transmit</button>
+                <div class="field-note">Prepared mailbox frame: JSON • 318 B • 194 B remaining</div>
+                <button class="tx-button">Queue + Transmit</button>
               </div>
             </section>
 
             <section class="history-card">
               <h3>Rapid Reuse</h3>
-              <p class="section-subtitle">Recent secure commands and interoperable frames will appear here after transmission.</p>
+              <p class="section-subtitle">Recent mailbox frames, peer receipts, and provisioning checkpoints will appear here after transmission.</p>
               <select class="history-select" style="margin-top:14px;">
                 <option>Reuse a recent command</option>
                 <option>ATAK Test Message!</option>
                 <option>{"type":"spotrep","priority":"routine"}</option>
                 <option>CUSTOM:REQUEST_STATUS</option>
               </select>
-              <p class="hint" style="margin-top:14px;">3 reusable commands ready for retransmission.</p>
+              <p class="hint" style="margin-top:14px;">3 reusable commands and 14 replay checkpoints are ready for rehearsal.</p>
             </section>
           </div>
         </div>
       </section>
     </div>
 
-    <p class="preview-note">This preview is a visual approximation of the implemented plugin UI, not a live ATAK render. The plugin now combines ATAK-native tactical overlays, provisioning workflow, incident boards, and secure mission command before device testing.</p>
+    <p class="preview-note">This preview is a visual approximation of the implemented plugin UI, not a live ATAK render. The plugin now combines ATAK-native tactical overlays, guaranteed-delivery mailbox routing, provisioning ceremony controls, incident boards, and mission replay before device testing.</p>
   </div>
 
   <script>

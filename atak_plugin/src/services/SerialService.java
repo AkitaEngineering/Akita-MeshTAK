@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
@@ -21,6 +22,7 @@ import com.atakmap.api.CotPoint;
 import com.atakmap.api.Point2;
 import com.atakmap.api.map.MapItem;
 import com.atakmap.api.map.Marker;
+import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.driver.UsbSerialProber;
@@ -358,6 +360,10 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             auditLogger.log(AuditLogger.EventType.DATA_RECEIVED, AuditLogger.Severity.INFO,
                            "Serial", "Data received, len: " + data.length, true);
         }
+
+        if (AkitaMissionControl.getInstance(getApplicationContext()).consumeIncomingStatus(decodedPayload, AkitaMissionControl.ROUTE_SERIAL)) {
+            return;
+        }
         
         processCotData(decodedPayload);
     }
@@ -430,7 +436,19 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         sendData((Config.CMD_ALERT_SOS + "\n").getBytes());
     }
     
-    public void sendData(byte[] data) {
+    public boolean sendPlaintextData(byte[] data) {
+        return sendData(data, true);
+    }
+
+    public boolean isReadyForTraffic() {
+        return serialPort != null && serialPort.isOpen();
+    }
+
+    public boolean sendData(byte[] data) {
+        return sendData(data, false);
+    }
+
+    public boolean sendData(byte[] data, boolean forcePlaintext) {
         if (serialPort == null || !serialPort.isOpen()) {
             Log.w(TAG, "Serial port not open, cannot send data.");
             updateStatus("Error: Serial port not open");
@@ -438,7 +456,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                 auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.WARNING,
                                "Serial", "Send failed - port not open", false);
             }
-            return;
+            return false;
         }
         
         // Input validation
@@ -447,18 +465,18 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                 auditLogger.log(AuditLogger.EventType.SECURITY_VIOLATION, AuditLogger.Severity.WARNING,
                                "Serial", "Invalid data length: " + (data != null ? data.length : 0), false);
             }
-            return;
+            return false;
         }
         
         // Optional: Encrypt data if security is enabled; default is plaintext for compatibility
         byte[] dataToSend = data;
-        if (securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
+        if (!forcePlaintext && securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
             String encryptedEnvelope = encodeEncryptedPayload(data);
             if (encryptedEnvelope != null) {
                 dataToSend = encryptedEnvelope.getBytes(StandardCharsets.UTF_8);
             } else {
                 Log.w(TAG, "Encryption failed, aborting send");
-                return;
+                return false;
             }
         }
         
@@ -475,6 +493,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                 auditLogger.log(AuditLogger.EventType.DATA_SENT, AuditLogger.Severity.INFO,
                                "Serial", "Data sent, len: " + data.length, true);
             }
+            return true;
         } catch (IOException e) {
             Log.e(TAG, "Error sending data via serial: " + e.getMessage(), e);
             updateStatus("Error sending data: " + e.getMessage());
@@ -482,6 +501,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                 auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
                                "Serial", "Send error: " + e.getMessage(), false);
             }
+            return false;
         }
     }
     

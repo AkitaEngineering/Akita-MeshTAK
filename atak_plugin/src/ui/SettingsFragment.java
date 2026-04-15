@@ -22,6 +22,7 @@ import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 
 import com.atakmap.android.maps.MapView;
+import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.R;
 import com.akitaengineering.meshtak.services.BLEService;
@@ -86,9 +87,14 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         ListPreference connectionMethodPref = findPreference("connection_method");
         ListPreference uiThemePref = findPreference(AkitaTheme.PREF_UI_THEME);
         ListPreference missionProfilePref = findPreference(AkitaMissionProfile.PREF_MISSION_PROFILE);
+        SwitchPreferenceCompat autoFailoverPref = findPreference(AkitaMissionControl.PREF_AUTO_FAILOVER);
         SwitchPreferenceCompat encryptionEnabledPref = findPreference(AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED);
         EditTextPreference provisioningSecretPref = findPreference(AkitaProvisioningManager.PREF_PROVISIONING_SECRET);
         Preference rotateSecretPref = findPreference("security_rotate_secret");
+        EditTextPreference provisioningBundlePref = findPreference(AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE);
+        Preference generateBundlePref = findPreference("security_generate_bundle");
+        Preference applyBundlePref = findPreference("security_apply_bundle");
+        Preference stageDevicePref = findPreference("security_stage_device");
         Preference exportAuditPref = findPreference("security_export_audit");
         Preference reloadSecurityPref = findPreference("security_reload_state");
         Preference mockModePref = findPreference(AkitaMockSettings.PREF_MOCK_MODE);
@@ -107,11 +113,14 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         if (uiThemePref != null) uiThemePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
         if (missionProfilePref != null) missionProfilePref.setOnPreferenceChangeListener(this);
         if (missionProfilePref != null) missionProfilePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (autoFailoverPref != null) autoFailoverPref.setOnPreferenceChangeListener(this);
         if (encryptionEnabledPref != null) encryptionEnabledPref.setOnPreferenceChangeListener(this);
         if (provisioningSecretPref != null) provisioningSecretPref.setOnPreferenceChangeListener(this);
         if (provisioningSecretPref != null) provisioningSecretPref.setSummary(AkitaProvisioningManager.getProvisioningSummary(requireContext()));
         if (provisioningSecretPref != null) provisioningSecretPref.setOnBindEditTextListener(editText ->
             editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD));
+        if (provisioningBundlePref != null) provisioningBundlePref.setOnPreferenceChangeListener(this);
+        if (provisioningBundlePref != null) provisioningBundlePref.setSummary(AkitaProvisioningManager.getProvisioningBundleSummary(requireContext()));
         if (mockModePref != null) mockModePref.setOnPreferenceChangeListener(this);
         if (mockBleStatusPref != null) mockBleStatusPref.setOnPreferenceChangeListener(this);
         if (mockBleStatusPref != null) mockBleStatusPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
@@ -137,6 +146,35 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                 refreshProvisioningPreferenceSummaries();
                 reloadBoundServiceSecurity();
                 Toast.makeText(getActivity(), "Provisioning secret rotated: " + AkitaProvisioningManager.maskSecret(rotatedSecret), Toast.LENGTH_SHORT).show();
+                return true;
+            });
+        }
+        if (generateBundlePref != null) {
+            generateBundlePref.setOnPreferenceClickListener(preference -> {
+                String deviceAlias = PreferenceManager.getDefaultSharedPreferences(requireContext())
+                        .getString("ble_device_name", "AkitaNode01");
+                AkitaProvisioningManager.createProvisioningBundle(requireContext(), deviceAlias);
+                refreshProvisioningPreferenceSummaries();
+                Toast.makeText(getActivity(), "Provisioning bundle refreshed for " + deviceAlias + ".", Toast.LENGTH_SHORT).show();
+                return true;
+            });
+        }
+        if (applyBundlePref != null) {
+            applyBundlePref.setOnPreferenceClickListener(preference -> {
+                try {
+                    AkitaProvisioningManager.ProvisioningBundle bundle = AkitaProvisioningManager.applyProvisioningBundle(requireContext());
+                    refreshProvisioningPreferenceSummaries();
+                    reloadBoundServiceSecurity();
+                    Toast.makeText(getActivity(), "Provisioning bundle applied for " + bundle.deviceAlias + ".", Toast.LENGTH_SHORT).show();
+                } catch (IllegalArgumentException exception) {
+                    Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+                return true;
+            });
+        }
+        if (stageDevicePref != null) {
+            stageDevicePref.setOnPreferenceClickListener(preference -> {
+                stageProvisioningToDevice();
                 return true;
             });
         }
@@ -224,35 +262,45 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
     
     private void sendTestMessageToDevice() {
         String testMessage = "ATAK Test Message!";
-        if (getActivity() != null && AkitaMockSettings.isEnabled(PreferenceManager.getDefaultSharedPreferences(getActivity()))) {
-            String mockRoute = PreferenceManager.getDefaultSharedPreferences(getActivity())
-                    .getString("connection_method", "ble")
-                    .toUpperCase();
-            Toast.makeText(getActivity(), "Simulated via " + mockRoute + ": " + testMessage, Toast.LENGTH_SHORT).show();
+        if (getActivity() == null) {
             return;
         }
-        String connectionMethod = PreferenceManager.getDefaultSharedPreferences(getActivity())
-                .getString("connection_method", "ble");
 
-        if (connectionMethod.equals("ble") && bleService != null) {
-            bleService.sendData(testMessage.getBytes());
-            Toast.makeText(getActivity(), "Sent via BLE: " + testMessage, Toast.LENGTH_SHORT).show();
-        } else if (connectionMethod.equals("serial") && serialService != null) {
-            serialService.sendData(testMessage.getBytes());
-            Toast.makeText(getActivity(), "Sent via Serial: " + testMessage, Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(getActivity(), "Not connected or connection method not selected.", Toast.LENGTH_SHORT).show();
-        }
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+        String connectionMethod = preferences.getString("connection_method", "ble");
+        AkitaMissionControl missionControl = AkitaMissionControl.getInstance(requireContext());
+        missionControl.queueMessage("Plain Text", testMessage, connectionMethod);
+        AkitaMissionControl.DispatchBatchResult result = missionControl.dispatchPendingMessages(
+                buildRouteSender(AkitaMockSettings.isEnabled(preferences)),
+                AkitaMissionControl.isAutoFailoverEnabled(preferences),
+                AkitaMockSettings.isEnabled(preferences));
+        Toast.makeText(getActivity(), result.summary, Toast.LENGTH_SHORT).show();
     }
 
     private void refreshProvisioningPreferenceSummaries() {
         EditTextPreference provisioningSecretPref = findPreference(AkitaProvisioningManager.PREF_PROVISIONING_SECRET);
+        EditTextPreference provisioningBundlePref = findPreference(AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE);
         Preference rotateSecretPref = findPreference("security_rotate_secret");
+        Preference generateBundlePref = findPreference("security_generate_bundle");
+        Preference applyBundlePref = findPreference("security_apply_bundle");
+        Preference stageDevicePref = findPreference("security_stage_device");
         if (provisioningSecretPref != null && getContext() != null) {
             provisioningSecretPref.setSummary(AkitaProvisioningManager.getProvisioningSummary(getContext()));
         }
+        if (provisioningBundlePref != null && getContext() != null) {
+            provisioningBundlePref.setSummary(AkitaProvisioningManager.getProvisioningBundleSummary(getContext()));
+        }
         if (rotateSecretPref != null && getContext() != null) {
             rotateSecretPref.setSummary(AkitaProvisioningManager.getRotationSummary(getContext()));
+        }
+        if (generateBundlePref != null) {
+            generateBundlePref.setSummary("Refresh an offline provisioning bundle from the active plugin secret.");
+        }
+        if (applyBundlePref != null) {
+            applyBundlePref.setSummary("Apply the staged air-gapped bundle to the plugin security profile.");
+        }
+        if (stageDevicePref != null) {
+            stageDevicePref.setSummary("Send the staged or active secret to the connected device in plaintext for runtime reprovisioning.");
         }
     }
 
@@ -268,9 +316,13 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
     @Override
     public void onSharedPreferenceChanged(android.content.SharedPreferences sharedPreferences, String key) {
         if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
-                || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)) {
+                || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)
+                || AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE.equals(key)) {
             refreshProvisioningPreferenceSummaries();
-            new Handler(Looper.getMainLooper()).post(this::reloadBoundServiceSecurity);
+            if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
+                    || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)) {
+                new Handler(Looper.getMainLooper()).post(this::reloadBoundServiceSecurity);
+            }
         }
     }
 
@@ -295,6 +347,16 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                 Toast.makeText(getActivity(), "Provisioning secret must be at least 12 characters or left blank to use the build-time secret.", Toast.LENGTH_SHORT).show();
                 return false;
             }
+        } else if (AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE.equals(key)) {
+            String bundle = String.valueOf(newValue).trim();
+            if (!bundle.isEmpty()) {
+                try {
+                    AkitaProvisioningManager.previewProvisioningBundle(bundle);
+                } catch (IllegalArgumentException exception) {
+                    Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+            }
         } else if (AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)) {
             try {
                 int batteryLevel = Integer.parseInt(String.valueOf(newValue));
@@ -311,5 +373,83 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
             bleService.setTargetDeviceName((String) newValue);
         }
         return true;
+    }
+
+    private void stageProvisioningToDevice() {
+        if (getActivity() == null) {
+            return;
+        }
+
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+        boolean mockMode = AkitaMockSettings.isEnabled(preferences);
+        String connectionMethod = preferences.getString("connection_method", "ble");
+        String command;
+        try {
+            command = AkitaProvisioningManager.buildProvisioningStageCommand(requireContext());
+        } catch (IllegalArgumentException exception) {
+            Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (mockMode) {
+            AkitaMissionControl.getInstance(requireContext()).recordProvisioningEvent(
+                    "PROVISIONING_STAGED",
+                    "Mock runtime provisioning staged over " + AkitaMissionControl.routeLabel(connectionMethod),
+                    AkitaMissionControl.ROUTE_MOCK);
+            Toast.makeText(getActivity(), "Simulated runtime provisioning staged.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        boolean success = sendPlaintextToPreferredRoute(connectionMethod, command.getBytes());
+        if (success) {
+            AkitaMissionControl.getInstance(requireContext()).recordProvisioningEvent(
+                    "PROVISIONING_STAGE_REQUESTED",
+                    "Plaintext staging command sent over " + AkitaMissionControl.routeLabel(connectionMethod),
+                    connectionMethod);
+            Toast.makeText(getActivity(), "Provisioning stage command sent. Apply the bundle locally if needed.", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(getActivity(), "No connected bearer available for provisioning stage.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private AkitaMissionControl.RouteSender buildRouteSender(boolean mockMode) {
+        return new AkitaMissionControl.RouteSender() {
+            @Override
+            public boolean isRouteAvailable(String route) {
+                if (mockMode) {
+                    return true;
+                }
+                if (AkitaMissionControl.ROUTE_SERIAL.equalsIgnoreCase(route)) {
+                    return serialService != null && serialService.isReadyForTraffic();
+                }
+                return bleService != null && bleService.isReadyForTraffic();
+            }
+
+            @Override
+            public boolean send(String route, byte[] data) {
+                if (mockMode) {
+                    return true;
+                }
+                if (AkitaMissionControl.ROUTE_SERIAL.equalsIgnoreCase(route)) {
+                    return serialService != null && serialService.sendData(data);
+                }
+                return bleService != null && bleService.sendData(data);
+            }
+        };
+    }
+
+    private boolean sendPlaintextToPreferredRoute(String preferredRoute, byte[] data) {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(requireContext());
+        boolean autoFailover = AkitaMissionControl.isAutoFailoverEnabled(preferences);
+        if (AkitaMissionControl.ROUTE_SERIAL.equalsIgnoreCase(preferredRoute)) {
+            if (serialService != null && serialService.isReadyForTraffic() && serialService.sendPlaintextData(data)) {
+                return true;
+            }
+            return autoFailover && bleService != null && bleService.isReadyForTraffic() && bleService.sendPlaintextData(data);
+        }
+        if (bleService != null && bleService.isReadyForTraffic() && bleService.sendPlaintextData(data)) {
+            return true;
+        }
+        return autoFailover && serialService != null && serialService.isReadyForTraffic() && serialService.sendPlaintextData(data);
     }
 }

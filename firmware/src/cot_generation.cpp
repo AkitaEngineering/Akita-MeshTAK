@@ -24,13 +24,28 @@ String generateLocationCoT(const String& deviceId, float latitude, float longitu
   String safeDeviceId = escapeXmlAttribute(deviceId);
   String uniqueId = safeDeviceId + "_" + String(millis()) + "_" + String(uidCounter++);
 
-  String cot = "<event version='2.0' type='a-f-G-U-U'>";
-  cot += "<uid generator='" + safeDeviceId + "' uniqueid='" + uniqueId + "'/>";
-  cot += "<point lat='" + String(latitude, 7) + "' lon='" + String(longitude, 7) + "' hae='" + String(altitude, 2) + "' ce='10' le='10'/>";
-  cot += "<detail>";
-  cot += "<contact callsign='" + safeDeviceId + "'/>";
-  cot += "<precisionlocation geopointsrc='GPS'/>";
-  cot += "</detail>";
-  cot += "</event>";
-  return cot;
+  // Use a fixed buffer with snprintf to avoid heap fragmentation from repeated
+  // String += concatenation on the ESP32's constrained heap.
+  char buf[512];
+  int n = snprintf(buf, sizeof(buf),
+      "<event version='2.0' type='a-f-G-U-U'>"
+      "<uid generator='%s' uniqueid='%s'/>"
+      "<point lat='%.7f' lon='%.7f' hae='%.2f' ce='10' le='10'/>"
+      "<detail>"
+      "<contact callsign='%s'/>"
+      "<precisionlocation geopointsrc='GPS'/>"
+      "</detail>"
+      "</event>",
+      safeDeviceId.c_str(),
+      uniqueId.c_str(),
+      (double)latitude,
+      (double)longitude,
+      (double)altitude,
+      safeDeviceId.c_str());
+
+  if (n < 0 || n >= (int)sizeof(buf)) {
+    // Truncated — return whatever fits.
+    buf[sizeof(buf) - 1] = '\0';
+  }
+  return String(buf);
 }

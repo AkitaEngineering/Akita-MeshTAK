@@ -8,7 +8,7 @@
 #include <Arduino.h>
 
 // Maximum lengths
-#define MAX_COMMAND_LENGTH 256
+#define MAX_COMMAND_LENGTH 512
 #define MAX_DEVICE_ID_LENGTH 64
 #define MAX_CALLSIGN_LENGTH 32
 #define MAX_MESSAGE_LENGTH 512

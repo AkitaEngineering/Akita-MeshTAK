@@ -11,6 +11,8 @@
 #include "audit_log.h"        // For audit logging
 #include "security.h"         // For security initialization
 #include <mbedtls/sha256.h>
+#include <mbedtls/pkcs5.h>
+#include <mbedtls/md.h>
 #include <string.h>
 
 void setupConfig() {
@@ -18,10 +20,23 @@ void setupConfig() {
 }
 
 static void deriveProvisionedKey(const char* purpose, uint8_t* outKey, size_t outLen) {
-  String material = String(PROVISIONING_SECRET) + ":" + String(DEVICE_ID) + ":" + String(purpose);
-  uint8_t hash[32] = {0};
-  mbedtls_sha256(reinterpret_cast<const unsigned char*>(material.c_str()), material.length(), hash, 0);
-  memcpy(outKey, hash, outLen);
+  // Build salt from deviceId + purpose so each derived key is unique.
+  String salt = String(DEVICE_ID) + ":" + String(purpose);
+
+  // PBKDF2-HMAC-SHA256, 100 000 iterations – matches security.cpp.
+  mbedtls_pkcs5_hmac_ext(
+      MBEDTLS_MD_SHA256,
+      reinterpret_cast<const unsigned char*>(PROVISIONING_SECRET),
+      strlen(PROVISIONING_SECRET),
+      reinterpret_cast<const unsigned char*>(salt.c_str()),
+      salt.length(),
+      100000,
+      outLen,
+      outKey);
+
+  for (unsigned int i = 0; i < salt.length(); i++) {
+    salt.setCharAt(i, '\0');
+  }
 }
 
 void setup() {

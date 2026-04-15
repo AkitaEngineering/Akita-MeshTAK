@@ -3,7 +3,7 @@
 ## OPERATOR'S MANUAL
 
 **Document Number:** OM-AKITA-MESHTAK-001  
-**Revision:** 1.3  
+**Revision:** 1.4  
 **Date:** 2026-04-14  
 **Classification:** UNCLASSIFIED  
 **Prepared By:** Akita Engineering  
@@ -17,7 +17,7 @@
 |------|-------------|
 | Document Title | Akita MeshTAK System Operator's Manual |
 | Document Number | OM-AKITA-MESHTAK-001 |
-| Revision | 1.3 |
+| Revision | 1.4 |
 | Date | 2026-04-14 |
 | Classification | UNCLASSIFIED |
 | Distribution | As Required |
@@ -77,9 +77,13 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 - **Secure Communication**: Encrypted and authenticated
 - **Mission Profiles**: Adjust workflow for SAR, law enforcement, coast guard, military, or private security
 - **Mission Assurance**: Surface encryption, audit, interoperability, and provisioning posture before transmission
+- **Guaranteed Delivery Mailbox**: Preserve queued frames, show `IN_FLIGHT` vs peer-delivered state, and support queue retry
+- **Bearer Failover**: Preserve queued traffic while rerouting between BLE and Serial when required
+- **Air-Gapped Provisioning Ceremony**: Generate, apply, and stage offline provisioning bundles during trusted local access
+- **Mission Replay**: Rehearse recent mailbox and provisioning checkpoints in Mock Transport Mode
 - **Incident Board**: Keep operational tempo, role pack, and next-action context visible
 - **Tactical Map Layer**: Show route health, geofence, sectors, and stale-marker warnings on the ATAK map
-- **Rehearsal and Theme Modes**: Support Mock Transport Mode plus Dark Ops, Light Ops, and Night Red displays
+- **Rehearsal and Theme Modes**: Support Mock Transport Mode plus Dark Ops, Light Ops, Night Red, and Night Green displays
 
 ---
 
@@ -105,9 +109,10 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
    - **BLE Device Name**: Enter device name (e.g., "AkitaNode01")
    - **Serial Baud Rate**: Leave at 115200 (default)
   - **Mission Profile**: Select the operational workflow for your team
-  - **Dashboard Theme**: Select Dark Ops, Light Ops, or Night Red
-  - **Security and Provisioning**: Confirm encrypted transport is enabled and replace any placeholder provisioning secret before live operations
-  - **Mock Transport Mode**: Enable only for rehearsal without hardware
+  - **Dashboard Theme**: Select Dark Ops, Light Ops, Night Red, or Night Green
+  - **Auto Bearer Failover**: Preserve queued traffic across BLE and Serial when the preferred bearer is unavailable
+  - **Security and Provisioning**: Confirm encrypted transport is enabled, generate/apply bundle material as needed, stage the connected device on a trusted local route, and replace any placeholder provisioning secret before live operations
+  - **Mock Transport Mode**: Enable only for rehearsal without hardware or for replay drills
 
 ### 3.2 Daily Startup
 
@@ -157,16 +162,16 @@ The Akita MeshTAK toolbar shows:
 
 #### 4.2.1 Send Data View
 1. Open "Send Data" view from ATAK menu
-2. Review the **Operational Summary**, **Mission Assurance**, and **Incident Board** cards
+2. Review the **Operational Summary**, **Mission Assurance**, **Guaranteed Delivery Mailbox**, and **Incident Board** cards
 3. Optionally load a **Mission Playbook** or **Queue Action** from the active role pack
 4. Enter or review your message in the text field
 5. Select data format:
    - **Plain Text**: Standard text message
    - **JSON**: Structured data
    - **Custom**: Custom format
-6. Confirm payload budget and send context
-7. Tap **Transmit** button
-8. Verify message sent (toast notification appears)
+6. Confirm payload budget, failover posture, and mailbox state
+7. Tap **Transmit** button to queue and dispatch the frame
+8. Verify the frame advances to **In Flight**; **Delivered** indicates a peer mailbox receipt
 
 #### 4.2.2 Command History
 - Previously sent commands appear in dropdown
@@ -184,6 +189,7 @@ The Akita MeshTAK toolbar shows:
 #### 4.3.2 Status Updates
 - Battery status updates every 30-60 seconds
 - Connection status updates in real-time
+- Mailbox acknowledgements and provisioning status updates surface in the dashboard workflow
 - Error messages appear in toolbar
 
 ### 4.4 Emergency Procedures
@@ -260,12 +266,17 @@ The Akita MeshTAK toolbar shows:
 #### 5.2.2 Settings Options
 - **Connection Method**: BLE or Serial
 - **Mission Profile**: Search & Rescue, Law Enforcement, Coast Guard, Military, or Private Security
-- **Dashboard Theme**: Dark Ops, Light Ops, Night Red
+- **Dashboard Theme**: Dark Ops, Light Ops, Night Red, Night Green
+- **Auto Bearer Failover**: Preserve queue and reroute between BLE/Serial when possible
 - **BLE Device Name**: Device identifier for BLE
 - **Serial Baud Rate**: Communication speed (default: 115200)
 - **Enable Encrypted Transport**: Enables or disables protected payload transport
 - **Provisioning Secret**: Runtime deployment secret for the plugin
+- **Air-Gapped Provisioning Bundle**: Staged bundle text field
 - **Rotate Provisioning Secret**: Generates a new plugin-side secret
+- **Generate Provisioning Bundle**: Creates an offline bundle from the active secret
+- **Apply Provisioning Bundle**: Loads staged bundle material into the plugin security profile
+- **Stage Secret To Connected Device**: Sends the trusted local runtime provisioning command
 - **Export Audit Log**: Saves the Android audit trail to file
 - **Reload Security State**: Re-applies current security settings to live services
 - **Mock Transport Mode**: Rehearsal mode without hardware
@@ -282,12 +293,14 @@ The Akita MeshTAK toolbar shows:
 - **Mission Playbook Spinner**: Load profile-specific preset traffic
 - **Queue Action Spinner**: Load role-pack actions from the incident board
 - **Data Input Field**: Enter message text
-- **Operational Summary**: Route, payload budget, last send, delivery ratio
+- **Operational Summary**: Route, payload budget, last send, and peer receipt ratio
 - **Mission Assurance**: Encryption, audit, interoperability, and provisioning posture
+- **Guaranteed Delivery Mailbox**: Pending / In Flight / Delivered counts, failover posture, and replay checkpoints
 - **Incident Board**: Incident title, role pack, tempo, and next action
 - **Payload/Format Charts**: Recent payload trend and data-format distribution
 - **Command History Spinner**: Select previous command
-- **Transmit Button**: Send message
+- **Replay Last Mission**: Rehearse stored mailbox checkpoints in Mock Transport Mode
+- **Transmit Button**: Queue and dispatch message
 
 ### 5.4 Map Overlay
 
@@ -345,11 +358,21 @@ The Akita MeshTAK toolbar shows:
 
 **Solutions**:
 1. Verify connection status (must be "Connected")
-2. Check message format
-3. Verify device has power
-4. Try sending test message
-5. Restart connection
-6. Review Mission Assurance for provisioning or encryption warnings
+2. Review the **Guaranteed Delivery Mailbox** for pending, failed, or in-flight frames
+3. Check message format and payload budget
+4. Verify device has power
+5. Try sending test message or **Retry Queue**
+6. Restart connection or enable **Auto Bearer Failover**
+7. Review Mission Assurance for provisioning or encryption warnings
+
+#### Problem: Frames Remain In Flight
+**Symptoms**: Message leaves the device but never reaches peer-delivered state
+
+**Solutions**:
+1. Confirm a peer node is available on the mesh
+2. Allow time for the peer mailbox acknowledgement to return
+3. Review failover posture and restore the preferred bearer if needed
+4. Use **Replay Last Mission** in Mock Transport Mode to rehearse the last sequence
 
 #### Problem: Security Shows "Rotate Deployment Secret"
 **Symptoms**: Mission Assurance or toolbar shows degraded provisioning posture
@@ -417,6 +440,7 @@ The Akita MeshTAK toolbar shows:
 - **Device Security**: Secure devices physically. Report lost or stolen devices immediately.
 - **Encryption Policy**: The Android plugin uses the active **Enable Encrypted Transport** setting and runtime provisioning secret from settings, with a build-time fallback only if no runtime secret is present. Placeholder secrets are acceptable for rehearsal only.
 - **Metadata Match Required**: Firmware and plugin must use matching provisioning secret and encrypted envelope metadata (`version`, `key-id`).
+- **Runtime Staging**: **Stage Secret To Connected Device** intentionally uses plaintext over a trusted local bearer. Use it only during controlled provisioning ceremonies.
 
 #### CAUTIONS
 - **Network Security**: Be aware of network security implications
@@ -493,6 +517,7 @@ The Akita MeshTAK toolbar shows:
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
+| 1.4 | 2026-04-14 | Added guaranteed-delivery mailbox, bearer failover, air-gapped provisioning ceremony, mission replay, and Night Green operator guidance | Akita Engineering |
 | 1.3 | 2026-04-14 | Added mission assurance, incident board, tactical overlay, runtime provisioning, and updated operator workflow | Akita Engineering |
 | 1.2 | 2026-03-13 | Corrected encryption default state for Android plugin; added key provisioning references | Akita Engineering |
 | 1.1 | 2026-03-12 | Updated operator security guidance for AES-256-GCM, versioned encrypted envelopes, and key-id alignment checks | Akita Engineering |
