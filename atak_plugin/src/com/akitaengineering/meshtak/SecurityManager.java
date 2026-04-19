@@ -87,6 +87,8 @@ public class SecurityManager {
      * Generate new keys (for initial setup).
      */
     public boolean generateKeys() {
+        byte[] generatedAesKey = null;
+        byte[] generatedHmacKey = null;
         try {
             // Generate AES key
             KeyGenerator keyGen = KeyGenerator.getInstance("AES");
@@ -97,11 +99,16 @@ public class SecurityManager {
             KeyGenerator hmacKeyGen = KeyGenerator.getInstance("HmacSHA256");
             hmacKeyGen.init(256);
             SecretKey newHmacKey = hmacKeyGen.generateKey();
-            
-            return initialize(newAesKey.getEncoded(), newHmacKey.getEncoded());
+
+            generatedAesKey = newAesKey.getEncoded();
+            generatedHmacKey = newHmacKey.getEncoded();
+            return initialize(generatedAesKey, generatedHmacKey);
         } catch (Exception e) {
             Log.e(TAG, "Failed to generate keys", e);
             return false;
+        } finally {
+            wipe(generatedAesKey);
+            wipe(generatedHmacKey);
         }
     }
 
@@ -119,27 +126,39 @@ public class SecurityManager {
                     + "Replace Config.PROVISIONING_SECRET before deploying to production.");
         }
 
+        char[] sharedSecretChars = sharedSecret.toCharArray();
+        byte[] aesKeyBytes = null;
+        byte[] hmacKeyBytes = null;
         try {
-            byte[] aesKeyBytes = deriveKeyMaterial(deviceId, sharedSecret, "aes");
-            byte[] hmacKeyBytes = deriveKeyMaterial(deviceId, sharedSecret, "hmac");
+            aesKeyBytes = deriveKeyMaterial(deviceId, sharedSecretChars, "aes");
+            hmacKeyBytes = deriveKeyMaterial(deviceId, sharedSecretChars, "hmac");
             return initialize(aesKeyBytes, hmacKeyBytes);
         } catch (Exception e) {
             Log.e(TAG, "Failed to initialize keys from provisioning", e);
             return false;
+        } finally {
+            wipe(sharedSecretChars);
+            wipe(aesKeyBytes);
+            wipe(hmacKeyBytes);
         }
     }
 
-    private byte[] deriveKeyMaterial(String deviceId, String sharedSecret, String purpose) throws Exception {
-        // PBKDF2-HMAC-SHA256 with 100 000 iterations — matches firmware security.cpp.
-        String salt = deviceId + ":" + purpose;
-        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-        KeySpec spec = new PBEKeySpec(
-                sharedSecret.toCharArray(),
-                salt.getBytes(StandardCharsets.UTF_8),
-                100000,
-                256);
-        SecretKey derived = factory.generateSecret(spec);
-        return derived.getEncoded();
+    private byte[] deriveKeyMaterial(String deviceId, char[] sharedSecretChars, String purpose) throws Exception {
+        byte[] saltBytes = null;
+        PBEKeySpec spec = null;
+        try {
+            // PBKDF2-HMAC-SHA256 with 100 000 iterations — matches firmware security.cpp.
+            saltBytes = (deviceId + ":" + purpose).getBytes(StandardCharsets.UTF_8);
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            spec = new PBEKeySpec(sharedSecretChars, saltBytes, 100000, 256);
+            SecretKey derived = factory.generateSecret(spec);
+            return derived.getEncoded();
+        } finally {
+            if (spec != null) {
+                spec.clearPassword();
+            }
+            wipe(saltBytes);
+        }
     }
     
     /**
@@ -158,15 +177,17 @@ public class SecurityManager {
             return copy;
         }
         
+        byte[] iv = null;
+        byte[] ciphertext = null;
         try {
-            byte[] iv = new byte[IV_SIZE];
+            iv = new byte[IV_SIZE];
             new SecureRandom().nextBytes(iv);
 
             Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
             GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_BITS, iv);
             cipher.init(Cipher.ENCRYPT_MODE, aesKey, gcmSpec);
 
-            byte[] ciphertext = cipher.doFinal(plaintext);
+            ciphertext = cipher.doFinal(plaintext);
             
             // Prepend IV to ciphertext
             byte[] result = new byte[IV_SIZE + ciphertext.length];
@@ -178,6 +199,9 @@ public class SecurityManager {
         } catch (Exception e) {
             Log.e(TAG, "Encryption failed", e);
             return null;
+        } finally {
+            wipe(iv);
+            wipe(ciphertext);
         }
     }
     
@@ -197,10 +221,12 @@ public class SecurityManager {
             return copy;
         }
         
+        byte[] iv = null;
+        byte[] encryptedData = null;
         try {
             // Extract IV
-            byte[] iv = Arrays.copyOfRange(ciphertext, 0, IV_SIZE);
-            byte[] encryptedData = Arrays.copyOfRange(ciphertext, IV_SIZE, ciphertext.length);
+            iv = Arrays.copyOfRange(ciphertext, 0, IV_SIZE);
+            encryptedData = Arrays.copyOfRange(ciphertext, IV_SIZE, ciphertext.length);
             
             Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
             GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_BITS, iv);
@@ -213,6 +239,9 @@ public class SecurityManager {
             Log.e(TAG, "Decryption failed", e);
             authFailures++;
             return null;
+        } finally {
+            wipe(iv);
+            wipe(encryptedData);
         }
     }
     
@@ -244,16 +273,20 @@ public class SecurityManager {
         }
         
         byte[] calculatedHMAC = generateHMAC(data);
-        if (calculatedHMAC == null) {
-            integrityFailures++;
-            return false;
+        try {
+            if (calculatedHMAC == null) {
+                integrityFailures++;
+                return false;
+            }
+
+            boolean valid = MessageDigest.isEqual(calculatedHMAC, hmac);
+            if (!valid) {
+                integrityFailures++;
+            }
+            return valid;
+        } finally {
+            wipe(calculatedHMAC);
         }
-        
-        boolean valid = MessageDigest.isEqual(calculatedHMAC, hmac);
-        if (!valid) {
-            integrityFailures++;
-        }
-        return valid;
     }
     
     /**
@@ -319,6 +352,18 @@ public class SecurityManager {
     
     public long getAuthFailures() {
         return authFailures;
+    }
+
+    private static void wipe(byte[] buffer) {
+        if (buffer != null) {
+            Arrays.fill(buffer, (byte) 0);
+        }
+    }
+
+    private static void wipe(char[] buffer) {
+        if (buffer != null) {
+            Arrays.fill(buffer, '\0');
+        }
     }
 }
 

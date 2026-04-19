@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
@@ -224,6 +225,21 @@ public final class AkitaProvisioningManager {
         return Config.CMD_PROVISION_STAGE_PREFIX + getActiveProvisioningSecret(context);
     }
 
+    public static byte[] buildProvisioningStageCommandBytes(Context context) {
+        ProvisioningState state = getStateStore(context).readState();
+        String secret = hasText(state.stagedBundle)
+                ? parseProvisioningBundle(state.stagedBundle).secret
+                : getActiveProvisioningSecret(context);
+
+        byte[] prefixBytes = Config.CMD_PROVISION_STAGE_PREFIX.getBytes(StandardCharsets.UTF_8);
+        byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+        byte[] commandBytes = new byte[prefixBytes.length + secretBytes.length];
+        System.arraycopy(prefixBytes, 0, commandBytes, 0, prefixBytes.length);
+        System.arraycopy(secretBytes, 0, commandBytes, prefixBytes.length, secretBytes.length);
+        wipe(secretBytes);
+        return commandBytes;
+    }
+
     public static String getProvisioningBundleSummary(Context context) {
         ProvisioningState state = getStateStore(context).readState();
         if (!hasText(state.stagedBundle)) {
@@ -410,8 +426,9 @@ public final class AkitaProvisioningManager {
                 return migrateLegacyState();
             }
 
+            byte[] payloadBytes = null;
             try (FileInputStream inputStream = stateFile.openRead()) {
-                byte[] payloadBytes = readAllBytes(inputStream);
+                payloadBytes = readAllBytes(inputStream);
                 if (payloadBytes.length == 0) {
                     return new ProvisioningState("", "", 0L, 0L);
                 }
@@ -421,14 +438,19 @@ public final class AkitaProvisioningManager {
             } catch (IOException | JSONException | GeneralSecurityException exception) {
                 Log.w(TAG, "Failed to read encrypted provisioning state; falling back to legacy preferences", exception);
                 return migrateLegacyState();
+            } finally {
+                wipe(payloadBytes);
             }
         }
 
         private synchronized void writeState(ProvisioningState state) {
             FileOutputStream outputStream = null;
+            byte[] serializedState = null;
+            byte[] encryptedPayload = null;
             try {
                 outputStream = stateFile.startWrite();
-                byte[] encryptedPayload = stateCipher.encrypt(state.toJson().toString());
+                serializedState = state.toJson().toString().getBytes(StandardCharsets.UTF_8);
+                encryptedPayload = stateCipher.encrypt(serializedState);
                 outputStream.write(encryptedPayload);
                 outputStream.flush();
                 stateFile.finishWrite(outputStream);
@@ -437,6 +459,9 @@ public final class AkitaProvisioningManager {
                 if (outputStream != null) {
                     stateFile.failWrite(outputStream);
                 }
+            } finally {
+                wipe(serializedState);
+                wipe(encryptedPayload);
             }
         }
 
@@ -454,8 +479,12 @@ public final class AkitaProvisioningManager {
             String payload = new String(payloadBytes, StandardCharsets.UTF_8);
             JSONObject root = new JSONObject(payload);
             if (root.has("ciphertext") && root.has("iv")) {
-                String decryptedPayload = stateCipher.decrypt(root);
-                return ProvisioningState.fromJson(new JSONObject(decryptedPayload));
+                byte[] decryptedPayload = stateCipher.decrypt(root);
+                try {
+                    return ProvisioningState.fromJson(new JSONObject(new String(decryptedPayload, StandardCharsets.UTF_8)));
+                } finally {
+                    wipe(decryptedPayload);
+                }
             }
 
             ProvisioningState legacyStateFile = ProvisioningState.fromJson(root);
@@ -480,27 +509,40 @@ public final class AkitaProvisioningManager {
 
         private static volatile SecretKey testFallbackKey;
 
-        private byte[] encrypt(String plaintext) throws GeneralSecurityException, JSONException {
-            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey());
-            byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+        private byte[] encrypt(byte[] plaintextBytes) throws GeneralSecurityException, JSONException {
+            byte[] ciphertext = null;
+            byte[] iv = null;
+            try {
+                Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+                cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey());
+                ciphertext = cipher.doFinal(plaintextBytes);
+                iv = cipher.getIV();
 
-            JSONObject envelope = new JSONObject();
-            envelope.put("schemaVersion", 1);
-            envelope.put("storageFormat", "AES_GCM");
-            envelope.put("keySource", isRobolectricRuntime() ? "test-fallback" : "android-keystore");
-            envelope.put("iv", Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP));
-            envelope.put("ciphertext", Base64.encodeToString(ciphertext, Base64.NO_WRAP));
-            return envelope.toString().getBytes(StandardCharsets.UTF_8);
+                JSONObject envelope = new JSONObject();
+                envelope.put("schemaVersion", 1);
+                envelope.put("storageFormat", "AES_GCM");
+                envelope.put("keySource", isRobolectricRuntime() ? "test-fallback" : "android-keystore");
+                envelope.put("iv", Base64.encodeToString(iv, Base64.NO_WRAP));
+                envelope.put("ciphertext", Base64.encodeToString(ciphertext, Base64.NO_WRAP));
+                return envelope.toString().getBytes(StandardCharsets.UTF_8);
+            } finally {
+                wipe(ciphertext);
+                wipe(iv);
+            }
         }
 
-        private String decrypt(JSONObject envelope) throws GeneralSecurityException, JSONException {
+        private byte[] decrypt(JSONObject envelope) throws GeneralSecurityException, JSONException {
             byte[] iv = Base64.decode(envelope.getString("iv"), Base64.NO_WRAP);
             byte[] ciphertext = Base64.decode(envelope.getString("ciphertext"), Base64.NO_WRAP);
 
-            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            cipher.init(Cipher.DECRYPT_MODE, getOrCreateSecretKey(), new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv));
-            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+            try {
+                Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+                cipher.init(Cipher.DECRYPT_MODE, getOrCreateSecretKey(), new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv));
+                return cipher.doFinal(ciphertext);
+            } finally {
+                wipe(iv);
+                wipe(ciphertext);
+            }
         }
 
         private SecretKey getOrCreateSecretKey() throws GeneralSecurityException {
@@ -611,6 +653,12 @@ public final class AkitaProvisioningManager {
 
     private static String normalizeValue(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static void wipe(byte[] buffer) {
+        if (buffer != null) {
+            Arrays.fill(buffer, (byte) 0);
+        }
     }
 
     private static void clearSensitivePreferenceMirrors(SharedPreferences preferences) {

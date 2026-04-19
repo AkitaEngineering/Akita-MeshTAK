@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 public class SerialService extends Service implements SerialInputOutputManager.Listener {
 
@@ -353,7 +354,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             return;
         }
 
-        Log.i(TAG, "Received from serial: " + received.trim());
+        Log.i(TAG, "Received from serial, len=" + data.length);
         
         // Audit log data reception
         if (auditLogger != null) {
@@ -383,7 +384,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         // 2. Validate data framing (Robustness Check)
         String cleanData = data.trim();
         if (!cleanData.startsWith("<event") || !cleanData.endsWith("</event>")) {
-            Log.w(TAG, "Received fragmented or non-CoT data (ignoring): " + cleanData);
+            Log.w(TAG, "Received fragmented or non-CoT data (ignoring), len=" + cleanData.length());
             return; 
         }
 
@@ -449,6 +450,9 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     }
 
     public boolean sendData(byte[] data, boolean forcePlaintext) {
+        byte[] dataToSend = data;
+        byte[] dataWithNewline = null;
+        boolean wipeSendBuffer = false;
         if (serialPort == null || !serialPort.isOpen()) {
             Log.w(TAG, "Serial port not open, cannot send data.");
             updateStatus("Error: Serial port not open");
@@ -467,26 +471,23 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             }
             return false;
         }
-        
-        // Optional: Encrypt data if security is enabled; default is plaintext for compatibility
-        byte[] dataToSend = data;
-        if (!forcePlaintext && securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
-            String encryptedEnvelope = encodeEncryptedPayload(data);
-            if (encryptedEnvelope != null) {
-                dataToSend = encryptedEnvelope.getBytes(StandardCharsets.UTF_8);
-            } else {
-                Log.w(TAG, "Encryption failed, aborting send");
-                return false;
-            }
-        }
-        
+
         try {
-            byte[] dataWithNewline = new byte[dataToSend.length + 1];
+            if (!forcePlaintext && securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
+                dataToSend = encodeEncryptedPayloadBytes(data);
+                wipeSendBuffer = dataToSend != null;
+                if (dataToSend == null) {
+                    Log.w(TAG, "Encryption failed, aborting send");
+                    return false;
+                }
+            }
+
+            dataWithNewline = new byte[dataToSend.length + 1];
             System.arraycopy(dataToSend, 0, dataWithNewline, 0, dataToSend.length);
             dataWithNewline[dataToSend.length] = '\n'; 
 
             serialPort.write(dataWithNewline, 500); 
-            Log.i(TAG, "Data sent via serial: " + new String(data));
+            Log.i(TAG, "Data sent via serial, len=" + data.length);
             
             // Audit log data send
             if (auditLogger != null) {
@@ -502,6 +503,13 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                                "Serial", "Send error: " + e.getMessage(), false);
             }
             return false;
+        } finally {
+            if (dataWithNewline != null) {
+                Arrays.fill(dataWithNewline, (byte) 0);
+            }
+            if (wipeSendBuffer) {
+                Arrays.fill(dataToSend, (byte) 0);
+            }
         }
     }
     
@@ -514,7 +522,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     public String getConnectionStatus() { return serialConnectionStatus; }
     public void setMapView(MapView view) { this.mapView = view; }
 
-    private String encodeEncryptedPayload(byte[] plaintext) {
+    private byte[] encodeEncryptedPayloadBytes(byte[] plaintext) {
         if (securityManager == null || !securityManager.isInitialized()) {
             return null;
         }
@@ -523,12 +531,20 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             return null;
         }
 
-        StringBuilder hex = new StringBuilder(encrypted.length * 2);
-        for (byte b : encrypted) {
-            hex.append(String.format("%02x", b & 0xFF));
+        byte[] header = (Config.ENCRYPTED_PAYLOAD_PREFIX + Config.ENCRYPTED_PAYLOAD_VERSION + ":"
+                + Config.ENCRYPTED_KEY_ID + ":").getBytes(StandardCharsets.UTF_8);
+        byte[] encoded = new byte[header.length + (encrypted.length * 2)];
+        try {
+            System.arraycopy(header, 0, encoded, 0, header.length);
+            for (int index = 0; index < encrypted.length; index++) {
+                int value = encrypted[index] & 0xFF;
+                encoded[header.length + (index * 2)] = HEX_DIGITS[value >>> 4];
+                encoded[header.length + (index * 2) + 1] = HEX_DIGITS[value & 0x0F];
+            }
+            return encoded;
+        } finally {
+            Arrays.fill(encrypted, (byte) 0);
         }
-        return Config.ENCRYPTED_PAYLOAD_PREFIX + Config.ENCRYPTED_PAYLOAD_VERSION + ":" +
-            Config.ENCRYPTED_KEY_ID + ":" + hex;
     }
 
     private String decodePayload(String payload) {
@@ -568,14 +584,23 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             try {
                 encrypted[i] = (byte) Integer.parseInt(hex.substring(idx, idx + 2), 16);
             } catch (NumberFormatException e) {
+                Arrays.fill(encrypted, (byte) 0);
                 return null;
             }
         }
 
         byte[] decrypted = securityManager.decrypt(encrypted);
         if (decrypted == null) {
+            Arrays.fill(encrypted, (byte) 0);
             return null;
         }
-        return new String(decrypted, StandardCharsets.UTF_8).trim();
+        try {
+            return new String(decrypted, StandardCharsets.UTF_8).trim();
+        } finally {
+            Arrays.fill(encrypted, (byte) 0);
+            Arrays.fill(decrypted, (byte) 0);
+        }
     }
+
+    private static final byte[] HEX_DIGITS = "0123456789abcdef".getBytes(StandardCharsets.US_ASCII);
 }

@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Locale;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -67,6 +68,9 @@ public class AkitaProvisioningManagerTest {
 
         assertEquals(com.akitaengineering.meshtak.Config.CMD_PROVISION_STAGE_PREFIX + "BundleSecret123456",
                 AkitaProvisioningManager.buildProvisioningStageCommand(context));
+        assertArrayEquals(
+            (com.akitaengineering.meshtak.Config.CMD_PROVISION_STAGE_PREFIX + "BundleSecret123456").getBytes(StandardCharsets.UTF_8),
+            AkitaProvisioningManager.buildProvisioningStageCommandBytes(context));
         assertFalse(preferences.contains(AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE));
         assertTrue(preferences.contains(AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE_SIGNAL));
         assertTrue(stateFile.exists());
@@ -94,6 +98,9 @@ public class AkitaProvisioningManagerTest {
         assertFalse(preferences.contains(AkitaProvisioningManager.PREF_LAST_BUNDLE_GENERATED_AT));
         assertEquals(com.akitaengineering.meshtak.Config.CMD_PROVISION_STAGE_PREFIX + "LegacySecret123456",
                 AkitaProvisioningManager.buildProvisioningStageCommand(context));
+        assertArrayEquals(
+            (com.akitaengineering.meshtak.Config.CMD_PROVISION_STAGE_PREFIX + "LegacySecret123456").getBytes(StandardCharsets.UTF_8),
+            AkitaProvisioningManager.buildProvisioningStageCommandBytes(context));
         assertTrue(stateFile.exists());
         assertStoredFileIsEncrypted("LegacySecret123456");
     }

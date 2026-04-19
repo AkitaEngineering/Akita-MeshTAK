@@ -31,6 +31,8 @@ import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
 import com.akitaengineering.meshtak.ui.AkitaTheme;
 
+import java.util.Arrays;
+
 public class SettingsFragment extends PreferenceFragmentCompat implements PluginPreferenceFragment, Preference.OnPreferenceChangeListener, android.content.SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static final String TAG = "SettingsFragment";
@@ -405,13 +407,6 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
         boolean mockMode = AkitaMockSettings.isEnabled(preferences);
         String connectionMethod = preferences.getString("connection_method", "ble");
-        String command;
-        try {
-            command = AkitaProvisioningManager.buildProvisioningStageCommand(requireContext());
-        } catch (IllegalArgumentException exception) {
-            Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
-            return;
-        }
 
         if (mockMode) {
             AkitaMissionControl.getInstance(requireContext()).recordProvisioningEvent(
@@ -422,15 +417,27 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
             return;
         }
 
-        boolean success = sendPlaintextToPreferredRoute(connectionMethod, command.getBytes());
-        if (success) {
-            AkitaMissionControl.getInstance(requireContext()).recordProvisioningEvent(
-                    "PROVISIONING_STAGE_REQUESTED",
-                    "Plaintext staging command sent over " + AkitaMissionControl.routeLabel(connectionMethod),
-                    connectionMethod);
-            Toast.makeText(getActivity(), "Provisioning stage command sent. Apply the bundle locally if needed.", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(getActivity(), "No connected bearer available for provisioning stage.", Toast.LENGTH_SHORT).show();
+        byte[] commandBytes;
+        try {
+            commandBytes = AkitaProvisioningManager.buildProvisioningStageCommandBytes(requireContext());
+        } catch (IllegalArgumentException exception) {
+            Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            boolean success = sendPlaintextToPreferredRoute(connectionMethod, commandBytes);
+            if (success) {
+                AkitaMissionControl.getInstance(requireContext()).recordProvisioningEvent(
+                        "PROVISIONING_STAGE_REQUESTED",
+                        "Plaintext staging command sent over " + AkitaMissionControl.routeLabel(connectionMethod),
+                        connectionMethod);
+                Toast.makeText(getActivity(), "Provisioning stage command sent. Apply the bundle locally if needed.", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(getActivity(), "No connected bearer available for provisioning stage.", Toast.LENGTH_SHORT).show();
+            }
+        } finally {
+            Arrays.fill(commandBytes, (byte) 0);
         }
     }
 
