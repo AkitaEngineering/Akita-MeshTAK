@@ -176,7 +176,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     private void initializeSecurity() {
         SharedPreferences preferences = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this);
         String deviceId = preferences.getString("ble_device_name", "AkitaNode01");
-        String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(preferences);
+        String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(this);
         boolean encryptionEnabled = AkitaProvisioningManager.isEncryptionEnabled(preferences);
 
         securityManager.reset();

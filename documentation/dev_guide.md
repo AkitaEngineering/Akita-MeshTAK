@@ -76,6 +76,8 @@ The firmware is built using **PlatformIO**.
 5. Build: ```pio run```
 6. Upload: ```pio run -t upload```
 
+CI-safe firmware validation uses `pio run -e heltec_v3_ci`.
+
 ---
 
 ## ATAK Plugin
@@ -83,17 +85,20 @@ The firmware is built using **PlatformIO**.
 The ATAK plugin is built using **Android Studio** or the Gradle wrapper from the command line.
 
 1. Install Android Studio (or the Android command-line tools) and Android SDK (platform 35, build-tools 35.0.1)  
-2. Place `atak-sdk.jar` in `atak_plugin/libs/`  
-3. Open `atak_plugin/` in Android Studio — it will create `local.properties` automatically.  
+2. Use Java 17 or 21 for Android builds  
+3. For release builds, obtain the official ATAK SDK jar and pass its path with `AKITA_ATAK_SDK_JAR` or `-PakitaAtakSdkJar`  
+4. Open `atak_plugin/` in Android Studio — it will create `local.properties` automatically.  
    *Or* create `atak_plugin/local.properties` manually with your SDK path:  
    ```properties
    sdk.dir=/path/to/your/Android/Sdk
    ```  
    *Or* set the `ANDROID_HOME` environment variable instead. `local.properties` is gitignored and machine-specific.  
-4. Configure UUIDs & USB IDs in `atak_plugin/src/com/akitaengineering/meshtak/Config.java`; runtime provisioning from the settings UI is preferred over relying on the build-time fallback secret  
-5. Build:  
+5. Supply build inputs with Gradle properties or environment variables instead of editing source files. Release builds validate provisioning secret, UUIDs, ATAK SDK presence, and signing material before packaging.  
+6. Build:  
    - **Android Studio:** Build → Build Bundle(s) / APK(s) → Build APK(s)  
-   - **Command line:** `cd atak_plugin && ./gradlew assembleDebug` (or `.\gradlew.bat assembleDebug` on Windows)
+   - **Command line debug/tests:** `cd atak_plugin && ./gradlew test -PakitaUseAtakStub=true`  
+   - **Command line debug APK:** `cd atak_plugin && ./gradlew assembleDebug` (or `.\gradlew.bat assembleDebug` on Windows)
+   - **Command line release APK:** `cd atak_plugin && ./gradlew assembleRelease`
 
 ---
 
@@ -147,6 +152,12 @@ Shared transport helpers live in `firmware/src/payload_codec.h/.cpp` and `firmwa
 5. Update documentation for your changes  
 6. Test thoroughly  
 7. Submit a pull request  
+
+## Release Management
+
+- Update `../version.properties` for each coordinated firmware/plugin release.
+- Update `../CHANGELOG.md`.
+- Follow `documentation/release_process.md` for release packaging and signing.
 
 ---
 

@@ -10,7 +10,7 @@ It enables ATAK users to:
 - Send critical alerts  
 - Monitor device health and provisioning posture  
 
-**CRITICAL:** The plugin **must** be configured before compilation.
+**CRITICAL:** Release builds must be configured before compilation. Debug/unit-test builds can use the ATAK stub path automatically when the official ATAK SDK jar is absent.
 
 ---
 
@@ -32,19 +32,20 @@ It enables ATAK users to:
 - Mission Assurance readiness indicators for encryption, audit, interoperability, and placeholder-secret posture
 
 ## Configuration
-- Central `Config.java` for UUIDs and USB IDs  
+- Build-time `BuildConfig` values for provisioning secret, UUIDs, and USB IDs  
 - In-app settings for runtime preferences, provisioning secret management, and encrypted transport policy
 
 ---
 
 # Building the Plugin
 
-To build the Akita MeshTAK ATAK Plugin, you need **Android Studio** and the **ATAK SDK**.
+To build the Akita MeshTAK ATAK Plugin, you need **Android Studio** or the Android command-line tools. Release packaging also needs the **official ATAK SDK**.
 
 ## Prerequisites
 - **Android Studio** (latest version) *or* the Android command-line tools  
 - **Android SDK** (platform 35, build-tools 35.0.1)  
-- **ATAK SDK** (`atak-sdk.jar` placed in `libs/`)  
+- **Java 17 or Java 21** for Gradle/Android builds  
+- **ATAK SDK** for release builds only. See `ATAK_SDK_REQUIREMENTS.md`.  
 
 ## Build Instructions
 
@@ -71,24 +72,32 @@ set ANDROID_HOME=C:\Users\you\AppData\Local\Android\Sdk   # Windows
 ```
 `local.properties` is gitignored and never committed — each developer provides their own.
 
-### 3. Configure the ATAK SDK
-Place `atak-sdk.jar` in the `libs/` directory. Follow the official ATAK SDK documentation to obtain the JAR.
+### 3. Configure the ATAK SDK Contract
+Release builds require the official ATAK SDK jar. Supply its path with one of the following:
 
-### 4. CRITICAL CONFIGURATION STEP
-Open:
-
-```
-atak_plugin/src/com/akitaengineering/meshtak/Config.java
+```bash
+export AKITA_ATAK_SDK_JAR=/absolute/path/to/atak-sdk.jar
 ```
 
-Replace **all placeholder UUIDs and USB IDs** with the exact values from:
+or
 
-- Your firmware: `firmware/src/config.h`  
-- Your hardware specifications  
+```bash
+./gradlew assembleRelease -PakitaAtakSdkJar=/absolute/path/to/atak-sdk.jar
+```
 
-Incorrect values **will prevent the plugin from connecting**.
+If the jar is absent, debug/unit-test builds automatically use compile-time ATAK stubs instead.
 
-If you rely on `Config.PROVISIONING_SECRET` as a build-time fallback, replace the placeholder value before deployment. The preferred path is to provision the secret at runtime from the plugin settings UI.
+### 4. Supply Deployment Build Inputs
+Release builds must receive deployment values without editing source files. Supported inputs are Gradle properties or environment variables:
+
+- Provisioning secret: `akitaProvisioningSecret` / `AKITA_PROVISIONING_SECRET`
+- BLE service UUID: `akitaBleServiceUuid` / `AKITA_BLE_SERVICE_UUID`
+- BLE CoT characteristic UUID: `akitaCotCharacteristicUuid` / `AKITA_BLE_COT_CHARACTERISTIC_UUID`
+- BLE write characteristic UUID: `akitaWriteCharacteristicUuid` / `AKITA_BLE_WRITE_CHARACTERISTIC_UUID`
+- USB vendor/product IDs: `akitaHeltecVendorId`, `akitaHeltecProductId` / `AKITA_HELTEC_VENDOR_ID`, `AKITA_HELTEC_PRODUCT_ID`
+- Release signing material: `akitaReleaseKeystoreFile`, `akitaReleaseStorePassword`, `akitaReleaseKeyAlias`, `akitaReleaseKeyPassword`
+
+Runtime provisioning from the settings UI remains preferred over relying on the build-time fallback secret.
 
 ### 5. Build the APK
 
@@ -100,10 +109,29 @@ Build -> Build Bundle(s) / APK(s) -> Build APK(s)
 **Command line (Gradle):**
 ```bash
 cd atak_plugin
+./gradlew test -PakitaUseAtakStub=true
 ./gradlew assembleDebug          # Linux / macOS
 .\gradlew.bat assembleDebug      # Windows
 ```
 The output APK will be in `build/outputs/apk/debug/`.
+
+### 6. Build a Signed Release APK
+
+```bash
+cd atak_plugin
+export AKITA_PROVISIONING_SECRET=...deployment secret...
+export AKITA_BLE_SERVICE_UUID=...deployment uuid...
+export AKITA_BLE_COT_CHARACTERISTIC_UUID=...deployment uuid...
+export AKITA_BLE_WRITE_CHARACTERISTIC_UUID=...deployment uuid...
+export AKITA_ATAK_SDK_JAR=/absolute/path/to/atak-sdk.jar
+export AKITA_RELEASE_KEYSTORE_FILE=/absolute/path/to/release.keystore
+export AKITA_RELEASE_STORE_PASSWORD=...store password...
+export AKITA_RELEASE_KEY_ALIAS=...alias...
+export AKITA_RELEASE_KEY_PASSWORD=...key password...
+./gradlew assembleRelease
+```
+
+The release build enforces real ATAK SDK input, non-placeholder provisioning/UUID values, and signing material.
 
 The output APK (e.g., `app-debug.apk`) will be located in:
 

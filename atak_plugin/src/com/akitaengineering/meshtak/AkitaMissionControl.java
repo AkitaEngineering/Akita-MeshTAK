@@ -3,6 +3,7 @@ package com.akitaengineering.meshtak;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.text.TextUtils;
+import android.util.AtomicFile;
 import android.util.Log;
 
 import androidx.preference.PreferenceManager;
@@ -11,6 +12,11 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,9 +48,11 @@ public final class AkitaMissionControl {
     private static AkitaMissionControl instance;
 
     private final SharedPreferences preferences;
+    private final MissionStateStore stateStore;
 
     private AkitaMissionControl(Context context) {
         preferences = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
+        stateStore = new MissionStateStore(context.getApplicationContext());
     }
 
     public static synchronized AkitaMissionControl getInstance(Context context) {
@@ -657,51 +665,36 @@ public final class AkitaMissionControl {
     }
 
     private List<MailboxRecord> readMailboxRecords() {
-        List<MailboxRecord> records = new ArrayList<>();
-        try {
-            JSONArray array = new JSONArray(preferences.getString(PREF_MAILBOX_RECORDS, "[]"));
-            for (int index = 0; index < array.length(); index++) {
-                JSONObject item = array.optJSONObject(index);
-                if (item != null) {
-                    records.add(MailboxRecord.fromJson(item));
-                }
-            }
-        } catch (JSONException e) {
-            Log.w(TAG, "Failed to parse mailbox records from preferences", e);
-        }
-        Collections.sort(records, Comparator.comparingLong(record -> record.createdAt));
-        return records;
+        return stateStore.readStateSnapshot().mailboxRecords;
     }
 
     private List<ReplayEvent> readReplayEvents() {
-        List<ReplayEvent> events = new ArrayList<>();
-        try {
-            JSONArray array = new JSONArray(preferences.getString(PREF_REPLAY_EVENTS, "[]"));
-            for (int index = 0; index < array.length(); index++) {
-                JSONObject item = array.optJSONObject(index);
-                if (item != null) {
-                    events.add(ReplayEvent.fromJson(item));
-                }
-            }
-        } catch (JSONException e) {
-            Log.w(TAG, "Failed to parse replay events from preferences", e);
-        }
-        Collections.sort(events, Comparator.comparingLong(event -> event.timestamp));
-        return events;
+        return stateStore.readStateSnapshot().replayEvents;
     }
 
     private void writeState(List<MailboxRecord> records, List<ReplayEvent> events) {
-        preferences.edit()
-                .putString(PREF_MAILBOX_RECORDS, writeMailboxRecords(records))
-                .putString(PREF_REPLAY_EVENTS, writeReplayEvents(events))
-                .apply();
+        stateStore.writeState(records, events);
+        signalStateChanged(true, true);
     }
 
     private void persistReplayEvents(List<ReplayEvent> events) {
-        preferences.edit().putString(PREF_REPLAY_EVENTS, writeReplayEvents(events)).apply();
+        stateStore.writeReplayEvents(events);
+        signalStateChanged(false, true);
     }
 
-    private String writeMailboxRecords(List<MailboxRecord> records) {
+    private void signalStateChanged(boolean mailboxChanged, boolean replayChanged) {
+        long now = System.currentTimeMillis();
+        SharedPreferences.Editor editor = preferences.edit();
+        if (mailboxChanged) {
+            editor.putLong(PREF_MAILBOX_RECORDS, now);
+        }
+        if (replayChanged) {
+            editor.putLong(PREF_REPLAY_EVENTS, now);
+        }
+        editor.apply();
+    }
+
+    private String serializeMailboxRecords(List<MailboxRecord> records) {
         JSONArray array = new JSONArray();
         for (MailboxRecord record : records) {
             try {
@@ -713,7 +706,7 @@ public final class AkitaMissionControl {
         return array.toString();
     }
 
-    private String writeReplayEvents(List<ReplayEvent> events) {
+    private String serializeReplayEvents(List<ReplayEvent> events) {
         JSONArray array = new JSONArray();
         for (ReplayEvent event : events) {
             try {
@@ -884,6 +877,158 @@ public final class AkitaMissionControl {
             this.messageId = messageId;
             this.format = format;
             this.payload = payload;
+        }
+    }
+
+    private static final class MissionStateSnapshot {
+        private final List<MailboxRecord> mailboxRecords;
+        private final List<ReplayEvent> replayEvents;
+
+        private MissionStateSnapshot(List<MailboxRecord> mailboxRecords, List<ReplayEvent> replayEvents) {
+            this.mailboxRecords = mailboxRecords;
+            this.replayEvents = replayEvents;
+        }
+    }
+
+    private final class MissionStateStore {
+        private static final String STATE_FILE_NAME = "akita-mission-state.json";
+
+        private final AtomicFile stateFile;
+
+        private MissionStateStore(Context context) {
+            File stateDirectory = context.getNoBackupFilesDir();
+            stateFile = new AtomicFile(new File(stateDirectory, STATE_FILE_NAME));
+        }
+
+        private MissionStateSnapshot readStateSnapshot() {
+            if (!stateFile.getBaseFile().exists()) {
+                return migrateLegacyState();
+            }
+
+            try (FileInputStream inputStream = stateFile.openRead()) {
+                String payload = new String(readAllBytes(inputStream), StandardCharsets.UTF_8);
+                if (payload.trim().isEmpty()) {
+                    return new MissionStateSnapshot(new ArrayList<>(), new ArrayList<>());
+                }
+
+                JSONObject root = new JSONObject(payload);
+                return new MissionStateSnapshot(
+                        parseMailboxRecords(root.optJSONArray("mailboxRecords")),
+                        parseReplayEvents(root.optJSONArray("replayEvents")));
+            } catch (IOException | JSONException e) {
+                Log.w(TAG, "Failed to read mission state from disk; falling back to legacy preferences", e);
+                return migrateLegacyState();
+            }
+        }
+
+        private void writeState(List<MailboxRecord> records, List<ReplayEvent> events) {
+            FileOutputStream outputStream = null;
+            try {
+                JSONObject root = new JSONObject();
+                root.put("schemaVersion", 1);
+                root.put("mailboxRecords", new JSONArray(serializeMailboxRecords(records)));
+                root.put("replayEvents", new JSONArray(serializeReplayEvents(events)));
+
+                outputStream = stateFile.startWrite();
+                outputStream.write(root.toString().getBytes(StandardCharsets.UTF_8));
+                outputStream.flush();
+                stateFile.finishWrite(outputStream);
+            } catch (IOException | JSONException e) {
+                Log.w(TAG, "Failed to persist mission state to disk", e);
+                if (outputStream != null) {
+                    stateFile.failWrite(outputStream);
+                }
+            }
+        }
+
+        private void writeReplayEvents(List<ReplayEvent> events) {
+            MissionStateSnapshot snapshot = readStateSnapshot();
+            writeState(snapshot.mailboxRecords, events);
+        }
+
+        private MissionStateSnapshot migrateLegacyState() {
+            List<MailboxRecord> records = readLegacyMailboxRecords();
+            List<ReplayEvent> events = readLegacyReplayEvents();
+            if (!records.isEmpty() || !events.isEmpty()) {
+                writeState(records, events);
+            }
+            return new MissionStateSnapshot(records, events);
+        }
+
+        private List<MailboxRecord> readLegacyMailboxRecords() {
+            List<MailboxRecord> records = new ArrayList<>();
+            try {
+                Object rawValue = preferences.getAll().get(PREF_MAILBOX_RECORDS);
+                JSONArray array = new JSONArray(rawValue instanceof String ? (String) rawValue : "[]");
+                for (int index = 0; index < array.length(); index++) {
+                    JSONObject item = array.optJSONObject(index);
+                    if (item != null) {
+                        records.add(MailboxRecord.fromJson(item));
+                    }
+                }
+            } catch (JSONException | ClassCastException e) {
+                Log.w(TAG, "Failed to parse mailbox records from legacy preferences", e);
+            }
+            Collections.sort(records, Comparator.comparingLong(record -> record.createdAt));
+            return records;
+        }
+
+        private List<ReplayEvent> readLegacyReplayEvents() {
+            List<ReplayEvent> events = new ArrayList<>();
+            try {
+                Object rawValue = preferences.getAll().get(PREF_REPLAY_EVENTS);
+                JSONArray array = new JSONArray(rawValue instanceof String ? (String) rawValue : "[]");
+                for (int index = 0; index < array.length(); index++) {
+                    JSONObject item = array.optJSONObject(index);
+                    if (item != null) {
+                        events.add(ReplayEvent.fromJson(item));
+                    }
+                }
+            } catch (JSONException | ClassCastException e) {
+                Log.w(TAG, "Failed to parse replay events from legacy preferences", e);
+            }
+            Collections.sort(events, Comparator.comparingLong(event -> event.timestamp));
+            return events;
+        }
+
+        private List<MailboxRecord> parseMailboxRecords(JSONArray array) {
+            List<MailboxRecord> records = new ArrayList<>();
+            if (array == null) {
+                return records;
+            }
+            for (int index = 0; index < array.length(); index++) {
+                JSONObject item = array.optJSONObject(index);
+                if (item != null) {
+                    records.add(MailboxRecord.fromJson(item));
+                }
+            }
+            Collections.sort(records, Comparator.comparingLong(record -> record.createdAt));
+            return records;
+        }
+
+        private List<ReplayEvent> parseReplayEvents(JSONArray array) {
+            List<ReplayEvent> events = new ArrayList<>();
+            if (array == null) {
+                return events;
+            }
+            for (int index = 0; index < array.length(); index++) {
+                JSONObject item = array.optJSONObject(index);
+                if (item != null) {
+                    events.add(ReplayEvent.fromJson(item));
+                }
+            }
+            Collections.sort(events, Comparator.comparingLong(event -> event.timestamp));
+            return events;
+        }
+
+        private byte[] readAllBytes(FileInputStream inputStream) throws IOException {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            return outputStream.toByteArray();
         }
     }
 

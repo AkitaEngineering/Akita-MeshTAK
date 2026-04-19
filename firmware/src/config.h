@@ -5,14 +5,22 @@
 
 #include <Arduino.h>
 
-#define FIRMWARE_VERSION "0.2.0" 
+#ifndef AKITA_VERSION_NAME
+#define AKITA_VERSION_NAME "0.2.0"
+#endif
+
+#define FIRMWARE_VERSION AKITA_VERSION_NAME
 
 // --- Device Identification ---
+#ifndef DEVICE_ID
 #define DEVICE_ID "AkitaNode01"
+#endif
 
 // --- Security Provisioning ---
 // Replace this secret during provisioning. Keep firmware/plugin values aligned.
+#ifndef PROVISIONING_SECRET
 #define PROVISIONING_SECRET "REPLACE_WITH_DEPLOYMENT_SECRET"
+#endif
 
 // Compile-time guard: fail the build if the placeholder secret has not been
 // replaced. Comment out only for local-bench testing behind ENABLE_MQTT=0.
@@ -50,9 +58,15 @@
 
 // --- BLE Configuration (UUIDs MUST match Config.java) ---
 #if defined(ENABLE_BLE) && ENABLE_BLE
-  #define BLE_SERVICE_UUID        "YOUR_SERVICE_UUID"
-  #define BLE_COT_CHARACTERISTIC_UUID "YOUR_COT_CHARACTERISTIC_UUID"
-  #define BLE_WRITE_CHARACTERISTIC_UUID "YOUR_WRITE_CHARACTERISTIC_UUID"
+  #ifndef BLE_SERVICE_UUID
+    #define BLE_SERVICE_UUID        "YOUR_SERVICE_UUID"
+  #endif
+  #ifndef BLE_COT_CHARACTERISTIC_UUID
+    #define BLE_COT_CHARACTERISTIC_UUID "YOUR_COT_CHARACTERISTIC_UUID"
+  #endif
+  #ifndef BLE_WRITE_CHARACTERISTIC_UUID
+    #define BLE_WRITE_CHARACTERISTIC_UUID "YOUR_WRITE_CHARACTERISTIC_UUID"
+  #endif
 
   // Compile-time guard: fail the build if the BLE UUIDs still contain
   // placeholder values. Comment out only for bench testing.
@@ -82,13 +96,27 @@
 
 // --- MQTT Configuration ---
 #if defined(ENABLE_MQTT) && ENABLE_MQTT
-  #define MQTT_SERVER "YOUR_MQTT_SERVER"
-  #define MQTT_PORT 1883
-  #define MQTT_TOPIC_PREFIX "akita/meshtak/"
-  #define MQTT_WIFI_SSID "YOUR_WIFI_SSID"
-  #define MQTT_WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
-  #define MQTT_USERNAME "YOUR_MQTT_USERNAME"
-  #define MQTT_PASSWORD "YOUR_MQTT_PASSWORD"
+  #ifndef MQTT_SERVER
+    #define MQTT_SERVER "YOUR_MQTT_SERVER"
+  #endif
+  #ifndef MQTT_PORT
+    #define MQTT_PORT 1883
+  #endif
+  #ifndef MQTT_TOPIC_PREFIX
+    #define MQTT_TOPIC_PREFIX "akita/meshtak/"
+  #endif
+  #ifndef MQTT_WIFI_SSID
+    #define MQTT_WIFI_SSID "YOUR_WIFI_SSID"
+  #endif
+  #ifndef MQTT_WIFI_PASSWORD
+    #define MQTT_WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+  #endif
+  #ifndef MQTT_USERNAME
+    #define MQTT_USERNAME "YOUR_MQTT_USERNAME"
+  #endif
+  #ifndef MQTT_PASSWORD
+    #define MQTT_PASSWORD "YOUR_MQTT_PASSWORD"
+  #endif
 
   // Compile-time guard: fail the build when MQTT is enabled but credentials
   // still contain placeholders.

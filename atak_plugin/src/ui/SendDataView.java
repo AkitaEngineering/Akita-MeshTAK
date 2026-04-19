@@ -24,6 +24,7 @@ import android.widget.Toast;
 import androidx.preference.PreferenceManager;
 
 import com.atakmap.android.maps.MapView;
+import com.atakmap.android.plugin.ui.PluginView;
 import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.akitaengineering.meshtak.R;
 import com.akitaengineering.meshtak.services.BLEService;
@@ -38,7 +39,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-public class SendDataView extends LinearLayout implements SharedPreferences.OnSharedPreferenceChangeListener {
+public class SendDataView extends LinearLayout implements PluginView, SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static final String PREF_COMMAND_HISTORY = "dashboard_command_history";
     private static final String PREF_RECENT_PAYLOADS = "dashboard_recent_payloads";
@@ -390,8 +391,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 || AkitaMockSettings.PREF_MOCK_SERIAL_STATUS.equals(key)
                 || AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)
                 || AkitaMissionProfile.PREF_MISSION_PROFILE.equals(key)
-                || AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
-            || AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE.equals(key)
+                || AkitaProvisioningManager.PREF_PROVISIONING_SECRET_SIGNAL.equals(key)
+            || AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE_SIGNAL.equals(key)
                 || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)
                 || "ble_device_name".equals(key)
                 || "serial_baud_rate".equals(key)
@@ -1349,6 +1350,5 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 textView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
             }
         }
-    }
     }
 }

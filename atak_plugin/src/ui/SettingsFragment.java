@@ -5,6 +5,7 @@ package com.akitaengineering.meshtak.ui;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.Handler;
@@ -22,6 +23,7 @@ import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 
 import com.atakmap.android.maps.MapView;
+import com.atakmap.android.plugin.ui.PluginPreferenceFragment;
 import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.R;
@@ -29,7 +31,7 @@ import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
 import com.akitaengineering.meshtak.ui.AkitaTheme;
 
-public class SettingsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener, android.content.SharedPreferences.OnSharedPreferenceChangeListener {
+public class SettingsFragment extends PreferenceFragmentCompat implements PluginPreferenceFragment, Preference.OnPreferenceChangeListener, android.content.SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static final String TAG = "SettingsFragment";
     private MapView mapView;
@@ -116,10 +118,12 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         if (autoFailoverPref != null) autoFailoverPref.setOnPreferenceChangeListener(this);
         if (encryptionEnabledPref != null) encryptionEnabledPref.setOnPreferenceChangeListener(this);
         if (provisioningSecretPref != null) provisioningSecretPref.setOnPreferenceChangeListener(this);
+        if (provisioningSecretPref != null) provisioningSecretPref.setText("");
         if (provisioningSecretPref != null) provisioningSecretPref.setSummary(AkitaProvisioningManager.getProvisioningSummary(requireContext()));
         if (provisioningSecretPref != null) provisioningSecretPref.setOnBindEditTextListener(editText ->
             editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD));
         if (provisioningBundlePref != null) provisioningBundlePref.setOnPreferenceChangeListener(this);
+        if (provisioningBundlePref != null) provisioningBundlePref.setText("");
         if (provisioningBundlePref != null) provisioningBundlePref.setSummary(AkitaProvisioningManager.getProvisioningBundleSummary(requireContext()));
         if (mockModePref != null) mockModePref.setOnPreferenceChangeListener(this);
         if (mockBleStatusPref != null) mockBleStatusPref.setOnPreferenceChangeListener(this);
@@ -315,11 +319,11 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
 
     @Override
     public void onSharedPreferenceChanged(android.content.SharedPreferences sharedPreferences, String key) {
-        if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
+        if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET_SIGNAL.equals(key)
                 || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)
-                || AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE.equals(key)) {
+                || AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE_SIGNAL.equals(key)) {
             refreshProvisioningPreferenceSummaries();
-            if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
+            if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET_SIGNAL.equals(key)
                     || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)) {
                 new Handler(Looper.getMainLooper()).post(this::reloadBoundServiceSecurity);
             }
@@ -347,6 +351,15 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                 Toast.makeText(getActivity(), "Provisioning secret must be at least 12 characters or left blank to use the build-time secret.", Toast.LENGTH_SHORT).show();
                 return false;
             }
+            AkitaProvisioningManager.setCustomProvisioningSecret(requireContext(), newSecret);
+            if (preference instanceof EditTextPreference) {
+                ((EditTextPreference) preference).setText("");
+            }
+            refreshProvisioningPreferenceSummaries();
+            Toast.makeText(getActivity(), newSecret.isEmpty()
+                    ? "Custom provisioning secret cleared."
+                    : "Custom provisioning secret updated.", Toast.LENGTH_SHORT).show();
+            return false;
         } else if (AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE.equals(key)) {
             String bundle = String.valueOf(newValue).trim();
             if (!bundle.isEmpty()) {
@@ -357,6 +370,15 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                     return false;
                 }
             }
+            AkitaProvisioningManager.setStagedProvisioningBundle(requireContext(), bundle);
+            if (preference instanceof EditTextPreference) {
+                ((EditTextPreference) preference).setText("");
+            }
+            refreshProvisioningPreferenceSummaries();
+            Toast.makeText(getActivity(), bundle.isEmpty()
+                    ? "Staged provisioning bundle cleared."
+                    : "Provisioning bundle staged securely.", Toast.LENGTH_SHORT).show();
+            return false;
         } else if (AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL.equals(key)) {
             try {
                 int batteryLevel = Integer.parseInt(String.valueOf(newValue));

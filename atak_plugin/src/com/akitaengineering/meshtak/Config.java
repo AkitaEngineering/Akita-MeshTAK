@@ -15,7 +15,7 @@ public final class Config {
     // --- Security Provisioning ---
 
     /** Replace with deployment-specific shared secret. Must match firmware PROVISIONING_SECRET. */
-    public static final String PROVISIONING_SECRET = "REPLACE_WITH_DEPLOYMENT_SECRET";
+    public static final String PROVISIONING_SECRET = BuildConfig.AKITA_PROVISIONING_SECRET;
 
     /** Returns true when the provisioning secret is still set to the compile-time placeholder. */
     public static boolean isPlaceholderSecret() {
@@ -34,21 +34,21 @@ public final class Config {
     // --- BLE (Bluetooth Low Energy) Configuration ---
     
     /** UUID of the primary BLE Service provided by the Akita MeshTAK firmware. (REPLACE ME) */
-    public static final UUID BLE_SERVICE_UUID = UUID.fromString("0000181A-0000-1000-8000-00805F9B34FB"); 
+    public static final UUID BLE_SERVICE_UUID = UUID.fromString(BuildConfig.AKITA_BLE_SERVICE_UUID);
     
     /** UUID for the Characteristic used to receive CoT data (Notifications). (REPLACE ME) */
-    public static final UUID COT_CHARACTERISTIC_UUID = UUID.fromString("00002A6E-0000-1000-8000-00805F9B34FB"); 
+    public static final UUID COT_CHARACTERISTIC_UUID = UUID.fromString(BuildConfig.AKITA_COT_CHARACTERISTIC_UUID);
     
     /** UUID for the Characteristic used to send commands/data (Write). (REPLACE ME) */
-    public static final UUID WRITE_CHARACTERISTIC_UUID = UUID.fromString("00002A6C-0000-1000-8000-00805F9B34FB");
+    public static final UUID WRITE_CHARACTERISTIC_UUID = UUID.fromString(BuildConfig.AKITA_WRITE_CHARACTERISTIC_UUID);
     
     // --- Serial (USB) Configuration ---
     
     /** USB Vendor ID (Decimal) for the Heltec V3's serial chip. (REPLACE ME) */
-    public static final int HELTEC_VENDOR_ID = 1027;
+    public static final int HELTEC_VENDOR_ID = BuildConfig.AKITA_HELTEC_VENDOR_ID;
     
     /** USB Product ID (Decimal) for the Heltec V3's serial chip. (REPLACE ME) */
-    public static final int HELTEC_PRODUCT_ID = 24577; 
+    public static final int HELTEC_PRODUCT_ID = BuildConfig.AKITA_HELTEC_PRODUCT_ID;
     
     // --- COMMAND AND STATUS CONSTANTS ---
     
@@ -89,4 +89,7 @@ public final class Config {
     
     /** Default CoT Type to use for rendering Meshtastic nodes if type data is missing. */
     public static final String DEFAULT_COT_TYPE = "a-h-G-U-T"; // Human/Ground/Friend/Unknown/Team
+
+    private Config() {
+    }
 }

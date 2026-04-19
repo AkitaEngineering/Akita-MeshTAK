@@ -1,6 +1,74 @@
+import java.util.Properties
+
 plugins {
     id 'com.android.application' version '8.5.2'
 }
+
+def versionProperties = new Properties()
+file("$rootDir/../version.properties").withInputStream { stream ->
+    versionProperties.load(stream)
+}
+
+def hasText = { String value ->
+    value != null && !value.trim().isEmpty()
+}
+
+def resolveConfig = { String gradleKey, String envKey, String fallback ->
+    if (project.hasProperty(gradleKey)) {
+        def propertyValue = project.property(gradleKey)?.toString()
+        if (hasText(propertyValue)) {
+            return propertyValue.trim()
+        }
+    }
+
+    def envValue = System.getenv(envKey)
+    if (hasText(envValue)) {
+        return envValue.trim()
+    }
+
+    return fallback
+}
+
+def escapeBuildConfigString = { String value ->
+    def sanitized = value.replace('\\', '\\\\').replace('"', '\\"')
+    return '"' + sanitized + '"'
+}
+
+def versionNameValue = versionProperties.getProperty('VERSION_NAME', '0.2.0').trim()
+def versionCodeValue = Integer.parseInt(versionProperties.getProperty('VERSION_CODE', '1').trim())
+def minFirmwareVersion = versionProperties.getProperty('MIN_FIRMWARE_VERSION', versionNameValue).trim()
+def maxFirmwareVersion = versionProperties.getProperty('MAX_FIRMWARE_VERSION', '1.0.0').trim()
+def requiredAtakSdkVersion = versionProperties.getProperty('ATAK_SDK_VERSION', 'official-jar-required').trim()
+
+def defaultProvisioningSecret = 'REPLACE_WITH_DEPLOYMENT_SECRET'
+def defaultBleServiceUuid = '0000181A-0000-1000-8000-00805F9B34FB'
+def defaultCotCharacteristicUuid = '00002A6E-0000-1000-8000-00805F9B34FB'
+def defaultWriteCharacteristicUuid = '00002A6C-0000-1000-8000-00805F9B34FB'
+def defaultVendorId = 1027
+def defaultProductId = 24577
+
+def provisioningSecretValue = resolveConfig('akitaProvisioningSecret', 'AKITA_PROVISIONING_SECRET', defaultProvisioningSecret)
+def bleServiceUuidValue = resolveConfig('akitaBleServiceUuid', 'AKITA_BLE_SERVICE_UUID', defaultBleServiceUuid)
+def cotCharacteristicUuidValue = resolveConfig('akitaCotCharacteristicUuid', 'AKITA_BLE_COT_CHARACTERISTIC_UUID', defaultCotCharacteristicUuid)
+def writeCharacteristicUuidValue = resolveConfig('akitaWriteCharacteristicUuid', 'AKITA_BLE_WRITE_CHARACTERISTIC_UUID', defaultWriteCharacteristicUuid)
+def vendorIdValue = Integer.parseInt(resolveConfig('akitaHeltecVendorId', 'AKITA_HELTEC_VENDOR_ID', String.valueOf(defaultVendorId)))
+def productIdValue = Integer.parseInt(resolveConfig('akitaHeltecProductId', 'AKITA_HELTEC_PRODUCT_ID', String.valueOf(defaultProductId)))
+
+def defaultAtakSdkJarPath = 'libs/atak-sdk.jar'
+def configuredAtakSdkJarPath = resolveConfig('akitaAtakSdkJar', 'AKITA_ATAK_SDK_JAR', defaultAtakSdkJarPath)
+def atakSdkJarFile = file(configuredAtakSdkJarPath)
+def useAtakStub = Boolean.parseBoolean(resolveConfig('akitaUseAtakStub', 'AKITA_USE_ATAK_STUB', 'false')) || !atakSdkJarFile.exists()
+
+def releaseKeystorePath = resolveConfig('akitaReleaseKeystoreFile', 'AKITA_RELEASE_KEYSTORE_FILE', '')
+def releaseStorePassword = resolveConfig('akitaReleaseStorePassword', 'AKITA_RELEASE_STORE_PASSWORD', '')
+def releaseKeyAlias = resolveConfig('akitaReleaseKeyAlias', 'AKITA_RELEASE_KEY_ALIAS', '')
+def releaseKeyPassword = resolveConfig('akitaReleaseKeyPassword', 'AKITA_RELEASE_KEY_PASSWORD', '')
+def releaseKeystoreFile = hasText(releaseKeystorePath) ? file(releaseKeystorePath) : null
+def hasReleaseSigning = (releaseKeystoreFile != null
+        && releaseKeystoreFile.exists()
+        && hasText(releaseStorePassword)
+        && hasText(releaseKeyAlias)
+        && hasText(releaseKeyPassword))
 
 android {
     namespace 'com.akitaengineering.meshtak'
@@ -10,8 +78,29 @@ android {
         applicationId 'com.akitaengineering.meshtak'
         minSdk 24
         targetSdk 35
-        versionCode 1
-        versionName "0.2.0"
+        versionCode versionCodeValue
+        versionName versionNameValue
+        buildConfigField 'String', 'AKITA_PROVISIONING_SECRET', escapeBuildConfigString(provisioningSecretValue)
+        buildConfigField 'String', 'AKITA_BLE_SERVICE_UUID', escapeBuildConfigString(bleServiceUuidValue)
+        buildConfigField 'String', 'AKITA_COT_CHARACTERISTIC_UUID', escapeBuildConfigString(cotCharacteristicUuidValue)
+        buildConfigField 'String', 'AKITA_WRITE_CHARACTERISTIC_UUID', escapeBuildConfigString(writeCharacteristicUuidValue)
+        buildConfigField 'int', 'AKITA_HELTEC_VENDOR_ID', String.valueOf(vendorIdValue)
+        buildConfigField 'int', 'AKITA_HELTEC_PRODUCT_ID', String.valueOf(productIdValue)
+        buildConfigField 'String', 'MIN_FIRMWARE_VERSION', escapeBuildConfigString(minFirmwareVersion)
+        buildConfigField 'String', 'MAX_FIRMWARE_VERSION', escapeBuildConfigString(maxFirmwareVersion)
+        buildConfigField 'String', 'REQUIRED_ATAK_SDK_VERSION', escapeBuildConfigString(requiredAtakSdkVersion)
+        buildConfigField 'boolean', 'USING_ATAK_STUB', useAtakStub ? 'true' : 'false'
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile releaseKeystoreFile
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -19,24 +108,42 @@ android {
             minifyEnabled false
         }
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
-    buildToolsVersion "35.0.1"
+    buildToolsVersion '35.0.1'
+
+    buildFeatures {
+        buildConfig true
+    }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
     }
 
     sourceSets {
         main {
             java.srcDirs = ['src']
+            if (useAtakStub) {
+                java.srcDirs += ['stubs']
+            }
             res.srcDirs = ['res']
             manifest.srcFile 'AndroidManifest.xml'
             assets.srcDirs = ['assets']
+        }
+        test {
+            java.srcDirs = ['test']
         }
     }
 }
@@ -44,7 +151,39 @@ android {
 dependencies {
     implementation 'androidx.preference:preference:1.2.1'
     implementation 'com.github.mik3y:usb-serial-for-android:3.7.0'
+    testImplementation 'androidx.test:core:1.6.1'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.16.1'
 
-    // ATAK SDK dependency placeholder (add your local SDK jar/aar here)
-    compileOnly files('libs/atak-sdk.jar')
+    if (!useAtakStub) {
+        compileOnly files(atakSdkJarFile)
+    }
+}
+
+def verifyReleaseInputs = tasks.register('verifyReleaseInputs') {
+    doLast {
+        if (useAtakStub) {
+            throw new RuntimeException(
+                    'Release builds require the official ATAK SDK jar via AKITA_ATAK_SDK_JAR or -PakitaAtakSdkJar. '
+                            + 'Expected SDK contract: ' + requiredAtakSdkVersion)
+        }
+        if (!hasReleaseSigning) {
+            throw new RuntimeException(
+                    'Release builds require signing credentials via AKITA_RELEASE_KEYSTORE_FILE, '
+                            + 'AKITA_RELEASE_STORE_PASSWORD, AKITA_RELEASE_KEY_ALIAS, and AKITA_RELEASE_KEY_PASSWORD.')
+        }
+        if (provisioningSecretValue == defaultProvisioningSecret) {
+            throw new RuntimeException('Release builds require AKITA_PROVISIONING_SECRET to replace the placeholder fallback.')
+        }
+        if (bleServiceUuidValue.equalsIgnoreCase(defaultBleServiceUuid)
+                || cotCharacteristicUuidValue.equalsIgnoreCase(defaultCotCharacteristicUuid)
+                || writeCharacteristicUuidValue.equalsIgnoreCase(defaultWriteCharacteristicUuid)) {
+            throw new RuntimeException('Release builds require deployment BLE UUIDs via AKITA_BLE_SERVICE_UUID, '
+                    + 'AKITA_BLE_COT_CHARACTERISTIC_UUID, and AKITA_BLE_WRITE_CHARACTERISTIC_UUID.')
+        }
+    }
+}
+
+tasks.matching { task -> task.name in ['assembleRelease', 'bundleRelease'] }.configureEach {
+    dependsOn verifyReleaseInputs
 }

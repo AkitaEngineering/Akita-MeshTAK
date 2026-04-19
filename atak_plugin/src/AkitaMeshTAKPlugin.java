@@ -257,7 +257,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
             
             // 3. Update the toolbar display instantly
             if (akitaToolbar != null) akitaToolbar.updateConnectionMethodDisplay();
-        } else if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)
+        } else if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET_SIGNAL.equals(key)
                 || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)) {
             if (bleService != null) {
                 bleService.reloadSecurityConfiguration();

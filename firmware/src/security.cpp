@@ -5,6 +5,7 @@
 #include "security.h"
 #include "config.h"
 #include <esp_random.h>
+#include <mbedtls/md.h>
 #include <mbedtls/pkcs5.h>
 #include <string.h>
 
@@ -34,16 +35,22 @@ static void deriveProvisionedKey(const String& deviceId,
     mbedtls_md_context_t ctx;
     const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     mbedtls_md_init(&ctx);
-    mbedtls_md_setup(&ctx, md_info, 1); // HMAC mode
-    mbedtls_pkcs5_hmac_ext(
-        MBEDTLS_MD_SHA256,
-        reinterpret_cast<const unsigned char*>(sharedSecret.c_str()),
-        sharedSecret.length(),
-        reinterpret_cast<const unsigned char*>(salt.c_str()),
-        salt.length(),
-        100000,
-        outLen,
-        outKey);
+    if (md_info == nullptr || mbedtls_md_setup(&ctx, md_info, 1) != 0) {
+        mbedtls_md_free(&ctx);
+        return;
+    }
+
+    if (mbedtls_pkcs5_pbkdf2_hmac(
+            &ctx,
+            reinterpret_cast<const unsigned char*>(sharedSecret.c_str()),
+            sharedSecret.length(),
+            reinterpret_cast<const unsigned char*>(salt.c_str()),
+            salt.length(),
+            100000,
+            outLen,
+            outKey) != 0) {
+        memset(outKey, 0, outLen);
+    }
     mbedtls_md_free(&ctx);
 
     // Best-effort wipe of the Arduino String holding secret material

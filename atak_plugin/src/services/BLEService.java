@@ -164,7 +164,7 @@ public class BLEService extends Service {
     private void initializeSecurity() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
         boolean encryptionEnabled = AkitaProvisioningManager.isEncryptionEnabled(preferences);
-        String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(preferences);
+        String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(this);
 
         securityManager.reset();
         if (!securityManager.initializeFromProvisioning(targetDeviceName, provisioningSecret)) {

@@ -20,6 +20,7 @@ The current Android plugin security model is surfaced directly to operators thro
 - **Firmware Default**: Encryption is enabled by default (`SECURITY_MODE_AES256_HMAC`). The firmware encrypts/decrypts all BLE and serial payloads when a valid provisioning secret is configured.
 - **Android Plugin Default**: The plugin reads `security_encryption_enabled` from settings and treats encrypted transport as enabled unless an operator explicitly disables it.
 - **Provisioning Source**: The active provisioning secret is read from plugin settings when present; `Config.PROVISIONING_SECRET` is used only as a fallback.
+- **Local Secret Storage**: Custom provisioning secrets and staged offline bundles are stored in a no-backup file encrypted with Android Keystore AES-GCM on device. JVM/Robolectric tests use a process-local fallback key only for test execution.
 - **Provisioning Ceremony**: The plugin can generate/apply air-gapped bundles and send a plaintext stage-to-device command over a trusted local bearer so firmware can adopt new provisioning material without a rebuild.
 - **Readiness Warning**: Placeholder secrets can support rehearsal and UI preview, but Mission Assurance will flag that posture as not deployment-ready.
 - **Enablement Requirement**: Firmware and plugin must use matching provisioning secret, version, and key-id metadata.
@@ -217,6 +218,10 @@ In firmware build flags:
 - Define `ALLOW_PLACEHOLDER_SECRET` only for bench rehearsal when placeholder values are intentionally retained
 
 ### Android Plugin Configuration
+
+- Custom provisioning secrets and staged bundles are no longer persisted as plain SharedPreferences values.
+- The plugin stores that material in an encrypted no-backup state file protected by an Android Keystore AES key.
+- Preference keys are retained only as non-sensitive UI/service refresh signals.
 
 In the plugin settings UI:
 - Configure **Enable Encrypted Transport**

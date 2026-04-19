@@ -89,7 +89,7 @@ public final class AkitaOperationalReadiness {
             return "Rotate deployment secret";
         }
         if (securityManager.isInitialized()) {
-            return AkitaProvisioningManager.getRotationSummary(preferences);
+            return AkitaProvisioningManager.getRotationSummary(context);
         }
         if (AkitaMockSettings.isEnabled(preferences)) {
             return "Mock provisioning staged";

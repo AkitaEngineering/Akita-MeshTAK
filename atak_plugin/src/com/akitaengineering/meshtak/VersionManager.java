@@ -12,15 +12,6 @@ import android.util.Log;
 public class VersionManager {
     private static final String TAG = "VersionManager";
     
-    // Plugin version
-    public static final String PLUGIN_VERSION = "0.2.0";
-    
-    // Minimum supported firmware version
-    public static final String MIN_FIRMWARE_VERSION = "0.2.0";
-    
-    // Maximum supported firmware version (for compatibility checking)
-    public static final String MAX_FIRMWARE_VERSION = "1.0.0";
-    
     /**
      * Compare version strings (format: "major.minor.patch")
      * Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
@@ -70,14 +61,14 @@ public class VersionManager {
             return false;
         }
         
-        int minCompare = compareVersions(firmwareVersion, MIN_FIRMWARE_VERSION);
-        int maxCompare = compareVersions(firmwareVersion, MAX_FIRMWARE_VERSION);
+        int minCompare = compareVersions(firmwareVersion, BuildConfig.MIN_FIRMWARE_VERSION);
+        int maxCompare = compareVersions(firmwareVersion, BuildConfig.MAX_FIRMWARE_VERSION);
         
         boolean compatible = (minCompare >= 0 && maxCompare <= 0);
         
         if (!compatible) {
             Log.w(TAG, "Firmware version " + firmwareVersion + " is not compatible. " +
-                  "Required: " + MIN_FIRMWARE_VERSION + " - " + MAX_FIRMWARE_VERSION);
+                  "Required: " + BuildConfig.MIN_FIRMWARE_VERSION + " - " + BuildConfig.MAX_FIRMWARE_VERSION);
         }
         
         return compatible;
@@ -87,7 +78,7 @@ public class VersionManager {
      * Get plugin version string.
      */
     public static String getPluginVersion() {
-        return PLUGIN_VERSION;
+        return BuildConfig.VERSION_NAME;
     }
 }
 

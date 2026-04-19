@@ -18,8 +18,9 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 
 ### IMPORTANT: READ BEFORE COMPILING
 
-- **Firmware**: Set the BLE UUIDs, deployment provisioning secret, and any enabled MQTT credentials in `firmware/src/config.h`. Placeholder UUIDs, provisioning material, and MQTT credentials now fail the firmware build unless you explicitly define `ALLOW_PLACEHOLDER_SECRET` for bench rehearsal.  
-- **ATAK Plugin**: Edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java` and fill in the UUIDs and USB IDs to match your firmware and hardware. Runtime provisioning from **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning** is preferred; `Config.PROVISIONING_SECRET` is only a fallback.  
+- **Firmware**: Prefer build-time environment variables over source edits. `firmware/tools/load_build_config.py` injects deployment values such as BLE UUIDs, device ID, provisioning secret, and MQTT credentials. Placeholder UUIDs, provisioning material, and MQTT credentials still fail the production firmware build unless you explicitly define `ALLOW_PLACEHOLDER_SECRET` or use the `heltec_v3_ci` rehearsal target.  
+- **ATAK Plugin**: Do not edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java` for deployment values. Supply provisioning secret, BLE UUIDs, USB IDs, and the ATAK SDK jar path through Gradle properties or environment variables as documented in `atak_plugin/README.md` and `atak_plugin/ATAK_SDK_REQUIREMENTS.md`.  
+- **Java Runtime**: Android builds require Java 17 or 21. Gradle/AGP validation is not reliable on Java 26 at the time of writing.  
 - **Provisioning Secret**: Operators can generate an air-gapped provisioning bundle, apply it locally, and stage the active secret to a connected device over a trusted local bearer. Placeholder secrets are acceptable for rehearsal only and are surfaced as degraded posture in Mission Assurance.  
 
 ---
@@ -91,6 +92,7 @@ Comprehensive MILSPEC documentation is available in the `documentation/` directo
 - **System Specification (SS)**: Detailed system requirements and specifications
 - **Security Guide**: Comprehensive security documentation
 - **Developer Guide**: Information for developers and contributors
+- **Release Process**: Coordinated firmware/plugin release steps, inputs, and artifact expectations
 - **UI Preview**: `documentation/ui_preview.html` provides a no-hardware visualization of the current toolbar and dashboard experience
 
 ---

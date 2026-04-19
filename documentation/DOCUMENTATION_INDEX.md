@@ -151,6 +151,22 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 
 ---
 
+#### 9. Release Process
+**File**: `release_process.md`  
+**Purpose**: Defines version management, release inputs, build signing, and coordinated artifact generation for firmware and ATAK plugin shipments
+
+**Contents**:
+- Version source of truth
+- Release preconditions
+- Firmware release inputs
+- ATAK plugin release inputs
+- Artifact checklist
+- Tagging and rollback guidance
+
+**Audience**: Release managers, maintainers, build engineers
+
+---
+
 ## Document Relationships
 
 ```

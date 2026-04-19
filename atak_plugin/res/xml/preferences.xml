@@ -38,6 +38,7 @@
         <EditTextPreference
             android:key="security_provisioning_secret"
             android:title="@string/provisioning_secret_title"
+            android:persistent="false"
             android:defaultValue="" />
 
         <Preference
@@ -47,6 +48,7 @@
         <EditTextPreference
             android:key="security_provisioning_bundle"
             android:title="@string/provisioning_bundle_title"
+            android:persistent="false"
             android:defaultValue="" />
 
         <Preference

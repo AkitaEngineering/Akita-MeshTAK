@@ -49,12 +49,24 @@ Clone the Akita MeshTAK repository.
 `cd AkitaMeshTAK/firmware`
 
 ## Configure
-Open `firmware/src/config.h` and set the following before building:  
-- BLE UUIDs that match the ATAK plugin  
-- `PROVISIONING_SECRET` for deployment builds  
-- `MQTT_SERVER`, `MQTT_WIFI_SSID`, `MQTT_WIFI_PASSWORD`, `MQTT_USERNAME`, and `MQTT_PASSWORD` when `ENABLE_MQTT` is enabled  
+Prefer environment-driven build inputs over source edits. `tools/load_build_config.py` maps deployment values into preprocessor defines before compilation.
 
-These values are guarded with compile-time assertions. If placeholder values remain, the build fails unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for local bench rehearsal.
+Supported environment variables:
+
+- `AKITA_DEVICE_ID`
+- `AKITA_PROVISIONING_SECRET`
+- `AKITA_BLE_SERVICE_UUID`
+- `AKITA_BLE_COT_CHARACTERISTIC_UUID`
+- `AKITA_BLE_WRITE_CHARACTERISTIC_UUID`
+- `AKITA_MQTT_SERVER`
+- `AKITA_MQTT_PORT`
+- `AKITA_MQTT_TOPIC_PREFIX`
+- `AKITA_MQTT_WIFI_SSID`
+- `AKITA_MQTT_WIFI_PASSWORD`
+- `AKITA_MQTT_USERNAME`
+- `AKITA_MQTT_PASSWORD`
+
+Placeholders remain guarded with compile-time assertions. If deployment values are absent, the production target fails unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for local bench rehearsal.
 
 ## Build and Upload
 
@@ -62,7 +74,7 @@ These values are guarded with compile-time assertions. If placeholder values rem
 2. Build the firmware: `pio run`
 3. Upload the firmware: `pio run -t upload`
 
-For rehearsal-only builds that intentionally keep placeholder provisioning or UUID material, define `ALLOW_PLACEHOLDER_SECRET` in your PlatformIO build flags. Do not use that override for fielded or production images.
+For CI or rehearsal-only builds that intentionally keep placeholder provisioning or UUID material, use `pio run -e heltec_v3_ci` or define `ALLOW_PLACEHOLDER_SECRET` in your PlatformIO build flags. Do not use that override for fielded or production images.
 
 ---
 

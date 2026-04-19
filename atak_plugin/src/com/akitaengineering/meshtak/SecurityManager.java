@@ -34,8 +34,7 @@ public class SecurityManager {
     private SecretKey aesKey;
     private SecretKey hmacKey;
     private volatile boolean initialized = false;
-    // Default to false to avoid breaking compatibility until a secure handshake/key exchange exists
-    private volatile boolean encryptionEnabled = false;
+    private volatile boolean encryptionEnabled = true;
     
     // Security statistics
     private long messagesEncrypted = 0;
@@ -298,7 +297,7 @@ public class SecurityManager {
         aesKey = null;
         hmacKey = null;
         initialized = false;
-        encryptionEnabled = false;
+        encryptionEnabled = true;
     }
 
     public void setEncryptionEnabled(boolean enabled) {

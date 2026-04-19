@@ -2,62 +2,104 @@ package com.akitaengineering.meshtak.ui;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Build;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.AtomicFile;
+import android.util.Base64;
+import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
 import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.akitaengineering.meshtak.Config;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.util.Collections;
 import java.util.Locale;
+import java.util.Map;
+import java.util.WeakHashMap;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 
 public final class AkitaProvisioningManager {
+
+    private static final String TAG = "AkitaProvisioningMgr";
 
     public static final String PREF_PROVISIONING_SECRET = "security_provisioning_secret";
     public static final String PREF_ENCRYPTION_ENABLED = "security_encryption_enabled";
     public static final String PREF_LAST_ROTATION_AT = "security_last_rotation_at";
     public static final String PREF_PROVISIONING_BUNDLE = "security_provisioning_bundle";
     public static final String PREF_LAST_BUNDLE_GENERATED_AT = "security_last_bundle_generated_at";
+    public static final String PREF_PROVISIONING_SECRET_SIGNAL = "security_provisioning_secret_signal";
+    public static final String PREF_PROVISIONING_BUNDLE_SIGNAL = "security_provisioning_bundle_signal";
 
     private static final String SECRET_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
     private static final int GENERATED_SECRET_LENGTH = 40;
     private static final String BUNDLE_PREFIX = "AKITA-PROV-1";
+    private static final String STATE_FILE_NAME = "akita-provisioning-state.json";
+    private static final String PROVISIONING_STATE_KEY_ALIAS = "akita_provisioning_state_key";
+    private static final Object STATE_LOCK = new Object();
+    private static final Map<SharedPreferences, ProvisioningStateStore> STORES_BY_PREFERENCES = Collections.synchronizedMap(new WeakHashMap<>());
+
+    private static volatile ProvisioningStateStore stateStore;
 
     private AkitaProvisioningManager() {
     }
 
     public static SharedPreferences getPreferences(Context context) {
-        return PreferenceManager.getDefaultSharedPreferences(context);
+        Context appContext = context.getApplicationContext();
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(appContext);
+        STORES_BY_PREFERENCES.put(preferences, getStateStore(appContext));
+        return preferences;
     }
 
     public static String getActiveProvisioningSecret(Context context) {
-        return getActiveProvisioningSecret(getPreferences(context));
+        ProvisioningState state = getStateStore(context).readState();
+        if (hasText(state.customSecret)) {
+            return state.customSecret;
+        }
+        return Config.PROVISIONING_SECRET;
     }
 
     public static String getActiveProvisioningSecret(SharedPreferences preferences) {
-        String configuredSecret = preferences.getString(PREF_PROVISIONING_SECRET, "");
-        if (configuredSecret != null && !configuredSecret.trim().isEmpty()) {
-            return configuredSecret.trim();
+        ProvisioningState state = readState(preferences);
+        if (hasText(state.customSecret)) {
+            return state.customSecret;
         }
         return Config.PROVISIONING_SECRET;
     }
 
     public static boolean hasCustomSecret(Context context) {
-        return hasCustomSecret(getPreferences(context));
+        return hasText(getStateStore(context).readState().customSecret);
     }
 
     public static boolean hasCustomSecret(SharedPreferences preferences) {
-        String configuredSecret = preferences.getString(PREF_PROVISIONING_SECRET, "");
-        return configuredSecret != null && !configuredSecret.trim().isEmpty();
+        return hasText(readState(preferences).customSecret);
     }
 
     public static boolean isActiveSecretPlaceholder(Context context) {
-        return isActiveSecretPlaceholder(getPreferences(context));
+        String secret = getActiveProvisioningSecret(context);
+        return !hasText(secret) || secret.contains("REPLACE_WITH");
     }
 
     public static boolean isActiveSecretPlaceholder(SharedPreferences preferences) {
         String secret = getActiveProvisioningSecret(preferences);
-        return secret == null || secret.isEmpty() || secret.contains("REPLACE_WITH");
+        return !hasText(secret) || secret.contains("REPLACE_WITH");
     }
 
     public static boolean isEncryptionEnabled(Context context) {
@@ -71,20 +113,38 @@ public final class AkitaProvisioningManager {
     public static String rotateProvisioningSecret(Context context) {
         SharedPreferences preferences = getPreferences(context);
         String rotatedSecret = generateSecret();
-        preferences.edit()
-                .putString(PREF_PROVISIONING_SECRET, rotatedSecret)
-                .putLong(PREF_LAST_ROTATION_AT, System.currentTimeMillis())
-                .apply();
+        ProvisioningState state = getStateStore(context).readState();
+        state.customSecret = rotatedSecret;
+        state.lastRotationAt = System.currentTimeMillis();
+        getStateStore(context).writeState(state);
+        clearSensitivePreferenceMirrors(preferences);
+        signalSensitiveStateChanged(preferences, true, false);
         return rotatedSecret;
     }
 
+    public static void setCustomProvisioningSecret(Context context, String secret) {
+        SharedPreferences preferences = getPreferences(context);
+        ProvisioningState state = getStateStore(context).readState();
+        state.customSecret = normalizeValue(secret);
+        getStateStore(context).writeState(state);
+        clearSensitivePreferenceMirrors(preferences);
+        signalSensitiveStateChanged(preferences, true, false);
+    }
+
     public static String getProvisioningSummary(Context context) {
-        return getProvisioningSummary(getPreferences(context));
+        ProvisioningState state = getStateStore(context).readState();
+        if (hasText(state.customSecret)) {
+            return "Custom secret configured: " + maskSecret(state.customSecret);
+        }
+        return isActiveSecretPlaceholder(context)
+                ? "Using build-time placeholder secret"
+                : "Using build-time deployment secret";
     }
 
     public static String getProvisioningSummary(SharedPreferences preferences) {
-        if (hasCustomSecret(preferences)) {
-            return "Custom secret configured: " + maskSecret(preferences.getString(PREF_PROVISIONING_SECRET, ""));
+        ProvisioningState state = readState(preferences);
+        if (hasText(state.customSecret)) {
+            return "Custom secret configured: " + maskSecret(state.customSecret);
         }
         return isActiveSecretPlaceholder(preferences)
                 ? "Using build-time placeholder secret"
@@ -93,6 +153,7 @@ public final class AkitaProvisioningManager {
 
     public static String createProvisioningBundle(Context context, String deviceAlias) {
         SharedPreferences preferences = getPreferences(context);
+        ProvisioningState state = getStateStore(context).readState();
         String alias = sanitizeBundleField(deviceAlias);
         String bundle = String.format(
                 Locale.US,
@@ -102,16 +163,34 @@ public final class AkitaProvisioningManager {
                 Config.ENCRYPTED_PAYLOAD_VERSION,
                 Config.ENCRYPTED_KEY_ID,
                 isEncryptionEnabled(preferences) ? 1 : 0,
-                getActiveProvisioningSecret(preferences));
-        preferences.edit()
-                .putString(PREF_PROVISIONING_BUNDLE, bundle)
-                .putLong(PREF_LAST_BUNDLE_GENERATED_AT, System.currentTimeMillis())
-                .apply();
+                getActiveProvisioningSecret(context));
+        state.stagedBundle = bundle;
+        state.lastBundleGeneratedAt = System.currentTimeMillis();
+        getStateStore(context).writeState(state);
+        clearSensitivePreferenceMirrors(preferences);
+        signalSensitiveStateChanged(preferences, false, true);
         AkitaMissionControl.getInstance(context).recordProvisioningEvent(
                 "PROVISIONING_BUNDLE_GENERATED",
                 "Air-gapped bundle prepared for " + alias,
                 AkitaMissionControl.ROUTE_MOCK);
         return bundle;
+    }
+
+    public static void setStagedProvisioningBundle(Context context, String bundle) {
+        SharedPreferences preferences = getPreferences(context);
+        String normalizedBundle = normalizeValue(bundle);
+        ProvisioningState state = getStateStore(context).readState();
+        if (hasText(normalizedBundle)) {
+            parseProvisioningBundle(normalizedBundle);
+            state.stagedBundle = normalizedBundle;
+            state.lastBundleGeneratedAt = 0L;
+        } else {
+            state.stagedBundle = "";
+            state.lastBundleGeneratedAt = 0L;
+        }
+        getStateStore(context).writeState(state);
+        clearSensitivePreferenceMirrors(preferences);
+        signalSensitiveStateChanged(preferences, false, true);
     }
 
     public static ProvisioningBundle previewProvisioningBundle(String bundle) {
@@ -120,12 +199,16 @@ public final class AkitaProvisioningManager {
 
     public static ProvisioningBundle applyProvisioningBundle(Context context) {
         SharedPreferences preferences = getPreferences(context);
-        ProvisioningBundle bundle = parseProvisioningBundle(preferences.getString(PREF_PROVISIONING_BUNDLE, ""));
+        ProvisioningState state = getStateStore(context).readState();
+        ProvisioningBundle bundle = parseProvisioningBundle(state.stagedBundle);
+        state.customSecret = bundle.secret;
+        state.lastRotationAt = System.currentTimeMillis();
+        getStateStore(context).writeState(state);
         preferences.edit()
-                .putString(PREF_PROVISIONING_SECRET, bundle.secret)
                 .putBoolean(PREF_ENCRYPTION_ENABLED, bundle.encryptionEnabled)
-                .putLong(PREF_LAST_ROTATION_AT, System.currentTimeMillis())
                 .apply();
+        clearSensitivePreferenceMirrors(preferences);
+        signalSensitiveStateChanged(preferences, true, false);
         AkitaMissionControl.getInstance(context).recordProvisioningEvent(
                 "PROVISIONING_BUNDLE_APPLIED",
                 "Bundle applied locally for " + bundle.deviceAlias,
@@ -134,46 +217,74 @@ public final class AkitaProvisioningManager {
     }
 
     public static String buildProvisioningStageCommand(Context context) {
-        SharedPreferences preferences = getPreferences(context);
-        String stagedBundle = preferences.getString(PREF_PROVISIONING_BUNDLE, "");
-        if (stagedBundle != null && !stagedBundle.trim().isEmpty()) {
-            return Config.CMD_PROVISION_STAGE_PREFIX + parseProvisioningBundle(stagedBundle).secret;
+        ProvisioningState state = getStateStore(context).readState();
+        if (hasText(state.stagedBundle)) {
+            return Config.CMD_PROVISION_STAGE_PREFIX + parseProvisioningBundle(state.stagedBundle).secret;
         }
-        return Config.CMD_PROVISION_STAGE_PREFIX + getActiveProvisioningSecret(preferences);
+        return Config.CMD_PROVISION_STAGE_PREFIX + getActiveProvisioningSecret(context);
     }
 
     public static String getProvisioningBundleSummary(Context context) {
-        return getProvisioningBundleSummary(getPreferences(context));
-    }
-
-    public static String getProvisioningBundleSummary(SharedPreferences preferences) {
-        String bundleValue = preferences.getString(PREF_PROVISIONING_BUNDLE, "");
-        if (bundleValue == null || bundleValue.trim().isEmpty()) {
+        ProvisioningState state = getStateStore(context).readState();
+        if (!hasText(state.stagedBundle)) {
             return "No air-gapped provisioning bundle staged";
         }
 
-        ProvisioningBundle bundle = parseProvisioningBundle(bundleValue);
-        long generatedAt = preferences.getLong(PREF_LAST_BUNDLE_GENERATED_AT, 0L);
-        String ageSummary = generatedAt <= 0L
-                ? "bundle loaded"
-                : "bundle refreshed " + getRelativeAge(generatedAt);
-        return String.format(Locale.US,
-                "%s • %s/%s • %s",
-                bundle.deviceAlias,
-                bundle.version,
-                bundle.keyId,
-                ageSummary);
+        try {
+            ProvisioningBundle bundle = parseProvisioningBundle(state.stagedBundle);
+            String ageSummary = state.lastBundleGeneratedAt <= 0L
+                    ? "bundle loaded"
+                    : "bundle refreshed " + getRelativeAge(state.lastBundleGeneratedAt);
+            return String.format(Locale.US,
+                    "%s • %s/%s • %s",
+                    bundle.deviceAlias,
+                    bundle.version,
+                    bundle.keyId,
+                    ageSummary);
+        } catch (IllegalArgumentException exception) {
+            return "Staged air-gapped provisioning bundle is malformed";
+        }
+    }
+
+    public static String getProvisioningBundleSummary(SharedPreferences preferences) {
+        ProvisioningState state = readState(preferences);
+        if (!hasText(state.stagedBundle)) {
+            return "No air-gapped provisioning bundle staged";
+        }
+
+        try {
+            ProvisioningBundle bundle = parseProvisioningBundle(state.stagedBundle);
+            String ageSummary = state.lastBundleGeneratedAt <= 0L
+                    ? "bundle loaded"
+                    : "bundle refreshed " + getRelativeAge(state.lastBundleGeneratedAt);
+            return String.format(Locale.US,
+                    "%s • %s/%s • %s",
+                    bundle.deviceAlias,
+                    bundle.version,
+                    bundle.keyId,
+                    ageSummary);
+        } catch (IllegalArgumentException exception) {
+            return "Staged air-gapped provisioning bundle is malformed";
+        }
     }
 
     public static String getRotationSummary(Context context) {
-        return getRotationSummary(getPreferences(context));
+        ProvisioningState state = getStateStore(context).readState();
+        if (state.lastRotationAt <= 0L) {
+            return hasText(state.customSecret) ? "Custom secret loaded" : "No recorded rotation";
+        }
+        return describeRotationAge(state.lastRotationAt);
     }
 
     public static String getRotationSummary(SharedPreferences preferences) {
-        long rotatedAt = preferences.getLong(PREF_LAST_ROTATION_AT, 0L);
-        if (rotatedAt <= 0L) {
-            return hasCustomSecret(preferences) ? "Custom secret loaded" : "No recorded rotation";
+        ProvisioningState state = readState(preferences);
+        if (state.lastRotationAt <= 0L) {
+            return hasText(state.customSecret) ? "Custom secret loaded" : "No recorded rotation";
         }
+        return describeRotationAge(state.lastRotationAt);
+    }
+
+    private static String describeRotationAge(long rotatedAt) {
         long ageMinutes = Math.max(0L, (System.currentTimeMillis() - rotatedAt) / 60000L);
         if (ageMinutes < 1L) {
             return "Rotated just now";
@@ -227,6 +338,222 @@ public final class AkitaProvisioningManager {
         }
     }
 
+    private static final class ProvisioningState {
+        private String customSecret;
+        private String stagedBundle;
+        private long lastRotationAt;
+        private long lastBundleGeneratedAt;
+
+        private ProvisioningState(String customSecret,
+                                  String stagedBundle,
+                                  long lastRotationAt,
+                                  long lastBundleGeneratedAt) {
+            this.customSecret = customSecret;
+            this.stagedBundle = stagedBundle;
+            this.lastRotationAt = lastRotationAt;
+            this.lastBundleGeneratedAt = lastBundleGeneratedAt;
+        }
+
+        private JSONObject toJson() throws JSONException {
+            JSONObject json = new JSONObject();
+            json.put("schemaVersion", 1);
+            json.put("customSecret", customSecret);
+            json.put("stagedBundle", stagedBundle);
+            json.put("lastRotationAt", lastRotationAt);
+            json.put("lastBundleGeneratedAt", lastBundleGeneratedAt);
+            return json;
+        }
+
+        private static ProvisioningState fromJson(JSONObject json) {
+            return new ProvisioningState(
+                    normalizeValue(json.optString("customSecret", "")),
+                    normalizeValue(json.optString("stagedBundle", "")),
+                    json.optLong("lastRotationAt", 0L),
+                    json.optLong("lastBundleGeneratedAt", 0L));
+        }
+
+        private static ProvisioningState fromLegacyPreferences(SharedPreferences preferences) {
+            return new ProvisioningState(
+                    normalizeValue(preferences.getString(PREF_PROVISIONING_SECRET, "")),
+                    normalizeValue(preferences.getString(PREF_PROVISIONING_BUNDLE, "")),
+                    preferences.getLong(PREF_LAST_ROTATION_AT, 0L),
+                    preferences.getLong(PREF_LAST_BUNDLE_GENERATED_AT, 0L));
+        }
+    }
+
+    private static final class ProvisioningStateStore {
+        private final String stateFilePath;
+        private final AtomicFile stateFile;
+        private final SharedPreferences preferences;
+        private final ProvisioningStateCipher stateCipher;
+
+        private ProvisioningStateStore(Context context) {
+            Context appContext = context.getApplicationContext();
+            preferences = PreferenceManager.getDefaultSharedPreferences(appContext);
+            File stateDirectory = appContext.getNoBackupFilesDir();
+            if (!stateDirectory.exists()) {
+                stateDirectory.mkdirs();
+            }
+            File baseFile = new File(stateDirectory, STATE_FILE_NAME);
+            stateFilePath = baseFile.getAbsolutePath();
+            stateFile = new AtomicFile(baseFile);
+            stateCipher = new ProvisioningStateCipher();
+        }
+
+        private boolean matchesContext(Context context) {
+            File expectedFile = new File(context.getApplicationContext().getNoBackupFilesDir(), STATE_FILE_NAME);
+            return stateFilePath.equals(expectedFile.getAbsolutePath());
+        }
+
+        private synchronized ProvisioningState readState() {
+            if (!stateFile.getBaseFile().exists()) {
+                return migrateLegacyState();
+            }
+
+            try (FileInputStream inputStream = stateFile.openRead()) {
+                byte[] payloadBytes = readAllBytes(inputStream);
+                if (payloadBytes.length == 0) {
+                    return new ProvisioningState("", "", 0L, 0L);
+                }
+                ProvisioningState state = parseStoredState(payloadBytes);
+                clearSensitivePreferenceMirrors(preferences);
+                return state;
+            } catch (IOException | JSONException | GeneralSecurityException exception) {
+                Log.w(TAG, "Failed to read encrypted provisioning state; falling back to legacy preferences", exception);
+                return migrateLegacyState();
+            }
+        }
+
+        private synchronized void writeState(ProvisioningState state) {
+            FileOutputStream outputStream = null;
+            try {
+                outputStream = stateFile.startWrite();
+                byte[] encryptedPayload = stateCipher.encrypt(state.toJson().toString());
+                outputStream.write(encryptedPayload);
+                outputStream.flush();
+                stateFile.finishWrite(outputStream);
+            } catch (IOException | JSONException | GeneralSecurityException exception) {
+                Log.w(TAG, "Failed to persist encrypted provisioning state", exception);
+                if (outputStream != null) {
+                    stateFile.failWrite(outputStream);
+                }
+            }
+        }
+
+        private ProvisioningState migrateLegacyState() {
+            ProvisioningState state = ProvisioningState.fromLegacyPreferences(preferences);
+            if (hasText(state.customSecret) || hasText(state.stagedBundle)
+                    || state.lastRotationAt > 0L || state.lastBundleGeneratedAt > 0L) {
+                writeState(state);
+            }
+            clearSensitivePreferenceMirrors(preferences);
+            return state;
+        }
+
+        private ProvisioningState parseStoredState(byte[] payloadBytes) throws JSONException, GeneralSecurityException {
+            String payload = new String(payloadBytes, StandardCharsets.UTF_8);
+            JSONObject root = new JSONObject(payload);
+            if (root.has("ciphertext") && root.has("iv")) {
+                String decryptedPayload = stateCipher.decrypt(root);
+                return ProvisioningState.fromJson(new JSONObject(decryptedPayload));
+            }
+
+            ProvisioningState legacyStateFile = ProvisioningState.fromJson(root);
+            writeState(legacyStateFile);
+            return legacyStateFile;
+        }
+
+        private byte[] readAllBytes(FileInputStream inputStream) throws IOException {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            return outputStream.toByteArray();
+        }
+    }
+
+    private static final class ProvisioningStateCipher {
+        private static final String TRANSFORMATION = "AES/GCM/NoPadding";
+        private static final int GCM_TAG_LENGTH_BITS = 128;
+
+        private static volatile SecretKey testFallbackKey;
+
+        private byte[] encrypt(String plaintext) throws GeneralSecurityException, JSONException {
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey());
+            byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+
+            JSONObject envelope = new JSONObject();
+            envelope.put("schemaVersion", 1);
+            envelope.put("storageFormat", "AES_GCM");
+            envelope.put("keySource", isRobolectricRuntime() ? "test-fallback" : "android-keystore");
+            envelope.put("iv", Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP));
+            envelope.put("ciphertext", Base64.encodeToString(ciphertext, Base64.NO_WRAP));
+            return envelope.toString().getBytes(StandardCharsets.UTF_8);
+        }
+
+        private String decrypt(JSONObject envelope) throws GeneralSecurityException, JSONException {
+            byte[] iv = Base64.decode(envelope.getString("iv"), Base64.NO_WRAP);
+            byte[] ciphertext = Base64.decode(envelope.getString("ciphertext"), Base64.NO_WRAP);
+
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateSecretKey(), new GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv));
+            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+        }
+
+        private SecretKey getOrCreateSecretKey() throws GeneralSecurityException {
+            if (isRobolectricRuntime()) {
+                return getOrCreateTestFallbackKey();
+            }
+
+            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+            try {
+                keyStore.load(null);
+            } catch (IOException exception) {
+                throw new GeneralSecurityException("Unable to load Android KeyStore", exception);
+            }
+
+            KeyStore.Entry existingEntry = keyStore.getEntry(PROVISIONING_STATE_KEY_ALIAS, null);
+            if (existingEntry instanceof KeyStore.SecretKeyEntry) {
+                return ((KeyStore.SecretKeyEntry) existingEntry).getSecretKey();
+            }
+
+            KeyGenerator keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+            keyGenerator.init(new KeyGenParameterSpec.Builder(
+                    PROVISIONING_STATE_KEY_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(256)
+                    .setRandomizedEncryptionRequired(true)
+                    .setUserAuthenticationRequired(false)
+                    .build());
+            return keyGenerator.generateKey();
+        }
+
+        private SecretKey getOrCreateTestFallbackKey() throws GeneralSecurityException {
+            SecretKey existingKey = testFallbackKey;
+            if (existingKey != null) {
+                return existingKey;
+            }
+
+            synchronized (ProvisioningStateCipher.class) {
+                if (testFallbackKey == null) {
+                    KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+                    keyGenerator.init(256);
+                    testFallbackKey = keyGenerator.generateKey();
+                }
+                return testFallbackKey;
+            }
+        }
+
+        private boolean isRobolectricRuntime() {
+            return Build.FINGERPRINT != null && Build.FINGERPRINT.toLowerCase(Locale.US).contains("robolectric");
+        }
+    }
+
     private static ProvisioningBundle parseProvisioningBundle(String bundle) {
         if (bundle == null || bundle.trim().isEmpty()) {
             throw new IllegalArgumentException("Provisioning bundle is empty.");
@@ -253,6 +580,58 @@ public final class AkitaProvisioningManager {
             return "AkitaNode01";
         }
         return value.trim().replace('|', '_');
+    }
+
+    private static ProvisioningStateStore getStateStore(Context context) {
+        Context appContext = context.getApplicationContext();
+        synchronized (STATE_LOCK) {
+            if (stateStore == null || !stateStore.matchesContext(appContext)) {
+                stateStore = new ProvisioningStateStore(appContext);
+            }
+            STORES_BY_PREFERENCES.put(PreferenceManager.getDefaultSharedPreferences(appContext), stateStore);
+            return stateStore;
+        }
+    }
+
+    private static ProvisioningState readState(SharedPreferences preferences) {
+        ProvisioningStateStore store = STORES_BY_PREFERENCES.get(preferences);
+        if (store != null) {
+            return store.readState();
+        }
+        ProvisioningStateStore currentStore = stateStore;
+        if (currentStore != null) {
+            return currentStore.readState();
+        }
+        return ProvisioningState.fromLegacyPreferences(preferences);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private static String normalizeValue(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static void clearSensitivePreferenceMirrors(SharedPreferences preferences) {
+        preferences.edit()
+                .remove(PREF_PROVISIONING_SECRET)
+                .remove(PREF_LAST_ROTATION_AT)
+                .remove(PREF_PROVISIONING_BUNDLE)
+                .remove(PREF_LAST_BUNDLE_GENERATED_AT)
+                .apply();
+    }
+
+    private static void signalSensitiveStateChanged(SharedPreferences preferences, boolean secretChanged, boolean bundleChanged) {
+        long now = System.currentTimeMillis();
+        SharedPreferences.Editor editor = preferences.edit();
+        if (secretChanged) {
+            editor.putLong(PREF_PROVISIONING_SECRET_SIGNAL, now);
+        }
+        if (bundleChanged) {
+            editor.putLong(PREF_PROVISIONING_BUNDLE_SIGNAL, now);
+        }
+        editor.apply();
     }
 
     private static String getRelativeAge(long timestamp) {
