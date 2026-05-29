@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Locale;
 
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -103,6 +104,32 @@ public class AkitaProvisioningManagerTest {
             AkitaProvisioningManager.buildProvisioningStageCommandBytes(context));
         assertTrue(stateFile.exists());
         assertStoredFileIsEncrypted("LegacySecret123456");
+    }
+
+    @Test
+    public void secureStoreWriteFailurePreservesLegacyPreferences() {
+        preferences.edit()
+                .putString(AkitaProvisioningManager.PREF_PROVISIONING_SECRET, "LegacySecret123456")
+                .commit();
+
+        assertTrue(stateFile.mkdir());
+
+        assertEquals("LegacySecret123456", AkitaProvisioningManager.getActiveProvisioningSecret(context));
+        assertTrue(preferences.contains(AkitaProvisioningManager.PREF_PROVISIONING_SECRET));
+    }
+
+    @Test
+    public void secureStoreWriteFailureIsSurfacedToCallers() {
+        assertTrue(stateFile.mkdir());
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> AkitaProvisioningManager.setCustomProvisioningSecret(context, "CustomSecret123456"));
+
+        assertEquals(
+                "Unable to persist encrypted provisioning state. Check device storage and Android Keystore availability.",
+                exception.getMessage());
+        assertFalse(preferences.contains(AkitaProvisioningManager.PREF_PROVISIONING_SECRET_SIGNAL));
     }
 
     private void assertStoredFileIsEncrypted(String rawSecret) {

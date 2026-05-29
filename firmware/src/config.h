@@ -75,6 +75,14 @@
       __builtin_strcmp(BLE_SERVICE_UUID, "YOUR_SERVICE_UUID") != 0,
       "BLE_SERVICE_UUID still contains the placeholder. "
       "Replace it with the real UUID from your firmware before deploying.");
+    static_assert(
+      __builtin_strcmp(BLE_COT_CHARACTERISTIC_UUID, "YOUR_COT_CHARACTERISTIC_UUID") != 0,
+      "BLE_COT_CHARACTERISTIC_UUID still contains the placeholder. "
+      "Replace it with the real UUID from your firmware before deploying.");
+    static_assert(
+      __builtin_strcmp(BLE_WRITE_CHARACTERISTIC_UUID, "YOUR_WRITE_CHARACTERISTIC_UUID") != 0,
+      "BLE_WRITE_CHARACTERISTIC_UUID still contains the placeholder. "
+      "Replace it with the real UUID from your firmware before deploying.");
   #endif
 #endif
 
@@ -122,9 +130,25 @@
   // still contain placeholders.
   #if !defined(ALLOW_PLACEHOLDER_SECRET)
     static_assert(
+      __builtin_strcmp(MQTT_SERVER, "YOUR_MQTT_SERVER") != 0,
+      "MQTT_SERVER still contains the placeholder. "
+      "Set the deployment broker address before enabling MQTT.");
+    static_assert(
       __builtin_strcmp(MQTT_WIFI_SSID, "YOUR_WIFI_SSID") != 0,
       "MQTT_WIFI_SSID still contains the placeholder. "
       "Set real WiFi credentials in config.h or define ALLOW_PLACEHOLDER_SECRET.");
+    static_assert(
+      __builtin_strcmp(MQTT_WIFI_PASSWORD, "YOUR_WIFI_PASSWORD") != 0,
+      "MQTT_WIFI_PASSWORD still contains the placeholder. "
+      "Set real WiFi credentials in config.h or define ALLOW_PLACEHOLDER_SECRET.");
+    static_assert(
+      __builtin_strcmp(MQTT_USERNAME, "YOUR_MQTT_USERNAME") != 0,
+      "MQTT_USERNAME still contains the placeholder. "
+      "Set the deployment MQTT username before enabling MQTT.");
+    static_assert(
+      __builtin_strcmp(MQTT_PASSWORD, "YOUR_MQTT_PASSWORD") != 0,
+      "MQTT_PASSWORD still contains the placeholder. "
+      "Set the deployment MQTT password before enabling MQTT.");
   #endif
 #endif
 

@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog and the project uses semantic versioning for coordinated firmware/plugin releases.
 
+## [Unreleased]
+
+### Fixed
+- Firmware provisioning now refuses to initialize security when PBKDF2 key derivation fails or produces zeroed key material.
+- Firmware HMAC generation now fails closed instead of leaving callers with undefined output on mbedTLS setup errors.
+- Firmware release guards now reject placeholder BLE characteristic UUIDs and MQTT deployment credentials, not just the primary service UUID/Wi-Fi SSID.
+- Android provisioning-state writes now fail visibly instead of silently dropping secure-state updates when encrypted storage is unavailable.
+- Legacy plugin provisioning secrets/bundles now remain intact if secure-state migration cannot complete.
+
 ## [0.2.0] - 2026-04-18
 
 ### Added

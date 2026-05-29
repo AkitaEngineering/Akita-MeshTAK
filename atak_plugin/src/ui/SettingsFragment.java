@@ -148,10 +148,14 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
         if (rotateSecretPref != null) {
             rotateSecretPref.setSummary(AkitaProvisioningManager.getRotationSummary(requireContext()));
             rotateSecretPref.setOnPreferenceClickListener(preference -> {
-                String rotatedSecret = AkitaProvisioningManager.rotateProvisioningSecret(requireContext());
-                refreshProvisioningPreferenceSummaries();
-                reloadBoundServiceSecurity();
-                Toast.makeText(getActivity(), "Provisioning secret rotated: " + AkitaProvisioningManager.maskSecret(rotatedSecret), Toast.LENGTH_SHORT).show();
+                try {
+                    String rotatedSecret = AkitaProvisioningManager.rotateProvisioningSecret(requireContext());
+                    refreshProvisioningPreferenceSummaries();
+                    reloadBoundServiceSecurity();
+                    Toast.makeText(getActivity(), "Provisioning secret rotated: " + AkitaProvisioningManager.maskSecret(rotatedSecret), Toast.LENGTH_SHORT).show();
+                } catch (IllegalStateException exception) {
+                    Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
+                }
                 return true;
             });
         }
@@ -159,9 +163,13 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
             generateBundlePref.setOnPreferenceClickListener(preference -> {
                 String deviceAlias = PreferenceManager.getDefaultSharedPreferences(requireContext())
                         .getString("ble_device_name", "AkitaNode01");
-                AkitaProvisioningManager.createProvisioningBundle(requireContext(), deviceAlias);
-                refreshProvisioningPreferenceSummaries();
-                Toast.makeText(getActivity(), "Provisioning bundle refreshed for " + deviceAlias + ".", Toast.LENGTH_SHORT).show();
+                try {
+                    AkitaProvisioningManager.createProvisioningBundle(requireContext(), deviceAlias);
+                    refreshProvisioningPreferenceSummaries();
+                    Toast.makeText(getActivity(), "Provisioning bundle refreshed for " + deviceAlias + ".", Toast.LENGTH_SHORT).show();
+                } catch (IllegalStateException exception) {
+                    Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
+                }
                 return true;
             });
         }
@@ -172,7 +180,7 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
                     refreshProvisioningPreferenceSummaries();
                     reloadBoundServiceSecurity();
                     Toast.makeText(getActivity(), "Provisioning bundle applied for " + bundle.deviceAlias + ".", Toast.LENGTH_SHORT).show();
-                } catch (IllegalArgumentException exception) {
+                } catch (IllegalArgumentException | IllegalStateException exception) {
                     Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
                 }
                 return true;
@@ -353,7 +361,12 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
                 Toast.makeText(getActivity(), "Provisioning secret must be at least 12 characters or left blank to use the build-time secret.", Toast.LENGTH_SHORT).show();
                 return false;
             }
-            AkitaProvisioningManager.setCustomProvisioningSecret(requireContext(), newSecret);
+            try {
+                AkitaProvisioningManager.setCustomProvisioningSecret(requireContext(), newSecret);
+            } catch (IllegalStateException exception) {
+                Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
+                return false;
+            }
             if (preference instanceof EditTextPreference) {
                 ((EditTextPreference) preference).setText("");
             }
@@ -372,7 +385,12 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
                     return false;
                 }
             }
-            AkitaProvisioningManager.setStagedProvisioningBundle(requireContext(), bundle);
+            try {
+                AkitaProvisioningManager.setStagedProvisioningBundle(requireContext(), bundle);
+            } catch (IllegalStateException exception) {
+                Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
+                return false;
+            }
             if (preference instanceof EditTextPreference) {
                 ((EditTextPreference) preference).setText("");
             }

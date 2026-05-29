@@ -19,17 +19,33 @@ static bool g_security_initialized = false;
 // Temporary IV storage
 static uint8_t g_iv[IV_SIZE];
 
-static void deriveProvisionedKey(const String& deviceId,
+static bool isAllZero(const uint8_t* buffer, size_t len) {
+    if (buffer == nullptr || len == 0) {
+        return true;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        if (buffer[i] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool deriveProvisionedKey(const String& deviceId,
                                  const String& sharedSecret,
                                  const char* purpose,
                                  uint8_t* outKey,
                                  size_t outLen) {
     if (outKey == nullptr || outLen == 0) {
-        return;
+        return false;
     }
+
+    memset(outKey, 0, outLen);
 
     // Build salt from deviceId + purpose so each derived key is unique.
     String salt = deviceId + ":" + String(purpose);
+    bool derived = false;
 
     // PBKDF2-HMAC-SHA256 with 100 000 iterations.
     mbedtls_md_context_t ctx;
@@ -37,7 +53,10 @@ static void deriveProvisionedKey(const String& deviceId,
     mbedtls_md_init(&ctx);
     if (md_info == nullptr || mbedtls_md_setup(&ctx, md_info, 1) != 0) {
         mbedtls_md_free(&ctx);
-        return;
+        for (unsigned int i = 0; i < salt.length(); i++) {
+            salt.setCharAt(i, '\0');
+        }
+        return false;
     }
 
     if (mbedtls_pkcs5_pbkdf2_hmac(
@@ -50,6 +69,11 @@ static void deriveProvisionedKey(const String& deviceId,
             outLen,
             outKey) != 0) {
         memset(outKey, 0, outLen);
+    } else {
+        derived = !isAllZero(outKey, outLen);
+        if (!derived) {
+            memset(outKey, 0, outLen);
+        }
     }
     mbedtls_md_free(&ctx);
 
@@ -57,10 +81,14 @@ static void deriveProvisionedKey(const String& deviceId,
     for (unsigned int i = 0; i < salt.length(); i++) {
         salt.setCharAt(i, '\0');
     }
+
+    return derived;
 }
 
 bool initSecurity(const uint8_t* aes_key, const uint8_t* hmac_key, uint8_t security_mode) {
-    if (aes_key == nullptr || hmac_key == nullptr) {
+    if (aes_key == nullptr || hmac_key == nullptr
+            || isAllZero(aes_key, AES_KEY_SIZE)
+            || isAllZero(hmac_key, HMAC_KEY_SIZE)) {
         return false;
     }
     
@@ -84,8 +112,14 @@ bool initSecurityFromProvisioning(const String& deviceId, const String& sharedSe
 
     uint8_t aesKey[AES_KEY_SIZE] = {0};
     uint8_t hmacKey[HMAC_KEY_SIZE] = {0};
-    deriveProvisionedKey(deviceId, sharedSecret, "aes", aesKey, sizeof(aesKey));
-    deriveProvisionedKey(deviceId, sharedSecret, "hmac", hmacKey, sizeof(hmacKey));
+    bool derivedAesKey = deriveProvisionedKey(deviceId, sharedSecret, "aes", aesKey, sizeof(aesKey));
+    bool derivedHmacKey = deriveProvisionedKey(deviceId, sharedSecret, "hmac", hmacKey, sizeof(hmacKey));
+
+    if (!derivedAesKey || !derivedHmacKey) {
+        memset(aesKey, 0, sizeof(aesKey));
+        memset(hmacKey, 0, sizeof(hmacKey));
+        return false;
+    }
 
     cleanupSecurity();
     bool initialized = initSecurity(aesKey, hmacKey, SECURITY_MODE_AES256_HMAC);
@@ -172,6 +206,10 @@ size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
 }
 
 void generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out) {
+    if (hmac_out != nullptr) {
+        memset(hmac_out, 0, HMAC_KEY_SIZE);
+    }
+
     if (data == nullptr || hmac_out == nullptr || !g_security_initialized) {
         return;
     }
@@ -180,10 +218,16 @@ void generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out) {
     const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     
     mbedtls_md_init(&ctx);
-    mbedtls_md_setup(&ctx, md_info, 1); // HMAC mode
-    mbedtls_md_hmac_starts(&ctx, g_hmac_key, HMAC_KEY_SIZE);
-    mbedtls_md_hmac_update(&ctx, data, data_len);
-    mbedtls_md_hmac_finish(&ctx, hmac_out);
+    if (md_info == nullptr || mbedtls_md_setup(&ctx, md_info, 1) != 0) {
+        mbedtls_md_free(&ctx);
+        return;
+    }
+
+    if (mbedtls_md_hmac_starts(&ctx, g_hmac_key, HMAC_KEY_SIZE) != 0
+            || mbedtls_md_hmac_update(&ctx, data, data_len) != 0
+            || mbedtls_md_hmac_finish(&ctx, hmac_out) != 0) {
+        memset(hmac_out, 0, HMAC_KEY_SIZE);
+    }
     mbedtls_md_free(&ctx);
 }
 
@@ -193,15 +237,16 @@ bool verifyHMAC(const uint8_t* data, size_t data_len, const uint8_t* hmac) {
         return false;
     }
     
-    uint8_t calculated_hmac[32];
+    uint8_t calculated_hmac[HMAC_KEY_SIZE] = {0};
     generateHMAC(data, data_len, calculated_hmac);
     
     // Constant-time comparison to prevent timing attacks
     volatile uint8_t diff = 0;
-    for (size_t i = 0; i < 32; i++) {
+    for (size_t i = 0; i < HMAC_KEY_SIZE; i++) {
         diff |= calculated_hmac[i] ^ hmac[i];
     }
     bool valid = (diff == 0);
+    memset(calculated_hmac, 0, sizeof(calculated_hmac));
     if (!valid) {
         g_security_status.integrity_failures++;
     }

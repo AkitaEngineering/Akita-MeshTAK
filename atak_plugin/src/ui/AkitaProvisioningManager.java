@@ -54,6 +54,7 @@ public final class AkitaProvisioningManager {
     private static final String BUNDLE_PREFIX = "AKITA-PROV-1";
     private static final String STATE_FILE_NAME = "akita-provisioning-state.json";
     private static final String PROVISIONING_STATE_KEY_ALIAS = "akita_provisioning_state_key";
+    private static final String SECURE_STATE_WRITE_FAILURE_MESSAGE = "Unable to persist encrypted provisioning state. Check device storage and Android Keystore availability.";
     private static final Object STATE_LOCK = new Object();
     private static final Map<SharedPreferences, ProvisioningStateStore> STORES_BY_PREFERENCES = Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -117,7 +118,7 @@ public final class AkitaProvisioningManager {
         ProvisioningState state = getStateStore(context).readState();
         state.customSecret = rotatedSecret;
         state.lastRotationAt = System.currentTimeMillis();
-        getStateStore(context).writeState(state);
+        persistStateOrThrow(context, state);
         clearSensitivePreferenceMirrors(preferences);
         signalSensitiveStateChanged(preferences, true, false);
         return rotatedSecret;
@@ -127,7 +128,7 @@ public final class AkitaProvisioningManager {
         SharedPreferences preferences = getPreferences(context);
         ProvisioningState state = getStateStore(context).readState();
         state.customSecret = normalizeValue(secret);
-        getStateStore(context).writeState(state);
+        persistStateOrThrow(context, state);
         clearSensitivePreferenceMirrors(preferences);
         signalSensitiveStateChanged(preferences, true, false);
     }
@@ -167,7 +168,7 @@ public final class AkitaProvisioningManager {
                 getActiveProvisioningSecret(context));
         state.stagedBundle = bundle;
         state.lastBundleGeneratedAt = System.currentTimeMillis();
-        getStateStore(context).writeState(state);
+            persistStateOrThrow(context, state);
         clearSensitivePreferenceMirrors(preferences);
         signalSensitiveStateChanged(preferences, false, true);
         AkitaMissionControl.getInstance(context).recordProvisioningEvent(
@@ -189,7 +190,7 @@ public final class AkitaProvisioningManager {
             state.stagedBundle = "";
             state.lastBundleGeneratedAt = 0L;
         }
-        getStateStore(context).writeState(state);
+        persistStateOrThrow(context, state);
         clearSensitivePreferenceMirrors(preferences);
         signalSensitiveStateChanged(preferences, false, true);
     }
@@ -204,7 +205,7 @@ public final class AkitaProvisioningManager {
         ProvisioningBundle bundle = parseProvisioningBundle(state.stagedBundle);
         state.customSecret = bundle.secret;
         state.lastRotationAt = System.currentTimeMillis();
-        getStateStore(context).writeState(state);
+        persistStateOrThrow(context, state);
         preferences.edit()
                 .putBoolean(PREF_ENCRYPTION_ENABLED, bundle.encryptionEnabled)
                 .apply();
@@ -430,7 +431,7 @@ public final class AkitaProvisioningManager {
             try (FileInputStream inputStream = stateFile.openRead()) {
                 payloadBytes = readAllBytes(inputStream);
                 if (payloadBytes.length == 0) {
-                    return new ProvisioningState("", "", 0L, 0L);
+                    return migrateLegacyState();
                 }
                 ProvisioningState state = parseStoredState(payloadBytes);
                 clearSensitivePreferenceMirrors(preferences);
@@ -443,7 +444,7 @@ public final class AkitaProvisioningManager {
             }
         }
 
-        private synchronized void writeState(ProvisioningState state) {
+        private synchronized boolean writeState(ProvisioningState state) {
             FileOutputStream outputStream = null;
             byte[] serializedState = null;
             byte[] encryptedPayload = null;
@@ -454,11 +455,13 @@ public final class AkitaProvisioningManager {
                 outputStream.write(encryptedPayload);
                 outputStream.flush();
                 stateFile.finishWrite(outputStream);
+                return true;
             } catch (IOException | JSONException | GeneralSecurityException exception) {
                 Log.w(TAG, "Failed to persist encrypted provisioning state", exception);
                 if (outputStream != null) {
                     stateFile.failWrite(outputStream);
                 }
+                return false;
             } finally {
                 wipe(serializedState);
                 wipe(encryptedPayload);
@@ -469,9 +472,11 @@ public final class AkitaProvisioningManager {
             ProvisioningState state = ProvisioningState.fromLegacyPreferences(preferences);
             if (hasText(state.customSecret) || hasText(state.stagedBundle)
                     || state.lastRotationAt > 0L || state.lastBundleGeneratedAt > 0L) {
-                writeState(state);
+                if (writeState(state)) {
+                    clearSensitivePreferenceMirrors(preferences);
+                }
+                return state;
             }
-            clearSensitivePreferenceMirrors(preferences);
             return state;
         }
 
@@ -645,6 +650,12 @@ public final class AkitaProvisioningManager {
             return currentStore.readState();
         }
         return ProvisioningState.fromLegacyPreferences(preferences);
+    }
+
+    private static void persistStateOrThrow(Context context, ProvisioningState state) {
+        if (!getStateStore(context).writeState(state)) {
+            throw new IllegalStateException(SECURE_STATE_WRITE_FAILURE_MESSAGE);
+        }
     }
 
     private static boolean hasText(String value) {

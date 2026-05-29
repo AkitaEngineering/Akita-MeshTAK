@@ -30,6 +30,7 @@ public class SecurityManager {
     private static final int IV_SIZE = 12;
     private static final int GCM_TAG_BITS = 128;
     private static final int HMAC_SIZE = 32;
+    private static final int MIN_PROVISIONING_SECRET_LENGTH = 12;
     
     private SecretKey aesKey;
     private SecretKey hmacKey;
@@ -65,9 +66,17 @@ public class SecurityManager {
                 Log.e(TAG, "Invalid AES key length");
                 return false;
             }
+            if (isAllZero(aesKeyBytes)) {
+                Log.e(TAG, "Refusing to initialize with an all-zero AES key");
+                return false;
+            }
             
             if (hmacKeyBytes == null || hmacKeyBytes.length != HMAC_SIZE) {
                 Log.e(TAG, "Invalid HMAC key length");
+                return false;
+            }
+            if (isAllZero(hmacKeyBytes)) {
+                Log.e(TAG, "Refusing to initialize with an all-zero HMAC key");
                 return false;
             }
             
@@ -118,6 +127,10 @@ public class SecurityManager {
     public boolean initializeFromProvisioning(String deviceId, String sharedSecret) {
         if (deviceId == null || deviceId.isEmpty() || sharedSecret == null || sharedSecret.isEmpty()) {
             Log.e(TAG, "Provisioning material is missing");
+            return false;
+        }
+        if (sharedSecret.length() < MIN_PROVISIONING_SECRET_LENGTH) {
+            Log.e(TAG, "Provisioning secret is too short");
             return false;
         }
 
@@ -358,6 +371,18 @@ public class SecurityManager {
         if (buffer != null) {
             Arrays.fill(buffer, (byte) 0);
         }
+    }
+
+    private static boolean isAllZero(byte[] buffer) {
+        if (buffer == null || buffer.length == 0) {
+            return true;
+        }
+        for (byte value : buffer) {
+            if (value != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void wipe(char[] buffer) {

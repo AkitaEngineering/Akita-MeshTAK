@@ -14,6 +14,7 @@ This document summarizes the comprehensive security, accountability, encryption,
 - **Versioned Envelope**: `ENC:v1:k1:<hex>` transport format with protocol version and key-id metadata
 - **Authenticated Integrity**: AES-GCM authentication tag verification during decrypt
 - **Secure Key Management**: Framework for secure key provisioning
+- **Fail-Closed Provisioning**: Security initialization now rejects failed/zeroed derived keys instead of reporting a live secure session
 - **Files Added**:
   - `firmware/src/security.h` / `security.cpp`
   - `atak_plugin/src/com/akitaengineering/meshtak/SecurityManager.java`
@@ -184,6 +185,13 @@ This document summarizes the comprehensive security, accountability, encryption,
 - `atak_plugin/src/services/SerialService.java` - Security, validation, audit logging
 - `atak_plugin/src/ui/AkitaToolbar.java` - SOS audit logging
 - `atak_plugin/src/com/akitaengineering/meshtak/Config.java` - Version constants
+
+### 9. Encrypted Provisioning-State Durability ✅
+**Status**: Improved
+
+- **Encrypted State Persistence**: Runtime provisioning secret and staged bundle writes now fail visibly if Android Keystore or app storage is unavailable
+- **Migration Safety**: Legacy SharedPreferences mirrors are preserved until the encrypted state file is written successfully
+- **Operator Feedback**: Settings UI surfaces secure-store persistence failures instead of reporting a successful rotation/bundle update
 
 ---
 
