@@ -10,8 +10,8 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 ### Technical Documentation (MILSPEC Format)
 
 #### 1. Technical Manual (TM)
-**File**: `TM_AkitaMeshTAK_Technical_Manual.md`  
-**Document Number**: TM-AKITA-MESHTAK-001  
+**File**: `TM_AkitaMeshTAK_Technical_Manual.md`
+**Document Number**: TM-AKITA-MESHTAK-001
 **Purpose**: Comprehensive technical documentation for installation, configuration, operation, and maintenance
 
 **Contents**:
@@ -31,8 +31,8 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 ---
 
 #### 2. Operator's Manual (OM)
-**File**: `OM_AkitaMeshTAK_Operators_Manual.md`  
-**Document Number**: OM-AKITA-MESHTAK-001  
+**File**: `OM_AkitaMeshTAK_Operators_Manual.md`
+**Document Number**: OM-AKITA-MESHTAK-001
 **Purpose**: User-friendly guide for field operators
 
 **Contents**:
@@ -49,8 +49,8 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 ---
 
 #### 3. System Specification (SS)
-**File**: `SS_AkitaMeshTAK_System_Specification.md`  
-**Document Number**: SS-AKITA-MESHTAK-001  
+**File**: `SS_AkitaMeshTAK_System_Specification.md`
+**Document Number**: SS-AKITA-MESHTAK-001
 **Purpose**: Detailed system requirements and specifications
 
 **Contents**:
@@ -71,7 +71,7 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 ### Supporting Documentation
 
 #### 4. Security Guide
-**File**: `security_guide.md`  
+**File**: `security_guide.md`
 **Purpose**: Comprehensive security documentation
 
 **Contents**:
@@ -88,7 +88,7 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 ---
 
 #### 5. Developer Guide
-**File**: `dev_guide.md`  
+**File**: `dev_guide.md`
 **Purpose**: Information for developers and contributors
 
 **Contents**:
@@ -103,7 +103,7 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 ---
 
 #### 6. User Guide
-**File**: `user_guide.md`  
+**File**: `user_guide.md`
 **Purpose**: Basic user instructions
 
 **Contents**:
@@ -117,8 +117,8 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 ---
 
 #### 7. Quick Reference Card (QR)
-**File**: `QR_AkitaMeshTAK_Quick_Reference.md`  
-**Document Number**: QR-AKITA-MESHTAK-001  
+**File**: `QR_AkitaMeshTAK_Quick_Reference.md`
+**Document Number**: QR-AKITA-MESHTAK-001
 **Purpose**: Single-page operational quick reference for field use
 
 **Contents**:
@@ -135,7 +135,7 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 ---
 
 #### 8. UI Preview
-**File**: `ui_preview.html`  
+**File**: `ui_preview.html`
 **Purpose**: No-hardware visualization of the current dashboard, toolbar, guaranteed-delivery mailbox, provisioning ceremony controls, replay workflow, and Night Red / Night Green presentation modes
 
 **Contents**:
@@ -152,7 +152,7 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 ---
 
 #### 9. Release Process
-**File**: `release_process.md`  
+**File**: `release_process.md`
 **Purpose**: Defines version management, release inputs, build signing, and coordinated artifact generation for firmware and ATAK plugin shipments
 
 **Contents**:
@@ -164,6 +164,21 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 - Tagging and rollback guidance
 
 **Audience**: Release managers, maintainers, build engineers
+
+---
+
+#### 10. OpenTAKServer Compatibility
+**File**: `opentakserver_compatibility.md`
+**Purpose**: Defines the supported OpenTAKServer interoperability path, CoT field coverage, default ports, feature matrix, and validation checklist
+
+**Contents**:
+- Supported Akita to ATAK to OpenTAKServer transport path
+- OpenTAKServer default streaming and Marti API ports
+- Firmware CoT fields parsed by OpenTAKServer
+- Feature support matrix
+- Validation checklist
+
+**Audience**: Integrators, system administrators, test engineers
 
 ---
 
@@ -235,6 +250,7 @@ Start with: **Developer Guide**
 - **Quick Reference Card**: Updated with operational procedure changes
 - **User Guide**: Updated with end-user-facing changes
 - **UI Preview**: Updated with major dashboard and workflow changes
+- **OpenTAKServer Compatibility**: Updated with TAK server interoperability changes
 
 ---
 
@@ -249,6 +265,7 @@ Start with: **Developer Guide**
 | Security Guide | — | 0.3.0 | 2026-04-14 |
 | Developer Guide | — | 0.2.0 | 2026-03-13 |
 | User Guide | — | 0.3.0 | 2026-04-14 |
+| OpenTAKServer Compatibility | — | 0.1.0 | 2026-05-31 |
 
 ### Change Control
 All documentation changes must be:
@@ -278,6 +295,7 @@ For documentation questions or updates:
 | Developer Guide | APPROVED | 0.2.0 | 2026-03-13 |
 | User Guide | APPROVED | 0.3.0 | 2026-04-14 |
 | Quick Reference Card (QR) | APPROVED | 1.3 | 2026-04-14 |
+| OpenTAKServer Compatibility | DRAFT | 0.1.0 | 2026-05-31 |
 
 ---
 

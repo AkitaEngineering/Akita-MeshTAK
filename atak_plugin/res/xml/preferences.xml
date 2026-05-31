@@ -23,6 +23,15 @@
         android:defaultValue="search_rescue" />
 
     <PreferenceCategory
+        android:title="@string/opentakserver_category_title">
+
+        <EditTextPreference
+            android:key="opentakserver_mission_name"
+            android:title="@string/opentakserver_mission_name_title"
+            android:defaultValue="" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:title="@string/security_category_title">
 
         <SwitchPreferenceCompat

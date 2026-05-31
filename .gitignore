@@ -21,6 +21,12 @@ atak_plugin/local.properties
 *.iml
 .vscode/
 
+# Private planning / deployment notes
+documentation/private/
+*_PRIVATE.md
+*_TODO_PRIVATE.md
+*enhancement_todo*.md
+
 # PlatformIO
 .pio/
 firmware/.pio/

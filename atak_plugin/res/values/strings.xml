@@ -8,6 +8,8 @@
     <string name="send_test_message_title">Send Test Message</string>
     <string name="ui_theme_title">Dashboard Theme</string>
     <string name="mission_profile_title">Mission Profile</string>
+    <string name="opentakserver_category_title">OpenTAKServer</string>
+    <string name="opentakserver_mission_name_title">Mission Name</string>
     <string name="security_category_title">Security and Provisioning</string>
     <string name="auto_failover_title">Auto Bearer Failover</string>
     <string name="provisioning_secret_title">Provisioning Secret</string>

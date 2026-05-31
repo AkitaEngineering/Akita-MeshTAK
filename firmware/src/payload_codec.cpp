@@ -6,6 +6,12 @@
 #include "input_validation.h"
 #include "security.h"
 #include <string.h>
+#include <time.h>
+
+static const unsigned long ENVELOPE_MAX_SKEW_SECONDS = 300;
+static const int REPLAY_CACHE_SIZE = 12;
+static String g_seenNonces[REPLAY_CACHE_SIZE];
+static int g_seenNonceIndex = 0;
 
 bool parseHexPayload(const String& hex, uint8_t* out, size_t outMax, size_t* outLen) {
   if ((hex.length() % 2) != 0) {
@@ -51,6 +57,47 @@ String encodeHexPayload(const uint8_t* data, size_t len) {
   return out;
 }
 
+static bool hasTrustedClock() {
+  return time(nullptr) >= 1609459200;
+}
+
+static bool parseUnsignedLongLong(const String& value, unsigned long long& out) {
+  if (value.length() == 0) {
+    return false;
+  }
+  unsigned long long parsed = 0;
+  for (size_t i = 0; i < value.length(); i++) {
+    char c = value.charAt(i);
+    if (c < '0' || c > '9') {
+      return false;
+    }
+    parsed = (parsed * 10ULL) + (unsigned long long)(c - '0');
+  }
+  out = parsed;
+  return true;
+}
+
+static bool isReplayNonce(const String& keyId, const String& nonceHex) {
+  String cacheKey = keyId + ":" + nonceHex;
+  for (int i = 0; i < REPLAY_CACHE_SIZE; i++) {
+    if (g_seenNonces[i] == cacheKey) {
+      return true;
+    }
+  }
+  g_seenNonces[g_seenNonceIndex] = cacheKey;
+  g_seenNonceIndex = (g_seenNonceIndex + 1) % REPLAY_CACHE_SIZE;
+  return false;
+}
+
+static bool verifyEnvelopeHmac(const String& signedData, const String& hmacHex) {
+  uint8_t expected[HMAC_KEY_SIZE] = {0};
+  size_t expectedLen = 0;
+  if (!parseHexPayload(hmacHex, expected, sizeof(expected), &expectedLen) || expectedLen != HMAC_KEY_SIZE) {
+    return false;
+  }
+  return verifyHMAC(reinterpret_cast<const uint8_t*>(signedData.c_str()), signedData.length(), expected);
+}
+
 bool decodeIncomingPayload(const String& input, String& output) {
   if (!input.startsWith(ENCRYPTED_PAYLOAD_PREFIX)) {
     output = input;
@@ -71,11 +118,49 @@ bool decodeIncomingPayload(const String& input, String& output) {
 
   String version = headerAndHex.substring(0, firstSep);
   String keyId = headerAndHex.substring(firstSep + 1, secondSep);
-  if (version != ENCRYPTED_PAYLOAD_VERSION || keyId != ENCRYPTED_KEY_ID) {
+  if (keyId != ENCRYPTED_KEY_ID) {
     return false;
   }
 
-  String hex = headerAndHex.substring(secondSep + 1);
+  String hex = "";
+  if (version == "v1") {
+    hex = headerAndHex.substring(secondSep + 1);
+  } else if (version == ENCRYPTED_PAYLOAD_VERSION) {
+    int thirdSep = headerAndHex.indexOf(':', secondSep + 1);
+    int fourthSep = headerAndHex.indexOf(':', thirdSep + 1);
+    int fifthSep = headerAndHex.indexOf(':', fourthSep + 1);
+    if (thirdSep <= secondSep + 1 || fourthSep <= thirdSep + 1 || fifthSep <= fourthSep + 1) {
+      return false;
+    }
+
+    String timestampText = headerAndHex.substring(secondSep + 1, thirdSep);
+    String nonceHex = headerAndHex.substring(thirdSep + 1, fourthSep);
+    hex = headerAndHex.substring(fourthSep + 1, fifthSep);
+    String hmacHex = headerAndHex.substring(fifthSep + 1);
+
+    unsigned long long envelopeTime = 0;
+    if (!parseUnsignedLongLong(timestampText, envelopeTime)) {
+      return false;
+    }
+    if (hasTrustedClock()) {
+      unsigned long long now = (unsigned long long)time(nullptr);
+      unsigned long long delta = now > envelopeTime ? now - envelopeTime : envelopeTime - now;
+      if (delta > ENVELOPE_MAX_SKEW_SECONDS) {
+        return false;
+      }
+    }
+    if (nonceHex.length() < 16 || isReplayNonce(keyId, nonceHex)) {
+      return false;
+    }
+
+    String signedData = version + ":" + keyId + ":" + timestampText + ":" + nonceHex + ":" + hex;
+    if (!verifyEnvelopeHmac(signedData, hmacHex)) {
+      return false;
+    }
+  } else {
+    return false;
+  }
+
   uint8_t encryptedBuffer[MAX_MESSAGE_LENGTH * 2];
   size_t encryptedLen = 0;
   if (!parseHexPayload(hex, encryptedBuffer, sizeof(encryptedBuffer), &encryptedLen)) {
@@ -120,7 +205,19 @@ bool encodeOutgoingPayload(const uint8_t* data, size_t len, String& output) {
   memcpy(envelope, iv, IV_SIZE);
   memcpy(envelope + IV_SIZE, ciphertext, encryptedLen);
 
-  output = String(ENCRYPTED_PAYLOAD_PREFIX) + String(ENCRYPTED_PAYLOAD_VERSION) + ":" +
-           String(ENCRYPTED_KEY_ID) + ":" + encodeHexPayload(envelope, IV_SIZE + encryptedLen);
+  uint8_t nonce[8] = {0};
+  secureRandom(nonce, sizeof(nonce));
+  String timestampText = String((unsigned long long)time(nullptr));
+  String nonceHex = encodeHexPayload(nonce, sizeof(nonce));
+  String envelopeHex = encodeHexPayload(envelope, IV_SIZE + encryptedLen);
+  String signedData = String(ENCRYPTED_PAYLOAD_VERSION) + ":" + String(ENCRYPTED_KEY_ID) + ":" +
+                      timestampText + ":" + nonceHex + ":" + envelopeHex;
+  uint8_t hmac[HMAC_KEY_SIZE] = {0};
+  generateHMAC(reinterpret_cast<const uint8_t*>(signedData.c_str()), signedData.length(), hmac);
+  String hmacHex = encodeHexPayload(hmac, sizeof(hmac));
+  memset(hmac, 0, sizeof(hmac));
+  memset(nonce, 0, sizeof(nonce));
+
+  output = String(ENCRYPTED_PAYLOAD_PREFIX) + signedData + ":" + hmacHex;
   return true;
 }

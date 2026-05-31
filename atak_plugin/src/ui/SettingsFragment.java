@@ -36,6 +36,7 @@ import java.util.Arrays;
 public class SettingsFragment extends PreferenceFragmentCompat implements PluginPreferenceFragment, Preference.OnPreferenceChangeListener, android.content.SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static final String TAG = "SettingsFragment";
+    private static final String PREF_OPENTAKSERVER_MISSION_NAME = "opentakserver_mission_name";
     private MapView mapView;
     private BLEService bleService;
     private SerialService serialService;
@@ -91,6 +92,7 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
         ListPreference connectionMethodPref = findPreference("connection_method");
         ListPreference uiThemePref = findPreference(AkitaTheme.PREF_UI_THEME);
         ListPreference missionProfilePref = findPreference(AkitaMissionProfile.PREF_MISSION_PROFILE);
+        EditTextPreference openTakMissionNamePref = findPreference(PREF_OPENTAKSERVER_MISSION_NAME);
         SwitchPreferenceCompat autoFailoverPref = findPreference(AkitaMissionControl.PREF_AUTO_FAILOVER);
         SwitchPreferenceCompat encryptionEnabledPref = findPreference(AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED);
         EditTextPreference provisioningSecretPref = findPreference(AkitaProvisioningManager.PREF_PROVISIONING_SECRET);
@@ -117,6 +119,8 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
         if (uiThemePref != null) uiThemePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
         if (missionProfilePref != null) missionProfilePref.setOnPreferenceChangeListener(this);
         if (missionProfilePref != null) missionProfilePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (openTakMissionNamePref != null) openTakMissionNamePref.setOnPreferenceChangeListener(this);
+        if (openTakMissionNamePref != null) openTakMissionNamePref.setSummaryProvider(EditTextPreference.SimpleSummaryProvider.getInstance());
         if (autoFailoverPref != null) autoFailoverPref.setOnPreferenceChangeListener(this);
         if (encryptionEnabledPref != null) encryptionEnabledPref.setOnPreferenceChangeListener(this);
         if (provisioningSecretPref != null) provisioningSecretPref.setOnPreferenceChangeListener(this);
@@ -264,16 +268,20 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
             // Load BLE device name preference
             String bleDeviceName = PreferenceManager.getDefaultSharedPreferences(getActivity())
                     .getString("ble_device_name", "AkitaNode01");
-            
+
             // Pass settings to the bound services
             if (bleService != null) {
                 // This call triggers the service to start scanning/connecting with the right name
                 bleService.setTargetDeviceName(bleDeviceName);
+                bleService.syncRuntimeState();
+            }
+            if (serialService != null) {
+                serialService.syncRuntimeState();
             }
             // SerialService loads its baud rate internally upon connection attempt
         }
     }
-    
+
     private void sendTestMessageToDevice() {
         String testMessage = "ATAK Test Message!";
         if (getActivity() == null) {
@@ -337,6 +345,8 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
                     || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)) {
                 new Handler(Looper.getMainLooper()).post(this::reloadBoundServiceSecurity);
             }
+        } else if (PREF_OPENTAKSERVER_MISSION_NAME.equals(key)) {
+            new Handler(Looper.getMainLooper()).post(this::syncBoundRuntimeState);
         }
     }
 
@@ -413,8 +423,38 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Plugin
         } else if (key.equals("ble_device_name") && bleService != null) {
             // Update BLE service immediately when name preference changes
             bleService.setTargetDeviceName((String) newValue);
+        } else if (PREF_OPENTAKSERVER_MISSION_NAME.equals(key)) {
+            String missionName = sanitizeMissionName(String.valueOf(newValue));
+            if (!missionName.equals(String.valueOf(newValue).trim())) {
+                Toast.makeText(getActivity(), "Mission name may contain letters, numbers, spaces, dash, underscore, and period.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
         }
         return true;
+    }
+
+    private void syncBoundRuntimeState() {
+        if (bleService != null) {
+            bleService.syncRuntimeState();
+        }
+        if (serialService != null) {
+            serialService.syncRuntimeState();
+        }
+    }
+
+    private static String sanitizeMissionName(String missionName) {
+        if (missionName == null) {
+            return "";
+        }
+        StringBuilder sanitized = new StringBuilder();
+        String trimmed = missionName.trim();
+        for (int index = 0; index < trimmed.length() && sanitized.length() < 64; index++) {
+            char c = trimmed.charAt(index);
+            if (Character.isLetterOrDigit(c) || c == '-' || c == '_' || c == ' ' || c == '.') {
+                sanitized.append(c);
+            }
+        }
+        return sanitized.toString().trim();
     }
 
     private void stageProvisioningToDevice() {

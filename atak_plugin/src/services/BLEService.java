@@ -26,6 +26,7 @@ import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.ui.AkitaMissionMarkerRegistry;
 import com.akitaengineering.meshtak.Config;
 import com.akitaengineering.meshtak.AuditLogger;
+import com.akitaengineering.meshtak.PayloadEnvelope;
 import com.akitaengineering.meshtak.SecurityManager;
 
 import java.util.UUID;
@@ -52,8 +53,8 @@ public class BLEService extends Service {
     private AuditLogger auditLogger;
 
     // Constants read from Config.java
-    private static final UUID SERVICE_UUID = Config.BLE_SERVICE_UUID; 
-    private static final UUID COT_CHARACTERISTIC_UUID = Config.COT_CHARACTERISTIC_UUID; 
+    private static final UUID SERVICE_UUID = Config.BLE_SERVICE_UUID;
+    private static final UUID COT_CHARACTERISTIC_UUID = Config.COT_CHARACTERISTIC_UUID;
     private static final UUID WRITE_CHARACTERISTIC_UUID = Config.WRITE_CHARACTERISTIC_UUID;
     private static final UUID CLIENT_CHARACTERISTIC_CONFIG = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
@@ -75,7 +76,7 @@ public class BLEService extends Service {
     public interface BleStatusListener {
         void onBleStatusChanged(String status);
     }
-    
+
     private final Runnable healthCheckRunnable = new Runnable() {
         @Override
         public void run() {
@@ -91,24 +92,24 @@ public class BLEService extends Service {
             return BLEService.this;
         }
     }
-    
+
     // --- Service Lifecycle and Setup ---
     @Override
     public void onCreate() {
         super.onCreate();
 
         loadPreferences();
-        
+
         // Initialize security and audit logging
         securityManager = SecurityManager.getInstance();
         auditLogger = AuditLogger.getInstance();
         auditLogger.initialize(getApplicationContext());
         initializeSecurity();
-        
+
         initialize();
         startScan();
         handler.post(healthCheckRunnable);
-        
+
         auditLogger.log(AuditLogger.EventType.CONNECTION, AuditLogger.Severity.INFO,
                        "BLEService", "Service created", true);
     }
@@ -135,7 +136,7 @@ public class BLEService extends Service {
         stopScan();
         super.onDestroy();
     }
-    
+
     // --- Core GATT Logic and Handlers ---
 
     public boolean initialize() {
@@ -266,7 +267,7 @@ public class BLEService extends Service {
         startConnectionTimeout();
         return true;
     }
-    
+
     private void startConnectionTimeout() {
         stopConnectionTimeout();
         connectionTimeoutRunnable = () -> {
@@ -305,12 +306,12 @@ public class BLEService extends Service {
                 bleConnectionStatus = "Error";
                 if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
                 if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Error: Connection failed with status " + status);
-                
+
                 if (auditLogger != null) {
                     auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
                                    "BLE", "GATT error status " + status + " for " + gatt.getDevice().getAddress(), false);
                 }
-                
+
                 disconnect();
                 close();
                 if (connectionRetryCount <= MAX_RETRY_ATTEMPTS) {
@@ -327,24 +328,24 @@ public class BLEService extends Service {
                 bleConnectionStatus = "Connected";
                 if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
                 if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Connected to " + gatt.getDevice().getAddress());
-                
+
                 if (auditLogger != null) {
                     auditLogger.log(AuditLogger.EventType.CONNECTION, AuditLogger.Severity.INFO,
                                    "BLE", "Connected to " + gatt.getDevice().getAddress(), true);
                 }
-                
+
                 bluetoothGatt.discoverServices();
             } else if (newState == android.bluetooth.BluetoothProfile.STATE_DISCONNECTED) {
                 Log.i(TAG, "onConnectionStateChange: Disconnected from GATT server for device " + gatt.getDevice().getAddress());
                 bleConnectionStatus = "Disconnected";
                 if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
                 if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Disconnected");
-                
+
                 if (auditLogger != null) {
                     auditLogger.log(AuditLogger.EventType.DISCONNECTION, AuditLogger.Severity.INFO,
                                    "BLE", "Disconnected from " + gatt.getDevice().getAddress(), true);
                 }
-                
+
                 close();
                 if (connectionRetryCount <= MAX_RETRY_ATTEMPTS) {
                     long delay = CONNECT_RETRY_DELAY * (long) Math.pow(2, connectionRetryCount - 1);
@@ -378,8 +379,8 @@ public class BLEService extends Service {
                         } else {
                             // Notification enable failure handling
                         }
-                    } 
-                } 
+                    }
+                }
             } else {
                 // Service discovery failure handling
             }
@@ -408,7 +409,7 @@ public class BLEService extends Service {
                 }
                 return;
             }
-            
+
             // Audit log data reception
             if (auditLogger != null) {
                 auditLogger.log(AuditLogger.EventType.DATA_RECEIVED, AuditLogger.Severity.INFO,
@@ -418,11 +419,19 @@ public class BLEService extends Service {
             if (AkitaMissionControl.getInstance(getApplicationContext()).consumeIncomingStatus(decodedPayload, AkitaMissionControl.ROUTE_BLE)) {
                 return;
             }
-            
+
+            if (consumeRuntimeStatus(decodedPayload)) {
+                return;
+            }
+
             processCotData(decodedPayload);
         }
 
-        @Override public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {}
+        @Override public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                syncRuntimeState();
+            }
+        }
     };
 
     public void disconnect() {
@@ -443,7 +452,7 @@ public class BLEService extends Service {
             Log.w(TAG, "MapView is not yet set. Cannot process CoT.");
             return;
         }
-        
+
         // 1. Check for status prefixes (Health Monitoring)
         if (data.startsWith(Config.STATUS_BATT_PREFIX)) {
             String status = data.substring(Config.STATUS_BATT_PREFIX.length()).trim();
@@ -455,7 +464,7 @@ public class BLEService extends Service {
         String cleanData = data.trim();
         if (!cleanData.startsWith("<event") || !cleanData.endsWith("</event>")) {
             Log.w(TAG, "Received fragmented or non-CoT data (ignoring), len=" + cleanData.length());
-            return; 
+            return;
         }
 
         // 3. Process CoT (ATAK Marker Logic)
@@ -479,7 +488,7 @@ public class BLEService extends Service {
                 marker.setUid(uid);
                 marker.setTitle(callsign != null ? callsign : uid);
                 marker.setType(cotPoint.getType() != null ? cotPoint.getType() : Config.DEFAULT_COT_TYPE);
-                
+
                 mapView.getRootGroup().addItem(marker);
             } else if (mapItem instanceof Marker) {
                 Marker marker = (Marker) mapItem;
@@ -496,17 +505,31 @@ public class BLEService extends Service {
             Log.e(TAG, "Error processing CoT data: " + e.getMessage(), e);
         }
     }
-    
+
     // --- Public Service Interface Methods ---
-    
+
     public void queryDeviceStatus(String command) {
         sendData((command + "\n").getBytes());
+    }
+
+    public void syncRuntimeState() {
+        if (!isReadyForTraffic()) {
+            return;
+        }
+        long epochSeconds = System.currentTimeMillis() / 1000L;
+        sendData((Config.CMD_TIME_SYNC_PREFIX + epochSeconds + "\n").getBytes(StandardCharsets.UTF_8));
+
+        String missionName = sanitizeMissionName(PreferenceManager.getDefaultSharedPreferences(this)
+                .getString("opentakserver_mission_name", ""));
+        handler.postDelayed(() ->
+                sendData((Config.CMD_COT_MISSION_PREFIX + missionName + "\n").getBytes(StandardCharsets.UTF_8)),
+                100);
     }
 
     public void sendCriticalAlert() {
         sendData((Config.CMD_ALERT_SOS + "\n").getBytes());
     }
-    
+
     public boolean sendPlaintextData(byte[] data) {
       return sendData(data, true);
     }
@@ -529,7 +552,7 @@ public class BLEService extends Service {
           }
           return false;
       }
-      
+
       // Input validation
       if (data == null || data.length == 0 || data.length > 512) {
           if (auditLogger != null) {
@@ -580,7 +603,7 @@ public class BLEService extends Service {
           }
       }
     }
-    
+
     // --- External Setters and Getters ---
     public void setAkitaToolbar(AkitaToolbar toolbar) { this.akitaToolbar = toolbar; }
     public void setBleStatusListener(BleStatusListener listener) { this.bleStatusListener = listener; }
@@ -589,84 +612,41 @@ public class BLEService extends Service {
     public void setMapView(MapView view) { this.mapView = view; }
     public void setTargetDeviceName(String name) { this.targetDeviceName = name; }
 
-    private byte[] encodeEncryptedPayloadBytes(byte[] plaintext) {
-        if (securityManager == null || !securityManager.isInitialized()) {
-            return null;
+    private boolean consumeRuntimeStatus(String line) {
+        if (line == null) {
+            return false;
         }
-        byte[] encrypted = securityManager.encrypt(plaintext);
-        if (encrypted == null || encrypted.length == 0) {
-            return null;
+        if (line.startsWith(Config.STATUS_TIME_SYNC_PREFIX)) {
+            Log.i(TAG, "Firmware time sync status: " + line.substring(Config.STATUS_TIME_SYNC_PREFIX.length()));
+            return true;
         }
+        if (line.startsWith(Config.STATUS_COT_MISSION_PREFIX)) {
+            Log.i(TAG, "Firmware CoT mission status: " + line.substring(Config.STATUS_COT_MISSION_PREFIX.length()));
+            return true;
+        }
+        return false;
+    }
 
-        byte[] header = (Config.ENCRYPTED_PAYLOAD_PREFIX + Config.ENCRYPTED_PAYLOAD_VERSION + ":"
-                + Config.ENCRYPTED_KEY_ID + ":").getBytes(StandardCharsets.UTF_8);
-        byte[] encoded = new byte[header.length + (encrypted.length * 2)];
-        try {
-            System.arraycopy(header, 0, encoded, 0, header.length);
-            for (int index = 0; index < encrypted.length; index++) {
-                int value = encrypted[index] & 0xFF;
-                encoded[header.length + (index * 2)] = HEX_DIGITS[value >>> 4];
-                encoded[header.length + (index * 2) + 1] = HEX_DIGITS[value & 0x0F];
-            }
-            return encoded;
-        } finally {
-            Arrays.fill(encrypted, (byte) 0);
+    private static String sanitizeMissionName(String missionName) {
+        if (missionName == null) {
+            return "";
         }
+        StringBuilder sanitized = new StringBuilder();
+        for (int index = 0; index < missionName.length() && sanitized.length() < 64; index++) {
+            char c = missionName.charAt(index);
+            if (Character.isLetterOrDigit(c) || c == '-' || c == '_' || c == ' ' || c == '.') {
+                sanitized.append(c);
+            }
+        }
+        return sanitized.toString().trim();
+    }
+
+    private byte[] encodeEncryptedPayloadBytes(byte[] plaintext) {
+        return PayloadEnvelope.encode(securityManager, plaintext);
     }
 
     private String decodePayload(String payload) {
-        if (payload == null || payload.isEmpty()) {
-            return null;
-        }
-
-        if (!payload.startsWith(Config.ENCRYPTED_PAYLOAD_PREFIX)) {
-            return payload;
-        }
-
-        if (securityManager == null || !securityManager.isInitialized() || !securityManager.isEncryptionEnabled()) {
-            return null;
-        }
-
-        String headerAndHex = payload.substring(Config.ENCRYPTED_PAYLOAD_PREFIX.length());
-        int firstSep = headerAndHex.indexOf(':');
-        int secondSep = headerAndHex.indexOf(':', firstSep + 1);
-        if (firstSep <= 0 || secondSep <= firstSep + 1) {
-            return null;
-        }
-
-        String version = headerAndHex.substring(0, firstSep);
-        String keyId = headerAndHex.substring(firstSep + 1, secondSep);
-        if (!Config.ENCRYPTED_PAYLOAD_VERSION.equals(version) || !Config.ENCRYPTED_KEY_ID.equals(keyId)) {
-            return null;
-        }
-
-        String hex = headerAndHex.substring(secondSep + 1);
-        if ((hex.length() % 2) != 0) {
-            return null;
-        }
-
-        byte[] encrypted = new byte[hex.length() / 2];
-        for (int i = 0; i < encrypted.length; i++) {
-            int idx = i * 2;
-            try {
-                encrypted[i] = (byte) Integer.parseInt(hex.substring(idx, idx + 2), 16);
-            } catch (NumberFormatException e) {
-                Arrays.fill(encrypted, (byte) 0);
-                return null;
-            }
-        }
-
-        byte[] decrypted = securityManager.decrypt(encrypted);
-        if (decrypted == null) {
-            Arrays.fill(encrypted, (byte) 0);
-            return null;
-        }
-        try {
-            return new String(decrypted, StandardCharsets.UTF_8).trim();
-        } finally {
-            Arrays.fill(encrypted, (byte) 0);
-            Arrays.fill(decrypted, (byte) 0);
-        }
+        return PayloadEnvelope.decode(securityManager, payload);
     }
 
     private static final byte[] HEX_DIGITS = "0123456789abcdef".getBytes(StandardCharsets.US_ASCII);

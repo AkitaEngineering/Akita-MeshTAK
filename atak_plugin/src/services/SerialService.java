@@ -32,6 +32,7 @@ import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.Config;
 import com.akitaengineering.meshtak.AuditLogger;
+import com.akitaengineering.meshtak.PayloadEnvelope;
 import com.akitaengineering.meshtak.SecurityManager;
 
 import java.io.IOException;
@@ -58,8 +59,8 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     private AuditLogger auditLogger;
 
     // Constants read from Config.java
-    private static final int HELTEC_VENDOR_ID = Config.HELTEC_VENDOR_ID; 
-    private static final int HELTEC_PRODUCT_ID = Config.HELTEC_PRODUCT_ID; 
+    private static final int HELTEC_VENDOR_ID = Config.HELTEC_VENDOR_ID;
+    private static final int HELTEC_PRODUCT_ID = Config.HELTEC_PRODUCT_ID;
 
     private static final String ACTION_USB_PERMISSION = "com.akitaengineering.meshtak.USB_PERMISSION";
     private static final long RECONNECT_DELAY = 5000;
@@ -73,7 +74,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     public interface SerialStatusListener {
         void onSerialStatusChanged(String status);
     }
-    
+
     private final Runnable healthCheckRunnable = new Runnable() {
         @Override
         public void run() {
@@ -108,38 +109,38 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                     closeSerialPort();
                     updateStatus("Disconnected");
                     reconnectAttemptCount = 0;
-                    
+
                     // Audit log disconnection
                     if (auditLogger != null) {
                         auditLogger.log(AuditLogger.EventType.DISCONNECTION, AuditLogger.Severity.INFO,
                                        "Serial", "USB device detached", true);
-                    } 
+                    }
                     handler.postDelayed(SerialService.this::findAndOpenHeltecSerialPortWithRetry, RECONNECT_DELAY);
                 }
             }
         }
     };
-    
+
     // --- Service Lifecycle and Setup ---
     @Override
     public void onCreate() {
         super.onCreate();
 
         loadPreferences();
-        
+
         // Initialize security and audit logging
         securityManager = SecurityManager.getInstance();
         auditLogger = AuditLogger.getInstance();
         auditLogger.initialize(getApplicationContext());
         initializeSecurity();
-        
+
         usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         registerReceiver(usbReceiver, filter);
         findAndOpenHeltecSerialPortWithRetry();
         handler.post(healthCheckRunnable);
-        
+
         auditLogger.log(AuditLogger.EventType.CONNECTION, AuditLogger.Severity.INFO,
                        "SerialService", "Service created", true);
     }
@@ -158,9 +159,9 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         executorService.shutdown();
         super.onDestroy();
     }
-    
+
     // --- Helper Methods ---
-    
+
     private void loadPreferences() {
         // Loads baud rate from preferences, needed before connection attempts
         String configuredBaud = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
@@ -197,7 +198,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         loadPreferences();
         initializeSecurity();
     }
-    
+
     private void updateStatus(final String status) {
         serialConnectionStatus = status;
         if (serialStatusListener != null) {
@@ -222,7 +223,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     private void findAndOpenHeltecSerialPortInternal() {
         UsbSerialProber prober = UsbSerialProber.getDefaultProber();
         List<UsbSerialDriver> availableDrivers = prober.findAllDrivers(usbManager);
-        
+
         for (UsbSerialDriver driver : availableDrivers) {
             UsbDevice device = driver.getDevice();
             if (device.getVendorId() == HELTEC_VENDOR_ID && device.getProductId() == HELTEC_PRODUCT_ID) {
@@ -285,12 +286,13 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                     Log.i(TAG, "Serial port opened for Heltec V3");
             updateStatus("Connected");
             reconnectAttemptCount = 0; // Success! Reset count
-            
+
             // Audit log connection
             if (auditLogger != null) {
                 auditLogger.log(AuditLogger.EventType.CONNECTION, AuditLogger.Severity.INFO,
                                "Serial", "Serial port connected", true);
             }
+            syncRuntimeState();
         } catch (IOException e) {
             Log.e(TAG, "Error opening serial port: " + e.getMessage(), e);
             closeSerialPort();
@@ -327,7 +329,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             serialPort = null;
         }
     }
-    
+
     // --- Interface Implementations ---
     @Override
     public void onRunError(Exception e) {
@@ -343,7 +345,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         if (data == null || data.length == 0) {
             return;
         }
-        
+
         String received = new String(data, StandardCharsets.UTF_8);
         String decodedPayload = decodePayload(received.trim());
         if (decodedPayload == null) {
@@ -355,7 +357,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         }
 
         Log.i(TAG, "Received from serial, len=" + data.length);
-        
+
         // Audit log data reception
         if (auditLogger != null) {
             auditLogger.log(AuditLogger.EventType.DATA_RECEIVED, AuditLogger.Severity.INFO,
@@ -365,7 +367,11 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         if (AkitaMissionControl.getInstance(getApplicationContext()).consumeIncomingStatus(decodedPayload, AkitaMissionControl.ROUTE_SERIAL)) {
             return;
         }
-        
+
+        if (consumeRuntimeStatus(decodedPayload)) {
+            return;
+        }
+
         processCotData(decodedPayload);
     }
 
@@ -373,7 +379,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
 
     private void processCotData(String data) {
         if (mapView == null) return;
-        
+
         // 1. Check for status prefixes (Health Monitoring)
         if (data.startsWith(Config.STATUS_BATT_PREFIX)) {
             String status = data.substring(Config.STATUS_BATT_PREFIX.length()).trim();
@@ -385,7 +391,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         String cleanData = data.trim();
         if (!cleanData.startsWith("<event") || !cleanData.endsWith("</event>")) {
             Log.w(TAG, "Received fragmented or non-CoT data (ignoring), len=" + cleanData.length());
-            return; 
+            return;
         }
 
         // 3. Process CoT (ATAK Marker Logic)
@@ -409,7 +415,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                 marker.setUid(uid);
                 marker.setTitle(callsign != null ? callsign : uid);
                 marker.setType(cotPoint.getType() != null ? cotPoint.getType() : Config.DEFAULT_COT_TYPE);
-                
+
                 mapView.getRootGroup().addItem(marker);
             } else if (mapItem instanceof Marker) {
                 Marker marker = (Marker) mapItem;
@@ -426,17 +432,31 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             Log.e(TAG, "Error parsing CoT data from serial: " + e.getMessage(), e);
         }
     }
-    
+
     // --- Public Service Interface Methods ---
-    
+
     public void queryDeviceStatus(String command) {
         sendData((command + "\n").getBytes());
+    }
+
+    public void syncRuntimeState() {
+        if (!isReadyForTraffic()) {
+            return;
+        }
+        long epochSeconds = System.currentTimeMillis() / 1000L;
+        sendData((Config.CMD_TIME_SYNC_PREFIX + epochSeconds + "\n").getBytes(StandardCharsets.UTF_8));
+
+        String missionName = sanitizeMissionName(androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                .getString("opentakserver_mission_name", ""));
+        handler.postDelayed(() ->
+                sendData((Config.CMD_COT_MISSION_PREFIX + missionName + "\n").getBytes(StandardCharsets.UTF_8)),
+                100);
     }
 
     public void sendCriticalAlert() {
         sendData((Config.CMD_ALERT_SOS + "\n").getBytes());
     }
-    
+
     public boolean sendPlaintextData(byte[] data) {
         return sendData(data, true);
     }
@@ -462,7 +482,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             }
             return false;
         }
-        
+
         // Input validation
         if (data == null || data.length == 0 || data.length > 512) {
             if (auditLogger != null) {
@@ -484,11 +504,11 @@ public class SerialService extends Service implements SerialInputOutputManager.L
 
             dataWithNewline = new byte[dataToSend.length + 1];
             System.arraycopy(dataToSend, 0, dataWithNewline, 0, dataToSend.length);
-            dataWithNewline[dataToSend.length] = '\n'; 
+            dataWithNewline[dataToSend.length] = '\n';
 
-            serialPort.write(dataWithNewline, 500); 
+            serialPort.write(dataWithNewline, 500);
             Log.i(TAG, "Data sent via serial, len=" + data.length);
-            
+
             // Audit log data send
             if (auditLogger != null) {
                 auditLogger.log(AuditLogger.EventType.DATA_SENT, AuditLogger.Severity.INFO,
@@ -512,7 +532,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             }
         }
     }
-    
+
     // --- Setter/Getter Interface ---
     public class LocalBinder extends Binder {
         public SerialService getService() { return SerialService.this; }
@@ -522,84 +542,41 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     public String getConnectionStatus() { return serialConnectionStatus; }
     public void setMapView(MapView view) { this.mapView = view; }
 
-    private byte[] encodeEncryptedPayloadBytes(byte[] plaintext) {
-        if (securityManager == null || !securityManager.isInitialized()) {
-            return null;
+    private boolean consumeRuntimeStatus(String line) {
+        if (line == null) {
+            return false;
         }
-        byte[] encrypted = securityManager.encrypt(plaintext);
-        if (encrypted == null || encrypted.length == 0) {
-            return null;
+        if (line.startsWith(Config.STATUS_TIME_SYNC_PREFIX)) {
+            Log.i(TAG, "Firmware time sync status: " + line.substring(Config.STATUS_TIME_SYNC_PREFIX.length()));
+            return true;
         }
+        if (line.startsWith(Config.STATUS_COT_MISSION_PREFIX)) {
+            Log.i(TAG, "Firmware CoT mission status: " + line.substring(Config.STATUS_COT_MISSION_PREFIX.length()));
+            return true;
+        }
+        return false;
+    }
 
-        byte[] header = (Config.ENCRYPTED_PAYLOAD_PREFIX + Config.ENCRYPTED_PAYLOAD_VERSION + ":"
-                + Config.ENCRYPTED_KEY_ID + ":").getBytes(StandardCharsets.UTF_8);
-        byte[] encoded = new byte[header.length + (encrypted.length * 2)];
-        try {
-            System.arraycopy(header, 0, encoded, 0, header.length);
-            for (int index = 0; index < encrypted.length; index++) {
-                int value = encrypted[index] & 0xFF;
-                encoded[header.length + (index * 2)] = HEX_DIGITS[value >>> 4];
-                encoded[header.length + (index * 2) + 1] = HEX_DIGITS[value & 0x0F];
-            }
-            return encoded;
-        } finally {
-            Arrays.fill(encrypted, (byte) 0);
+    private static String sanitizeMissionName(String missionName) {
+        if (missionName == null) {
+            return "";
         }
+        StringBuilder sanitized = new StringBuilder();
+        for (int index = 0; index < missionName.length() && sanitized.length() < 64; index++) {
+            char c = missionName.charAt(index);
+            if (Character.isLetterOrDigit(c) || c == '-' || c == '_' || c == ' ' || c == '.') {
+                sanitized.append(c);
+            }
+        }
+        return sanitized.toString().trim();
+    }
+
+    private byte[] encodeEncryptedPayloadBytes(byte[] plaintext) {
+        return PayloadEnvelope.encode(securityManager, plaintext);
     }
 
     private String decodePayload(String payload) {
-        if (payload == null || payload.isEmpty()) {
-            return null;
-        }
-
-        if (!payload.startsWith(Config.ENCRYPTED_PAYLOAD_PREFIX)) {
-            return payload;
-        }
-
-        if (securityManager == null || !securityManager.isInitialized() || !securityManager.isEncryptionEnabled()) {
-            return null;
-        }
-
-        String headerAndHex = payload.substring(Config.ENCRYPTED_PAYLOAD_PREFIX.length());
-        int firstSep = headerAndHex.indexOf(':');
-        int secondSep = headerAndHex.indexOf(':', firstSep + 1);
-        if (firstSep <= 0 || secondSep <= firstSep + 1) {
-            return null;
-        }
-
-        String version = headerAndHex.substring(0, firstSep);
-        String keyId = headerAndHex.substring(firstSep + 1, secondSep);
-        if (!Config.ENCRYPTED_PAYLOAD_VERSION.equals(version) || !Config.ENCRYPTED_KEY_ID.equals(keyId)) {
-            return null;
-        }
-
-        String hex = headerAndHex.substring(secondSep + 1);
-        if ((hex.length() % 2) != 0) {
-            return null;
-        }
-
-        byte[] encrypted = new byte[hex.length() / 2];
-        for (int i = 0; i < encrypted.length; i++) {
-            int idx = i * 2;
-            try {
-                encrypted[i] = (byte) Integer.parseInt(hex.substring(idx, idx + 2), 16);
-            } catch (NumberFormatException e) {
-                Arrays.fill(encrypted, (byte) 0);
-                return null;
-            }
-        }
-
-        byte[] decrypted = securityManager.decrypt(encrypted);
-        if (decrypted == null) {
-            Arrays.fill(encrypted, (byte) 0);
-            return null;
-        }
-        try {
-            return new String(decrypted, StandardCharsets.UTF_8).trim();
-        } finally {
-            Arrays.fill(encrypted, (byte) 0);
-            Arrays.fill(decrypted, (byte) 0);
-        }
+        return PayloadEnvelope.decode(securityManager, payload);
     }
 
     private static final byte[] HEX_DIGITS = "0123456789abcdef".getBytes(StandardCharsets.US_ASCII);

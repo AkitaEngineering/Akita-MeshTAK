@@ -4,6 +4,7 @@
 #include "power_management.h"
 #include "config.h"
 #include "meshtastic_setup.h" // For Meshtastic object
+#include "cot_generation.h"   // For CoT runtime metadata
 #include "ble_setup.h"         // For sendDataBLE
 #include "serial_bridge.h"   // For sendDataSerial
 #include "audit_log.h"        // For audit logging
@@ -11,6 +12,7 @@
 #include "security.h"         // For security operations
 #include "mailbox_escape.h"   // Shared escape/unescape
 #include <Arduino.h>
+#include <sys/time.h>
 
 static void sendStatusToAtak(const String& response, bool forcePlaintext = false) {
 #if defined(ENABLE_SERIAL) && ENABLE_SERIAL
@@ -42,7 +44,7 @@ static void sendMailboxAck(const String& messageId, const char* status) {
 }
 
 // Standard Heltec V3 battery pin and voltage divider constants
-const int VBAT_PIN = 37; 
+const int VBAT_PIN = 37;
 const float VOLTAGE_DIVIDER_R1 = 100.0; // kOhms
 const float VOLTAGE_DIVIDER_R2 = 100.0; // kOhms
 const float ADC_READING_CONVERSION = (3.3 / 4095.0); // 12-bit ADC, 3.3V reference
@@ -56,18 +58,18 @@ bool setupPowerManagement() {
 float readBatteryVoltage() {
     // Read the ADC value
     int adcValue = analogRead(VBAT_PIN);
-    
+
     // Convert ADC value to voltage
     float vbatVoltage = adcValue * ADC_READING_CONVERSION;
-    
+
     // Account for the voltage divider
     // Vout = Vin * (R2 / (R1 + R2))
     // Vin = Vout * ((R1 + R2) / R2)
     float actualVoltage = vbatVoltage * ((VOLTAGE_DIVIDER_R1 + VOLTAGE_DIVIDER_R2) / VOLTAGE_DIVIDER_R2);
-    
+
     // Heltec V3 specific correction factor (often needed)
     actualVoltage *= 1.1; // Adjust this factor based on real-world testing
-    
+
     return actualVoltage;
 }
 
@@ -79,50 +81,77 @@ void processIncomingCommand(const String& cmd) {
     // Input validation - CRITICAL for security
     ValidationResult validation = validateCommand(cmd);
     if (validation != VALIDATION_OK) {
-        logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 2, "SYSTEM", 
+        logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 2, "SYSTEM",
                      "Invalid command received - validation failed", false);
         Serial.printf("SECURITY: Command validation failed: %d\n", validation);
         return;
     }
-    
+
     // Log command reception
-    logAuditEvent(AUDIT_EVENT_COMMAND_RECEIVED, 0, DEVICE_ID, 
+    logAuditEvent(AUDIT_EVENT_COMMAND_RECEIVED, 0, DEVICE_ID,
                   ("Command: " + cmd).c_str(), true);
-    
+
     if (cmd.startsWith(CMD_ALERT_SOS)) {
         Serial.println("ALERT RECEIVED: SOS COMMAND TRIGGERED! BROADCASTING.");
-        
+
         // Log SOS trigger - CRITICAL event
-        logAuditEvent(AUDIT_EVENT_SOS_TRIGGERED, 3, DEVICE_ID, 
+        logAuditEvent(AUDIT_EVENT_SOS_TRIGGERED, 3, DEVICE_ID,
                      "SOS alert broadcast initiated", true);
-        
+
         // --- Implement Meshtastic high-power emergency broadcast here ---
         String sosMessage = "SOS: Critical Alert from " + String(DEVICE_ID);
         // sendData(payload, len, channel, wantAck, hopLimit, txPower)
         // Using max power (20), default hop limit, on primary channel
         bool sent = mt_send_text(sosMessage.c_str(), BROADCAST_ADDR, 0);
-        
+
         logAuditEvent(AUDIT_EVENT_COMMAND_EXECUTED, sent ? 0 : 2, DEVICE_ID,
                      sent ? "SOS broadcast successful" : "SOS broadcast failed", sent);
-        
+
     } else if (cmd.startsWith(CMD_GET_BATT)) {
         float voltage = readBatteryVoltage();
         // Simple LiPo calculation (3.2V min, 4.2V max)
-        int percent = (int)((voltage - 3.2) / (4.2 - 3.2) * 100); 
+        int percent = (int)((voltage - 3.2) / (4.2 - 3.2) * 100);
         if (percent > 100) percent = 100;
         if (percent < 0) percent = 0;
 
         String response = String(STATUS_BATT_PREFIX) + percent + "%";
         sendStatusToAtak(response);
-        
+
         logAuditEvent(AUDIT_EVENT_COMMAND_EXECUTED, 0, DEVICE_ID,
                      ("Battery status: " + String(percent) + "%").c_str(), true);
     } else if (cmd.startsWith(CMD_GET_VERSION)) {
         String response = String(STATUS_VERSION_PREFIX) + FIRMWARE_VERSION;
         sendStatusToAtak(response);
-        
+
         logAuditEvent(AUDIT_EVENT_COMMAND_EXECUTED, 0, DEVICE_ID,
                      ("Version: " + String(FIRMWARE_VERSION)).c_str(), true);
+    } else if (cmd.startsWith(CMD_TIME_SYNC_PREFIX)) {
+        String epochText = cmd.substring(strlen(CMD_TIME_SYNC_PREFIX));
+        epochText.trim();
+        unsigned long long epochSeconds = strtoull(epochText.c_str(), nullptr, 10);
+        if (epochSeconds >= 1609459200ULL) {
+            timeval tv;
+            tv.tv_sec = (time_t)epochSeconds;
+            tv.tv_usec = 0;
+            bool synced = settimeofday(&tv, nullptr) == 0;
+            String response = String(STATUS_TIME_SYNC_PREFIX) + (synced ? "OK:" : "FAILED:") + epochText;
+            sendStatusToAtak(response);
+            logAuditEvent(AUDIT_EVENT_CONFIGURATION_CHANGE, synced ? 0 : 2, DEVICE_ID,
+                         synced ? "CoT time synchronized" : "CoT time sync failed", synced);
+        } else {
+            sendStatusToAtak(String(STATUS_TIME_SYNC_PREFIX) + "FAILED:INVALID");
+            logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 1, DEVICE_ID,
+                         "Rejected invalid time sync command", false);
+        }
+    } else if (cmd.startsWith(CMD_COT_MISSION_PREFIX)) {
+        String missionName = cmd.substring(strlen(CMD_COT_MISSION_PREFIX));
+        missionName.trim();
+        setCotMissionName(missionName);
+        String activeMission = getCotMissionName();
+        String response = String(STATUS_COT_MISSION_PREFIX) + (activeMission.length() > 0 ? activeMission : "CLEARED");
+        sendStatusToAtak(response);
+        logAuditEvent(AUDIT_EVENT_CONFIGURATION_CHANGE, 0, DEVICE_ID,
+                     activeMission.length() > 0 ? "CoT mission tag updated" : "CoT mission tag cleared", true);
     } else if (cmd.startsWith(CMD_MAILBOX_PUT_PREFIX)) {
         String messageId = "";
         String format = "";
