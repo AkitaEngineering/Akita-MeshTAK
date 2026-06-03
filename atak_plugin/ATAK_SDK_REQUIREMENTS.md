@@ -9,7 +9,7 @@ This project intentionally does not ship the proprietary ATAK SDK jar.
 - Release APK builds require the official ATAK SDK jar.
 - Provide its absolute or relative path with `AKITA_ATAK_SDK_JAR` or `-PakitaAtakSdkJar=/path/to/main.jar`.
 - You may also point `AKITA_ATAK_SDK_JAR` or `-PakitaAtakSdkJar` at the extracted ATAK CIV SDK directory; the build will resolve `main.jar` inside that directory automatically.
-- The current validated public SDK baseline is `ATAK-CIV-5.5.1.8-SDK` and is recorded in `../version.properties` as `ATAK_SDK_VERSION`.
+- The current target public SDK baseline is `ATAK-CIV-5.6.0.12-SDK` and is recorded in `../version.properties` as `ATAK_SDK_VERSION`.
 - The ATAK plugin host metadata target is recorded in `../version.properties` as `ATAK_API_VERSION`.
 
 ## CI and Debug Builds

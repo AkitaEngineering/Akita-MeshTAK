@@ -5,12 +5,27 @@ plugins {
 }
 
 def versionProperties = new Properties()
-file("$rootDir/../version.properties").withInputStream { stream ->
+def versionPropertiesFile = file("$rootDir/../version.properties")
+if (!versionPropertiesFile.exists() || versionPropertiesFile.length() == 0) {
+    throw new GradleException("Missing version metadata at ${versionPropertiesFile}")
+}
+if (versionPropertiesFile.bytes.any { it == 0 }) {
+    throw new GradleException("Invalid version metadata at ${versionPropertiesFile}: file contains NUL bytes")
+}
+versionPropertiesFile.withInputStream { stream ->
     versionProperties.load(stream)
 }
 
 def hasText = { String value ->
     value != null && !value.trim().isEmpty()
+}
+
+def requireVersionProperty = { String key ->
+    def value = versionProperties.getProperty(key)
+    if (!hasText(value)) {
+        throw new GradleException("Missing required version property '${key}' in ${versionPropertiesFile}")
+    }
+    return value.trim()
 }
 
 def resolveConfig = { String gradleKey, String envKey, String fallback ->
@@ -34,12 +49,12 @@ def escapeBuildConfigString = { String value ->
     return '"' + sanitized + '"'
 }
 
-def versionNameValue = versionProperties.getProperty('VERSION_NAME', '0.2.0').trim()
-def versionCodeValue = Integer.parseInt(versionProperties.getProperty('VERSION_CODE', '1').trim())
-def minFirmwareVersion = versionProperties.getProperty('MIN_FIRMWARE_VERSION', versionNameValue).trim()
-def maxFirmwareVersion = versionProperties.getProperty('MAX_FIRMWARE_VERSION', '1.0.0').trim()
-def requiredAtakSdkVersion = versionProperties.getProperty('ATAK_SDK_VERSION', 'ATAK-CIV-5.5.1.8-SDK').trim()
-def defaultAtakApiVersion = versionProperties.getProperty('ATAK_API_VERSION', 'com.atakmap.app@5.5.1.8.CIV').trim()
+def versionNameValue = requireVersionProperty('VERSION_NAME')
+def versionCodeValue = Integer.parseInt(requireVersionProperty('VERSION_CODE'))
+def minFirmwareVersion = requireVersionProperty('MIN_FIRMWARE_VERSION')
+def maxFirmwareVersion = requireVersionProperty('MAX_FIRMWARE_VERSION')
+def requiredAtakSdkVersion = requireVersionProperty('ATAK_SDK_VERSION')
+def defaultAtakApiVersion = requireVersionProperty('ATAK_API_VERSION')
 
 def defaultProvisioningSecret = 'REPLACE_WITH_DEPLOYMENT_SECRET'
 def defaultBleServiceUuid = '0000181A-0000-1000-8000-00805F9B34FB'

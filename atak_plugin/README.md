@@ -91,7 +91,7 @@ If you have the extracted ATAK CIV SDK directory instead of a standalone jar, yo
 export AKITA_ATAK_SDK_JAR=/absolute/path/to/atak-civ/
 ```
 
-The current validated public SDK baseline for this repo is `ATAK-CIV-5.5.1.8-SDK`.
+The current target public SDK baseline for this repo is `ATAK-CIV-5.6.0.12-SDK`.
 
 If the jar is absent, debug/unit-test builds automatically use compile-time ATAK stubs instead.
 
