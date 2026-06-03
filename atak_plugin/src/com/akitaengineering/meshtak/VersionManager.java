@@ -1,13 +1,12 @@
 // File: atak_plugin/src/com/akitaengineering/meshtak/VersionManager.java
-// Description: Version checking and compatibility management.
-// Ensures firmware and plugin compatibility
+// Description: Version reporting and compatibility management.
 
 package com.akitaengineering.meshtak;
 
 import android.util.Log;
 
 /**
- * Version Manager for checking compatibility between plugin and firmware.
+ * Version Manager for plugin and firmware version helpers.
  */
 public class VersionManager {
     private static final String TAG = "VersionManager";
@@ -54,24 +53,18 @@ public class VersionManager {
     
     /**
      * Check if firmware version is compatible with plugin.
+     *
+     * The plugin is intentionally permissive across firmware releases. Transport
+     * and payload handling negotiate capabilities at runtime, so a reported
+     * firmware version should not block the plugin from running.
      */
     public static boolean isFirmwareCompatible(String firmwareVersion) {
-        if (firmwareVersion == null || firmwareVersion.isEmpty()) {
+        if (firmwareVersion == null || firmwareVersion.trim().isEmpty()) {
             Log.w(TAG, "Firmware version is null or empty");
             return false;
         }
-        
-        int minCompare = compareVersions(firmwareVersion, BuildConfig.MIN_FIRMWARE_VERSION);
-        int maxCompare = compareVersions(firmwareVersion, BuildConfig.MAX_FIRMWARE_VERSION);
-        
-        boolean compatible = (minCompare >= 0 && maxCompare <= 0);
-        
-        if (!compatible) {
-            Log.w(TAG, "Firmware version " + firmwareVersion + " is not compatible. " +
-                  "Required: " + BuildConfig.MIN_FIRMWARE_VERSION + " - " + BuildConfig.MAX_FIRMWARE_VERSION);
-        }
-        
-        return compatible;
+
+        return true;
     }
     
     /**

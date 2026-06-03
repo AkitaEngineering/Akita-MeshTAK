@@ -1,15 +1,20 @@
 package com.atakmap.android.maps;
 
+import android.view.View;
+
 import com.atakmap.api.Point2;
-import com.atakmap.api.map.MapItem;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class MapView {
+public class MapView extends View {
 
     private final RootGroup rootGroup = new RootGroup();
     private final Map<String, MapItem> items = new HashMap<>();
+
+    public MapView() {
+        super(null);
+    }
 
     public MapItem getMapItem(String uid) {
         return items.get(uid);
