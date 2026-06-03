@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Akita MeshTAK</string>
+    <string name="app_desc">Meshtastic integration plugin for ATAK</string>
     <string name="connection_method_title">Connection Method</string>
     <string name="ble_device_name_title">BLE Device Name</string>
     <string name="serial_port_path_title">Serial Port Path</string>

@@ -17,11 +17,12 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 
+import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapView;
-import com.atakmap.api.CotPoint;
-import com.atakmap.api.Point2;
-import com.atakmap.api.map.MapItem;
-import com.atakmap.api.map.Marker;
+import com.atakmap.android.maps.Marker;
+import com.atakmap.coremap.cot.event.CotDetail;
+import com.atakmap.coremap.cot.event.CotEvent;
+import com.atakmap.coremap.maps.coords.GeoPoint;
 import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
@@ -55,6 +56,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     private AkitaToolbar akitaToolbar;
     private SerialStatusListener serialStatusListener;
     private String serialConnectionStatus = "Idle";
+    private boolean serialPortOpen;
     private SecurityManager securityManager;
     private AuditLogger auditLogger;
 
@@ -271,7 +273,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     private void openSerialPort(UsbDeviceConnection connection) {
         // Setup timeout to prevent hanging if open fails silently
         handler.postDelayed(() -> {
-            if (ioManager == null && serialPort != null && serialPort.isOpen()) {
+            if (ioManager == null && serialPort != null && serialPortOpen) {
                 Log.w(TAG, "Serial port open timed out.");
                 closeSerialPort();
                 updateStatus("Error: Open timed out");
@@ -282,6 +284,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         try {
             serialPort.open(connection);
             serialPort.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
+            serialPortOpen = true;
             startIoManager();
                     Log.i(TAG, "Serial port opened for Heltec V3");
             updateStatus("Connected");
@@ -328,6 +331,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             }
             serialPort = null;
         }
+        serialPortOpen = false;
     }
 
     // --- Interface Implementations ---
@@ -396,37 +400,34 @@ public class SerialService extends Service implements SerialInputOutputManager.L
 
         // 3. Process CoT (ATAK Marker Logic)
         try {
-            CotPoint cotPoint = CotPoint.fromXml(cleanData);
-            if (cotPoint == null) return;
+            CotEvent cotEvent = CotEvent.parse(cleanData);
+            if (cotEvent == null || !cotEvent.isValid()) return;
 
-            final String uid = cotPoint.getUid();
-            String callsign = null;
-            if (cotPoint.getDetail() != null && cotPoint.getDetail().get("contact") != null) {
-                callsign = cotPoint.getDetail().get("contact").get("callsign");
-            }
-            final Point2 geoPoint = new Point2(cotPoint.getLongitude(), cotPoint.getLatitude());
+            final String uid = cotEvent.getUID();
+            CotDetail contactDetail = cotEvent.findDetail("contact");
+            String callsign = contactDetail != null ? contactDetail.getAttribute("callsign") : null;
+            final GeoPoint geoPoint = cotEvent.getGeoPoint();
 
             if (uid == null) return;
 
             MapItem mapItem = mapView.getMapItem(uid);
 
             if (mapItem == null) {
-                final Marker marker = new Marker(geoPoint);
-                marker.setUid(uid);
+                final Marker marker = new Marker(geoPoint, uid);
                 marker.setTitle(callsign != null ? callsign : uid);
-                marker.setType(cotPoint.getType() != null ? cotPoint.getType() : Config.DEFAULT_COT_TYPE);
+                marker.setType(cotEvent.getType() != null ? cotEvent.getType() : Config.DEFAULT_COT_TYPE);
 
                 mapView.getRootGroup().addItem(marker);
             } else if (mapItem instanceof Marker) {
                 Marker marker = (Marker) mapItem;
-                marker.setGeoPoint(geoPoint);
+                marker.setPoint(geoPoint);
             }
 
             AkitaMissionMarkerRegistry.getInstance().recordMarker(
                     uid,
                     callsign != null ? callsign : uid,
-                    cotPoint.getLatitude(),
-                    cotPoint.getLongitude(),
+                    geoPoint.getLatitude(),
+                    geoPoint.getLongitude(),
                     "Serial");
         } catch (Exception e) {
             Log.e(TAG, "Error parsing CoT data from serial: " + e.getMessage(), e);
@@ -462,7 +463,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     }
 
     public boolean isReadyForTraffic() {
-        return serialPort != null && serialPort.isOpen();
+        return serialPort != null && serialPortOpen;
     }
 
     public boolean sendData(byte[] data) {
@@ -473,7 +474,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         byte[] dataToSend = data;
         byte[] dataWithNewline = null;
         boolean wipeSendBuffer = false;
-        if (serialPort == null || !serialPort.isOpen()) {
+        if (serialPort == null || !serialPortOpen) {
             Log.w(TAG, "Serial port not open, cannot send data.");
             updateStatus("Error: Serial port not open");
             if (auditLogger != null) {

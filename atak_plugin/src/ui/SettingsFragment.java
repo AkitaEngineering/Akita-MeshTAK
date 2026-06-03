@@ -23,7 +23,6 @@ import androidx.preference.PreferenceManager;
 import androidx.preference.SwitchPreferenceCompat;
 
 import com.atakmap.android.maps.MapView;
-import com.atakmap.android.plugin.ui.PluginPreferenceFragment;
 import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.R;
@@ -33,7 +32,7 @@ import com.akitaengineering.meshtak.ui.AkitaTheme;
 
 import java.util.Arrays;
 
-public class SettingsFragment extends PreferenceFragmentCompat implements PluginPreferenceFragment, Preference.OnPreferenceChangeListener, android.content.SharedPreferences.OnSharedPreferenceChangeListener {
+public class SettingsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener, android.content.SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static final String TAG = "SettingsFragment";
     private static final String PREF_OPENTAKSERVER_MISSION_NAME = "opentakserver_mission_name";

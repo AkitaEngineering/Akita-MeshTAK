@@ -7,9 +7,10 @@ import android.widget.TextView;
 import android.content.SharedPreferences;
 import android.view.View;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
-import com.atakmap.android.plugin.ui.PluginToolbar;
+import com.atak.plugins.impl.PluginLayoutInflater;
 import com.akitaengineering.meshtak.R;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
@@ -17,7 +18,7 @@ import com.akitaengineering.meshtak.AuditLogger;
 
 import androidx.preference.PreferenceManager;
 
-public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnSharedPreferenceChangeListener {
+public class AkitaToolbar extends FrameLayout implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     private View attachedView;
     private View toolbarRoot;
@@ -41,10 +42,20 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
     private int batteryPercent = -1;
 
     public AkitaToolbar(Context context) {
-        super(context, R.layout.akita_toolbar);
+        super(context);
         this.context = context;
+        PluginLayoutInflater.inflate(context, R.layout.akita_toolbar, this, true);
+        attachedView = this;
+        bindViews(this);
         PreferenceManager.getDefaultSharedPreferences(context)
                 .registerOnSharedPreferenceChangeListener(this);
+        applyTheme();
+        updateConnectionMethodDisplay();
+        updateMissionProfileStatus();
+        updateSecurityPostureStatus();
+        setDetailedBleStatus(bleDetailedStatus);
+        setDetailedSerialStatus(serialDetailedStatus);
+        setBatteryStatus(batteryPercent >= 0 ? batteryPercent + "%" : "--%");
     }
     
     public void setServices(BLEService ble, SerialService serial) {
@@ -56,8 +67,7 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
         setBatteryStatus("--%");
     }
 
-    @Override
-    public void onAttachedToView(View v) {
+    private void bindViews(View v) {
         attachedView = v;
         toolbarRoot = v.findViewById(R.id.toolbar_root);
         toolbarTitleTextView = v.findViewById(R.id.toolbar_title);
@@ -71,23 +81,14 @@ public class AkitaToolbar extends PluginToolbar implements SharedPreferences.OnS
         batteryStatusTextView = v.findViewById(R.id.battery_status);
         toolbarHealthTextView = v.findViewById(R.id.toolbar_health_label);
         sosButton = v.findViewById(R.id.sos_button);
-
-        applyTheme();
-        updateConnectionMethodDisplay();
-        updateMissionProfileStatus();
-        updateSecurityPostureStatus();
-        setDetailedBleStatus(bleDetailedStatus);
-        setDetailedSerialStatus(serialDetailedStatus);
-        setBatteryStatus(batteryPercent >= 0 ? batteryPercent + "%" : "--%");
-
         if (sosButton != null) {
             sosButton.setOnClickListener(view -> triggerSosAlert());
         }
     }
-    
+
     @Override
-    public void onDetachedFromView(View v) {
-        // Unregister the listener when the toolbar is removed
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
         PreferenceManager.getDefaultSharedPreferences(context)
                 .unregisterOnSharedPreferenceChangeListener(this);
     }

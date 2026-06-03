@@ -76,13 +76,19 @@ set ANDROID_HOME=C:\Users\you\AppData\Local\Android\Sdk   # Windows
 Release builds require the official ATAK SDK jar. Supply its path with one of the following:
 
 ```bash
-export AKITA_ATAK_SDK_JAR=/absolute/path/to/atak-sdk.jar
+export AKITA_ATAK_SDK_JAR=/absolute/path/to/main.jar
 ```
 
 or
 
 ```bash
-./gradlew assembleRelease -PakitaAtakSdkJar=/absolute/path/to/atak-sdk.jar
+./gradlew assembleRelease -PakitaAtakSdkJar=/absolute/path/to/main.jar
+```
+
+If you have the extracted ATAK CIV SDK directory instead of a standalone jar, you can point the same setting at that directory and the build will resolve `main.jar` automatically:
+
+```bash
+export AKITA_ATAK_SDK_JAR=/absolute/path/to/atak-civ/
 ```
 
 If the jar is absent, debug/unit-test builds automatically use compile-time ATAK stubs instead.

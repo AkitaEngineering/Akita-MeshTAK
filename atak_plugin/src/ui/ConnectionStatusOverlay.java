@@ -6,15 +6,15 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.view.View;
 
 import androidx.preference.PreferenceManager;
 
 import com.atakmap.android.maps.MapView;
-import com.atakmap.android.plugin.ui.PluginMapOverlay;
 
 import java.util.Locale;
 
-public class ConnectionStatusOverlay extends PluginMapOverlay {
+public class ConnectionStatusOverlay extends View {
 
     private String bleStatus = "BLE: Idle";
     private String serialStatus = "Serial: Idle";
@@ -35,10 +35,12 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
     private final int textPadding;
     private final int cornerRadius;
     private final Context context;
+    private final MapView mapView;
 
     public ConnectionStatusOverlay(Context context, MapView mapView) {
-        super(mapView);
+        super(context);
         this.context = context;
+        this.mapView = mapView;
         float density = context.getResources().getDisplayMetrics().density;
         textPadding = (int) (8 * density);
         cornerRadius = (int) (10 * density);
@@ -74,21 +76,18 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
     public void setBleStatus(String status) {
         this.bleStatus = "BLE: " + status;
         lastBleUpdate = System.currentTimeMillis();
-        if (getMapView() != null) {
-            getMapView().invalidate();
-        }
+        invalidateView();
     }
 
     public void setSerialStatus(String status) {
         this.serialStatus = "Serial: " + status;
         lastSerialUpdate = System.currentTimeMillis();
-        if (getMapView() != null) {
-            getMapView().invalidate();
-        }
+        invalidateView();
     }
 
     @Override
-    public void draw(Canvas canvas, MapView mapView) {
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
         AkitaTheme.Palette palette = AkitaTheme.resolvePalette(context);
         applyPalette(palette);
 
@@ -230,5 +229,12 @@ public class ConnectionStatusOverlay extends PluginMapOverlay {
         String activeStatus = connectionMethod.equalsIgnoreCase("ble") ? bleStatus : serialStatus;
         String normalizedStatus = activeStatus == null ? "" : activeStatus.toLowerCase(Locale.US);
         return normalizedStatus.contains("connected") || normalizedStatus.contains("ready");
+    }
+
+    private void invalidateView() {
+        invalidate();
+        if (mapView != null) {
+            mapView.invalidate();
+        }
     }
 }

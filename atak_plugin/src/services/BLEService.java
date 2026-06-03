@@ -15,11 +15,12 @@ import android.util.Log;
 
 import androidx.preference.PreferenceManager;
 
+import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapView;
-import com.atakmap.api.CotPoint;
-import com.atakmap.api.Point2;
-import com.atakmap.api.map.MapItem;
-import com.atakmap.api.map.Marker;
+import com.atakmap.android.maps.Marker;
+import com.atakmap.coremap.cot.event.CotDetail;
+import com.atakmap.coremap.cot.event.CotEvent;
+import com.atakmap.coremap.maps.coords.GeoPoint;
 import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
@@ -469,37 +470,34 @@ public class BLEService extends Service {
 
         // 3. Process CoT (ATAK Marker Logic)
         try {
-            CotPoint cotPoint = CotPoint.fromXml(cleanData);
-            if (cotPoint == null) return;
+            CotEvent cotEvent = CotEvent.parse(cleanData);
+            if (cotEvent == null || !cotEvent.isValid()) return;
 
-            final String uid = cotPoint.getUid();
-            String callsign = null;
-            if (cotPoint.getDetail() != null && cotPoint.getDetail().get("contact") != null) {
-                callsign = cotPoint.getDetail().get("contact").get("callsign");
-            }
-            final Point2 geoPoint = new Point2(cotPoint.getLongitude(), cotPoint.getLatitude());
+            final String uid = cotEvent.getUID();
+            CotDetail contactDetail = cotEvent.findDetail("contact");
+            String callsign = contactDetail != null ? contactDetail.getAttribute("callsign") : null;
+            final GeoPoint geoPoint = cotEvent.getGeoPoint();
 
             if (uid == null) return;
 
             MapItem mapItem = mapView.getMapItem(uid);
 
             if (mapItem == null) {
-                final Marker marker = new Marker(geoPoint);
-                marker.setUid(uid);
+                final Marker marker = new Marker(geoPoint, uid);
                 marker.setTitle(callsign != null ? callsign : uid);
-                marker.setType(cotPoint.getType() != null ? cotPoint.getType() : Config.DEFAULT_COT_TYPE);
+                marker.setType(cotEvent.getType() != null ? cotEvent.getType() : Config.DEFAULT_COT_TYPE);
 
                 mapView.getRootGroup().addItem(marker);
             } else if (mapItem instanceof Marker) {
                 Marker marker = (Marker) mapItem;
-                marker.setGeoPoint(geoPoint);
+                marker.setPoint(geoPoint);
             }
 
             AkitaMissionMarkerRegistry.getInstance().recordMarker(
                     uid,
                     callsign != null ? callsign : uid,
-                    cotPoint.getLatitude(),
-                    cotPoint.getLongitude(),
+                    geoPoint.getLatitude(),
+                    geoPoint.getLongitude(),
                     "BLE");
         } catch (Exception e) {
             Log.e(TAG, "Error processing CoT data: " + e.getMessage(), e);

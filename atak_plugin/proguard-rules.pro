@@ -1,4 +1,9 @@
 # Keep the plugin entrypoints and services that ATAK reflects by name.
+-keep class com.akitaengineering.meshtak.AkitaMeshTAKLifecycle { *; }
+-keep class com.akitaengineering.meshtak.AkitaMeshTAKMapComponent { *; }
+-keep class com.akitaengineering.meshtak.ui.AkitaDropDownReceiver { *; }
+-keep class com.akitaengineering.meshtak.ui.AkitaPreferenceFragment { *; }
+-keep class com.akitaengineering.meshtak.ui.AkitaTool { *; }
 -keep class com.akitaengineering.meshtak.AkitaMeshTAKPlugin { *; }
 -keep class com.akitaengineering.meshtak.services.** { *; }
 -keep class com.akitaengineering.meshtak.ui.** { *; }

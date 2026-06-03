@@ -39,6 +39,7 @@ def versionCodeValue = Integer.parseInt(versionProperties.getProperty('VERSION_C
 def minFirmwareVersion = versionProperties.getProperty('MIN_FIRMWARE_VERSION', versionNameValue).trim()
 def maxFirmwareVersion = versionProperties.getProperty('MAX_FIRMWARE_VERSION', '1.0.0').trim()
 def requiredAtakSdkVersion = versionProperties.getProperty('ATAK_SDK_VERSION', 'official-jar-required').trim()
+def defaultAtakApiVersion = versionProperties.getProperty('ATAK_API_VERSION', 'com.atakmap.app@4.6.0.CIV').trim()
 
 def defaultProvisioningSecret = 'REPLACE_WITH_DEPLOYMENT_SECRET'
 def defaultBleServiceUuid = '0000181A-0000-1000-8000-00805F9B34FB'
@@ -55,9 +56,13 @@ def vendorIdValue = Integer.parseInt(resolveConfig('akitaHeltecVendorId', 'AKITA
 def productIdValue = Integer.parseInt(resolveConfig('akitaHeltecProductId', 'AKITA_HELTEC_PRODUCT_ID', String.valueOf(defaultProductId)))
 
 def defaultAtakSdkJarPath = 'libs/atak-sdk.jar'
-def configuredAtakSdkJarPath = resolveConfig('akitaAtakSdkJar', 'AKITA_ATAK_SDK_JAR', defaultAtakSdkJarPath)
-def atakSdkJarFile = file(configuredAtakSdkJarPath)
+def configuredAtakSdkPath = resolveConfig('akitaAtakSdkJar', 'AKITA_ATAK_SDK_JAR', defaultAtakSdkJarPath)
+def atakSdkJarFile = file(configuredAtakSdkPath)
+if (atakSdkJarFile.isDirectory()) {
+    atakSdkJarFile = new File(atakSdkJarFile, 'main.jar')
+}
 def useAtakStub = Boolean.parseBoolean(resolveConfig('akitaUseAtakStub', 'AKITA_USE_ATAK_STUB', 'false')) || !atakSdkJarFile.exists()
+def atakApiVersionValue = resolveConfig('akitaAtakApiVersion', 'AKITA_ATAK_API_VERSION', defaultAtakApiVersion)
 
 def releaseKeystorePath = resolveConfig('akitaReleaseKeystoreFile', 'AKITA_RELEASE_KEYSTORE_FILE', '')
 def releaseStorePassword = resolveConfig('akitaReleaseStorePassword', 'AKITA_RELEASE_STORE_PASSWORD', '')
@@ -80,6 +85,7 @@ android {
         targetSdk 35
         versionCode versionCodeValue
         versionName versionNameValue
+        manifestPlaceholders = [atakApiVersion: atakApiVersionValue]
         buildConfigField 'String', 'AKITA_PROVISIONING_SECRET', escapeBuildConfigString(provisioningSecretValue)
         buildConfigField 'String', 'AKITA_BLE_SERVICE_UUID', escapeBuildConfigString(bleServiceUuidValue)
         buildConfigField 'String', 'AKITA_COT_CHARACTERISTIC_UUID', escapeBuildConfigString(cotCharacteristicUuidValue)
@@ -89,6 +95,7 @@ android {
         buildConfigField 'String', 'MIN_FIRMWARE_VERSION', escapeBuildConfigString(minFirmwareVersion)
         buildConfigField 'String', 'MAX_FIRMWARE_VERSION', escapeBuildConfigString(maxFirmwareVersion)
         buildConfigField 'String', 'REQUIRED_ATAK_SDK_VERSION', escapeBuildConfigString(requiredAtakSdkVersion)
+        buildConfigField 'String', 'ATAK_API_VERSION', escapeBuildConfigString(atakApiVersionValue)
         buildConfigField 'boolean', 'USING_ATAK_STUB', useAtakStub ? 'true' : 'false'
     }
 

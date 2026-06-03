@@ -7,19 +7,18 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PointF;
 import android.graphics.RectF;
+import android.view.View;
 
 import androidx.preference.PreferenceManager;
 
 import com.atakmap.android.maps.MapView;
-import com.atakmap.android.plugin.ui.PluginMapOverlay;
-import com.atakmap.api.Point2;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Locale;
 
-public class MissionMapOverlay extends PluginMapOverlay {
+public class MissionMapOverlay extends View {
 
     private static final long STALE_THRESHOLD_MILLIS = 5L * 60L * 1000L;
 
@@ -35,10 +34,12 @@ public class MissionMapOverlay extends PluginMapOverlay {
 
     private String bleStatus = "Idle";
     private String serialStatus = "Idle";
+    private final MapView mapView;
 
     public MissionMapOverlay(Context context, MapView mapView) {
-        super(mapView);
+        super(context);
         this.context = context;
+        this.mapView = mapView;
 
         float density = context.getResources().getDisplayMetrics().density;
 
@@ -74,20 +75,17 @@ public class MissionMapOverlay extends PluginMapOverlay {
 
     public void setBleStatus(String status) {
         bleStatus = status;
-        if (getMapView() != null) {
-            getMapView().invalidate();
-        }
+        invalidateView();
     }
 
     public void setSerialStatus(String status) {
         serialStatus = status;
-        if (getMapView() != null) {
-            getMapView().invalidate();
-        }
+        invalidateView();
     }
 
     @Override
-    public void draw(Canvas canvas, MapView mapView) {
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
         AkitaTheme.Palette palette = AkitaTheme.resolvePalette(context);
         applyPalette(palette);
@@ -224,10 +222,7 @@ public class MissionMapOverlay extends PluginMapOverlay {
     }
 
     private PointF projectPoint(MapView mapView, double longitude, double latitude) {
-        Object projected = invokeProjection(mapView, new Point2(longitude, latitude));
-        if (projected == null) {
-            projected = invokeProjection(mapView, longitude, latitude);
-        }
+        Object projected = invokeProjection(mapView, longitude, latitude);
         return pointFromObject(projected);
     }
 
@@ -253,10 +248,6 @@ public class MissionMapOverlay extends PluginMapOverlay {
         }
         if (value instanceof PointF) {
             return (PointF) value;
-        }
-        if (value instanceof Point2) {
-            Point2 point2 = (Point2) value;
-            return new PointF((float) point2.getX(), (float) point2.getY());
         }
         try {
             Method getX = value.getClass().getMethod("getX");
@@ -300,5 +291,12 @@ public class MissionMapOverlay extends PluginMapOverlay {
 
     private float dp(int value) {
         return value * context.getResources().getDisplayMetrics().density;
+    }
+
+    private void invalidateView() {
+        invalidate();
+        if (mapView != null) {
+            mapView.invalidate();
+        }
     }
 }

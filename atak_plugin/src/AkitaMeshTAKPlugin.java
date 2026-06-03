@@ -13,13 +13,6 @@ import android.util.Log;
 import androidx.preference.PreferenceManager;
 
 import com.atakmap.android.maps.MapView;
-import com.atakmap.android.plugin.AbstractPlugin;
-import com.atakmap.android.plugin.PluginLayoutInflater;
-import com.atakmap.android.plugin.ui.PluginContextMenu;
-import com.atakmap.android.plugin.ui.PluginMapOverlay;
-import com.atakmap.android.plugin.ui.PluginPreferenceFragment;
-import com.atakmap.android.plugin.ui.PluginToolbar;
-import com.atakmap.android.plugin.ui.PluginView;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
@@ -33,10 +26,7 @@ import com.akitaengineering.meshtak.ui.MissionMapOverlay;
 import com.akitaengineering.meshtak.ui.SendDataView;
 import com.akitaengineering.meshtak.ui.SettingsFragment;
 
-import java.util.ArrayList;
-import java.util.List;
-
-public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferences.OnSharedPreferenceChangeListener {
+public class AkitaMeshTAKPlugin implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static final String TAG = "AkitaMeshTAKPlugin";
     private Context pluginContext;
@@ -122,9 +112,7 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
 
     // --- Plugin Lifecycle ---
     
-    @Override
     public void onCreate(Context context, MapView view) {
-        super.onCreate(context, view);
         this.pluginContext = context;
         this.mapView = view;
         Log.d(TAG, "Plugin created.");
@@ -146,7 +134,6 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
         }
     }
 
-    @Override
     public void onDestroy() {
         Log.d(TAG, "Plugin destroyed. Stopping services and unbinding.");
         
@@ -154,7 +141,6 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
                 .unregisterOnSharedPreferenceChangeListener(this);
         
         stopAndUnbindServices();
-        super.onDestroy();
     }
     
     /** Starts/Binds both services */
@@ -277,42 +263,22 @@ public class AkitaMeshTAKPlugin extends AbstractPlugin implements SharedPreferen
         }
     }
 
-    // --- Plugin Interface Methods ---
-
-    @Override
-    public List<PluginMapOverlay> getOverlays() {
-        List<PluginMapOverlay> overlays = new ArrayList<>();
-        overlays.add(connectionStatusOverlay);
-        overlays.add(missionMapOverlay);
-        return overlays;
+    public AkitaToolbar getToolbar() {
+        return akitaToolbar;
     }
 
-    @Override
-    public List<PluginToolbar> getToolbars() {
-        List<PluginToolbar> toolbars = new ArrayList<>();
-        toolbars.add(akitaToolbar);
-        return toolbars;
+    public ConnectionStatusOverlay getConnectionStatusOverlay() {
+        return connectionStatusOverlay;
     }
 
-    @Override
-    public PluginView onCreateView(String viewId, PluginLayoutInflater inflater) {
-        if (viewId.equals("com.akitaengineering.meshtak.send_data_view")) {
+    public MissionMapOverlay getMissionMapOverlay() {
+        return missionMapOverlay;
+    }
+
+    public SendDataView getSendDataView() {
+        if (sendDataView == null && pluginContext != null && mapView != null) {
             sendDataView = new SendDataView(pluginContext, mapView, bleService, serialService);
-            return sendDataView;
         }
-        return null;
+        return sendDataView;
     }
-
-    @Override
-    public PluginPreferenceFragment getPreferenceFragment() {
-        SettingsFragment settingsFragment = new SettingsFragment();
-        settingsFragment.setMapView(mapView);
-        return settingsFragment;
-    }
-
-    // Unused overrides for completeness
-    @Override public PluginLayoutInflater getLayoutInflater(PluginLayoutInflater parent) { return null; }
-    @Override public void onReceive(Context context, Intent intent) {}
-    @Override public PluginContextMenu getContextMenu(Object caller) { return null; }
-    @Override public void onUnbind(Intent intent) { super.onUnbind(intent); }
 }

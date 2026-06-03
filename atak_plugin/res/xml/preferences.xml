@@ -34,12 +34,12 @@
     <PreferenceCategory
         android:title="@string/security_category_title">
 
-        <SwitchPreferenceCompat
+        <SwitchPreference
             android:key="transport_auto_failover"
             android:title="@string/auto_failover_title"
             android:defaultValue="true" />
 
-        <SwitchPreferenceCompat
+        <SwitchPreference
             android:key="security_encryption_enabled"
             android:title="@string/encryption_enabled_title"
             android:defaultValue="true" />
@@ -81,7 +81,7 @@
             android:title="@string/reload_security_title" />
     </PreferenceCategory>
 
-    <SwitchPreferenceCompat
+    <SwitchPreference
         android:key="mock_mode"
         android:title="@string/mock_mode_title"
         android:defaultValue="false" />
