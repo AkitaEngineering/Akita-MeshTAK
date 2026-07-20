@@ -16,6 +16,8 @@ import org.robolectric.annotation.Config;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -43,7 +45,7 @@ public class AkitaMissionControlTest {
     }
 
     @Test
-    public void queueMessageWritesMissionStateToFileAndSignalsPreferences() {
+    public void queueMessageWritesMissionStateToFileAndSignalsPreferences() throws Exception {
         AkitaMissionControl missionControl = AkitaMissionControl.getInstance(context);
 
         missionControl.queueMessage("Plain Text", "test payload", AkitaMissionControl.ROUTE_BLE);
@@ -51,6 +53,9 @@ public class AkitaMissionControlTest {
         AkitaMissionControl.QueueSnapshot snapshot = missionControl.getQueueSnapshot(true);
         assertEquals(1, snapshot.pendingCount);
         assertTrue(stateFile.exists());
+        String stored = new String(Files.readAllBytes(stateFile.toPath()), StandardCharsets.UTF_8);
+        assertTrue(stored.contains("\"ciphertext\""));
+        assertTrue(!stored.contains("test payload"));
         assertTrue(preferences.getAll().get(AkitaMissionControl.PREF_MAILBOX_RECORDS) instanceof Long);
         assertTrue(preferences.getAll().get(AkitaMissionControl.PREF_REPLAY_EVENTS) instanceof Long);
     }
@@ -90,5 +95,30 @@ public class AkitaMissionControlTest {
         assertEquals(1, snapshot.pendingCount);
         assertEquals(1, missionControl.getReplayTimeline().size());
         assertTrue(stateFile.exists());
+    }
+
+    @Test
+    public void legacyPlaintextFileIsMigratedToAuthenticatedStorage() throws Exception {
+        JSONObject mailboxRecord = new JSONObject();
+        mailboxRecord.put("messageId", "MSGFILE01");
+        mailboxRecord.put("format", "Plain Text");
+        mailboxRecord.put("payload", "legacy file payload");
+        mailboxRecord.put("preferredRoute", AkitaMissionControl.ROUTE_BLE);
+        mailboxRecord.put("status", AkitaMissionControl.STATUS_PENDING);
+        mailboxRecord.put("createdAt", 1L);
+        mailboxRecord.put("updatedAt", 1L);
+
+        JSONObject root = new JSONObject();
+        root.put("schemaVersion", 1);
+        root.put("mailboxRecords", new JSONArray().put(mailboxRecord));
+        root.put("replayEvents", new JSONArray());
+        Files.write(stateFile.toPath(), root.toString().getBytes(StandardCharsets.UTF_8));
+
+        AkitaMissionControl missionControl = AkitaMissionControl.getInstance(context);
+        assertEquals(1, missionControl.getQueueSnapshot(true).pendingCount);
+
+        String migrated = new String(Files.readAllBytes(stateFile.toPath()), StandardCharsets.UTF_8);
+        assertTrue(migrated.contains("\"storageFormat\":\"AES_GCM\""));
+        assertTrue(!migrated.contains("legacy file payload"));
     }
 }

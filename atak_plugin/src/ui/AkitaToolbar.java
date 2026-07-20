@@ -18,6 +18,8 @@ import com.akitaengineering.meshtak.AuditLogger;
 
 import androidx.preference.PreferenceManager;
 
+import java.util.Locale;
+
 public class AkitaToolbar extends FrameLayout implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     private View attachedView;
@@ -32,8 +34,8 @@ public class AkitaToolbar extends FrameLayout implements SharedPreferences.OnSha
     private TextView serialStatusTextView;
     private TextView batteryStatusTextView;
     private TextView toolbarHealthTextView;
-    private Button sosButton;              
-    
+    private Button sosButton;
+
     private Context context;
     private BLEService bleService;
     private SerialService serialService;
@@ -57,7 +59,7 @@ public class AkitaToolbar extends FrameLayout implements SharedPreferences.OnSha
         setDetailedSerialStatus(serialDetailedStatus);
         setBatteryStatus(batteryPercent >= 0 ? batteryPercent + "%" : "--%");
     }
-    
+
     public void setServices(BLEService ble, SerialService serial) {
         this.bleService = ble;
         this.serialService = serial;
@@ -159,7 +161,7 @@ public class AkitaToolbar extends FrameLayout implements SharedPreferences.OnSha
                 .getString("connection_method", "ble");
         return "ble".equalsIgnoreCase(method) ? bleService != null : serialService != null;
     }
-    
+
     private void triggerSosAlert() {
         if (AkitaMockSettings.isEnabled(context)) {
             Toast.makeText(context, "MOCK ALERT: SOS simulated for dashboard validation.", Toast.LENGTH_SHORT).show();
@@ -173,14 +175,14 @@ public class AkitaToolbar extends FrameLayout implements SharedPreferences.OnSha
 
         String method = PreferenceManager.getDefaultSharedPreferences(context)
                 .getString("connection_method", "ble");
-        
+
         // CRITICAL: Log SOS trigger for accountability
-        AuditLogger.getInstance().log(AuditLogger.EventType.SOS_TRIGGERED, 
+        AuditLogger.getInstance().log(AuditLogger.EventType.SOS_TRIGGERED,
                                     AuditLogger.Severity.CRITICAL,
-                                    "AkitaToolbar", 
-                                    "SOS alert triggered via " + method.toUpperCase(), 
+                                    "AkitaToolbar",
+                                    "SOS alert triggered via " + method.toUpperCase(Locale.ROOT),
                                     true);
-                
+
         if (method.equals("ble") && bleService != null) {
             bleService.sendCriticalAlert();
             Toast.makeText(context, "ALERT: SOS sent via BLE!", Toast.LENGTH_SHORT).show();
@@ -189,14 +191,14 @@ public class AkitaToolbar extends FrameLayout implements SharedPreferences.OnSha
             Toast.makeText(context, "ALERT: SOS sent via Serial!", Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(context, "Cannot send SOS: Device disconnected.", Toast.LENGTH_SHORT).show();
-            AuditLogger.getInstance().log(AuditLogger.EventType.ERROR, 
+            AuditLogger.getInstance().log(AuditLogger.EventType.ERROR,
                                         AuditLogger.Severity.ERROR,
-                                        "AkitaToolbar", 
-                                        "SOS send failed - device disconnected", 
+                                        "AkitaToolbar",
+                                        "SOS send failed - device disconnected",
                                         false);
         }
     }
-    
+
     public void setBatteryStatus(final String status) {
         if (batteryStatusTextView != null) {
             batteryStatusTextView.post(() -> {
@@ -259,7 +261,7 @@ public class AkitaToolbar extends FrameLayout implements SharedPreferences.OnSha
         String activeMethod = PreferenceManager.getDefaultSharedPreferences(context)
                 .getString("connection_method", "ble");
         String activeStatus = activeMethod.equalsIgnoreCase("ble") ? bleDetailedStatus : serialDetailedStatus;
-        String normalizedStatus = activeStatus == null ? "" : activeStatus.toLowerCase();
+        String normalizedStatus = activeStatus == null ? "" : activeStatus.toLowerCase(Locale.ROOT);
 
         String healthText;
         if (normalizedStatus.contains("connected")) {

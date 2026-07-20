@@ -290,12 +290,17 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
         String connectionMethod = preferences.getString("connection_method", "ble");
         AkitaMissionControl missionControl = AkitaMissionControl.getInstance(requireContext());
-        missionControl.queueMessage("Plain Text", testMessage, connectionMethod);
-        AkitaMissionControl.DispatchBatchResult result = missionControl.dispatchPendingMessages(
-                buildRouteSender(AkitaMockSettings.isEnabled(preferences)),
-                AkitaMissionControl.isAutoFailoverEnabled(preferences),
-                AkitaMockSettings.isEnabled(preferences));
-        Toast.makeText(getActivity(), result.summary, Toast.LENGTH_SHORT).show();
+        try {
+            missionControl.queueMessage("Plain Text", testMessage, connectionMethod);
+            AkitaMissionControl.DispatchBatchResult result = missionControl.dispatchPendingMessages(
+                    buildRouteSender(AkitaMockSettings.isEnabled(preferences)),
+                    AkitaMissionControl.isAutoFailoverEnabled(preferences),
+                    AkitaMockSettings.isEnabled(preferences));
+            Toast.makeText(getActivity(), result.summary, Toast.LENGTH_SHORT).show();
+        } catch (IllegalStateException exception) {
+            Log.e(TAG, "Unable to persist or queue test traffic", exception);
+            Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void refreshProvisioningPreferenceSummaries() {
@@ -321,7 +326,7 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
             applyBundlePref.setSummary("Apply the staged air-gapped bundle to the plugin security profile.");
         }
         if (stageDevicePref != null) {
-            stageDevicePref.setSummary("Send the staged or active secret to the connected device in plaintext for runtime reprovisioning.");
+            stageDevicePref.setSummary("Apply any staged bundle locally, then boot with the physical provisioning button held and send within two minutes.");
         }
     }
 
@@ -346,6 +351,12 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
             }
         } else if (PREF_OPENTAKSERVER_MISSION_NAME.equals(key)) {
             new Handler(Looper.getMainLooper()).post(this::syncBoundRuntimeState);
+        } else if ("ble_device_name".equals(key)) {
+            new Handler(Looper.getMainLooper()).post(() -> {
+                String deviceName = sharedPreferences.getString("ble_device_name", "AkitaNode01");
+                if (bleService != null) bleService.setTargetDeviceName(deviceName);
+                if (serialService != null) serialService.reloadSecurityConfiguration();
+            });
         }
     }
 
@@ -366,13 +377,13 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
             if (serialBaudPref != null) serialBaudPref.setEnabled(selectedMethod.equals("serial"));
         } else if (AkitaProvisioningManager.PREF_PROVISIONING_SECRET.equals(key)) {
             String newSecret = String.valueOf(newValue).trim();
-            if (!newSecret.isEmpty() && newSecret.length() < 12) {
-                Toast.makeText(getActivity(), "Provisioning secret must be at least 12 characters or left blank to use the build-time secret.", Toast.LENGTH_SHORT).show();
+            if (newSecret.length() < 16) {
+                Toast.makeText(getActivity(), "Provisioning secret must contain at least 16 valid characters.", Toast.LENGTH_SHORT).show();
                 return false;
             }
             try {
                 AkitaProvisioningManager.setCustomProvisioningSecret(requireContext(), newSecret);
-            } catch (IllegalStateException exception) {
+            } catch (IllegalArgumentException | IllegalStateException exception) {
                 Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_SHORT).show();
                 return false;
             }
@@ -380,9 +391,7 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                 ((EditTextPreference) preference).setText("");
             }
             refreshProvisioningPreferenceSummaries();
-            Toast.makeText(getActivity(), newSecret.isEmpty()
-                    ? "Custom provisioning secret cleared."
-                    : "Custom provisioning secret updated.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getActivity(), "Custom provisioning secret updated.", Toast.LENGTH_SHORT).show();
             return false;
         } else if (AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE.equals(key)) {
             String bundle = String.valueOf(newValue).trim();
@@ -419,9 +428,12 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                 Toast.makeText(getActivity(), "Mock battery level must be numeric.", Toast.LENGTH_SHORT).show();
                 return false;
             }
-        } else if (key.equals("ble_device_name") && bleService != null) {
-            // Update BLE service immediately when name preference changes
-            bleService.setTargetDeviceName((String) newValue);
+        } else if (key.equals("ble_device_name")) {
+            String deviceName = String.valueOf(newValue).trim();
+            if (!deviceName.matches("[A-Za-z0-9_-]{1,64}")) {
+                Toast.makeText(getActivity(), "Device name may contain 1-64 letters, digits, dash, or underscore.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
         } else if (PREF_OPENTAKSERVER_MISSION_NAME.equals(key)) {
             String missionName = sanitizeMissionName(String.valueOf(newValue));
             if (!missionName.equals(String.valueOf(newValue).trim())) {
@@ -489,7 +501,7 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                         "PROVISIONING_STAGE_REQUESTED",
                         "Plaintext staging command sent over " + AkitaMissionControl.routeLabel(connectionMethod),
                         connectionMethod);
-                Toast.makeText(getActivity(), "Provisioning stage command sent. Apply the bundle locally if needed.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getActivity(), "Provisioning command sent; wait for authenticated status before live traffic.", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(getActivity(), "No connected bearer available for provisioning stage.", Toast.LENGTH_SHORT).show();
             }

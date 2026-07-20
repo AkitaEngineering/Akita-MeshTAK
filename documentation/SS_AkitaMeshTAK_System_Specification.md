@@ -2,11 +2,13 @@
 ## AKITA MESHTAK SYSTEM
 ## SYSTEM SPECIFICATION
 
-**Document Number:** SS-AKITA-MESHTAK-001  
-**Revision:** 1.2  
-**Date:** 2026-03-13  
-**Classification:** UNCLASSIFIED  
-**Prepared By:** Akita Engineering  
+**Document Number:** SS-AKITA-MESHTAK-001
+**Revision:** 1.2
+**Date:** 2026-03-13
+**Classification:** UNCLASSIFIED
+
+> **Architecture boundary:** the specified firmware is a companion-controller application connected over UART to a separate node running official Meshtastic firmware; it is not a native Meshtastic radio firmware image.
+**Prepared By:** Akita Engineering
 **Approved By:** [Approval Authority]
 
 ---
@@ -134,7 +136,8 @@ This specification is organized into functional areas:
 **Specifications**:
 - Service UUID: Configurable
 - Characteristic UUIDs: Configurable
-- MTU: 20 bytes (default), 512 bytes (negotiated)
+- ATT payload: 20 bytes at the default MTU; the plugin requests MTU 247 and requires at least MTU 64
+- Framing: ordered `F1` chunks with bounded reassembly; writes are serialized by GATT callbacks
 - Range: 10-50 meters (line of sight)
 - Connection Time: < 10 seconds
 
@@ -320,10 +323,10 @@ This specification is organized into functional areas:
 - Key Size: 256 bits
 - Nonce: 96 bits (random per message)
 - Authentication Tag: 128 bits
-- Envelope Format: `ENC:<version>:<key-id>:<hex-payload>`
+- Envelope Format: `ENC:v2:<key-id>:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>`
 - Key Storage: Secure storage (Android Keystore, ESP32 NVS)
 
-**Note on Default State**: Firmware enables encryption by default (SECURITY_MODE_AES256_HMAC). The Android plugin initializes with encryption disabled for backward compatibility; encryption must be explicitly enabled after key provisioning succeeds (see Security Guide for provisioning workflow).
+**Note on Default State**: Firmware and Android both fail closed. Operational traffic is unavailable until matching per-device provisioning succeeds; plaintext is accepted only for the physical-presence provisioning command.
 
 **Compliance**: Implemented in SecurityManager.java and security.cpp.
 
@@ -421,7 +424,8 @@ This specification is organized into functional areas:
 - Service: Custom UUID (configurable)
 - Characteristics: CoT (Notify), Write (Write, Write No Response)
 - Data Format: UTF-8 strings
-- MTU: 20-512 bytes
+- ATT MTU: 23 by default; Android requests 247 and rejects links below 64
+- Larger application payloads use bounded ordered transport frames
 
 **Compliance**: Implemented per BLE 4.2+ specification.
 

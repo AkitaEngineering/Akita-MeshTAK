@@ -35,7 +35,6 @@ env.Append(CPPDEFINES=[("AKITA_VERSION_NAME", env.StringifyMacro(load_version_na
 
 string_overrides = {
     "DEVICE_ID": "AKITA_DEVICE_ID",
-    "PROVISIONING_SECRET": "AKITA_PROVISIONING_SECRET",
     "BLE_SERVICE_UUID": "AKITA_BLE_SERVICE_UUID",
     "BLE_COT_CHARACTERISTIC_UUID": "AKITA_BLE_COT_CHARACTERISTIC_UUID",
     "BLE_WRITE_CHARACTERISTIC_UUID": "AKITA_BLE_WRITE_CHARACTERISTIC_UUID",
@@ -56,6 +55,18 @@ port_value = resolve_env("AKITA_MQTT_PORT")
 if port_value is not None:
     env.Append(CPPDEFINES=[("MQTT_PORT", int(port_value))])
 
+for define_name, env_name in {
+    "MESH_SERIAL_RX_PIN": "AKITA_MESH_SERIAL_RX_PIN",
+    "MESH_SERIAL_TX_PIN": "AKITA_MESH_SERIAL_TX_PIN",
+}.items():
+    value = resolve_env(env_name)
+    if value is not None:
+        env.Append(CPPDEFINES=[(define_name, int(value))])
+
 allow_placeholder = resolve_env("AKITA_ALLOW_PLACEHOLDER_SECRET")
 if allow_placeholder is not None and allow_placeholder.lower() in {"1", "true", "yes", "on"}:
     env.Append(CPPDEFINES=["ALLOW_PLACEHOLDER_SECRET"])
+
+allow_insecure_mqtt = resolve_env("AKITA_ALLOW_INSECURE_MQTT")
+if allow_insecure_mqtt is not None and allow_insecure_mqtt.lower() in {"1", "true", "yes", "on"}:
+    env.Append(CPPDEFINES=["ALLOW_INSECURE_MQTT"])

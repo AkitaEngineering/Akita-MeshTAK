@@ -14,15 +14,15 @@ The current Android plugin security model is surfaced directly to operators thro
 - **Authenticated Integrity**: AES-GCM authentication tag verification is required during decryption
 - **PBKDF2 Key Derivation**: AES/HMAC transport keys are derived with PBKDF2-HMAC-SHA256 (100,000 iterations) from provisioning material using device/purpose salt
 - **Secure Key Management**: Keys should be provisioned securely (NOT hardcoded)
-- **Versioned Envelope**: Encrypted payloads use `ENC:v1:k1:<hex>` format for protocol versioning and key-id rotation
+- **Versioned Envelope**: Encrypted payloads use `ENC:v2:k1:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>` format for protocol versioning and key-id rotation
 
 #### Encryption Activation (Current Behavior)
 - **Firmware Default**: Encryption is enabled by default (`SECURITY_MODE_AES256_HMAC`). The firmware encrypts/decrypts all BLE and serial payloads when a valid provisioning secret is configured.
-- **Android Plugin Default**: The plugin reads `security_encryption_enabled` from settings and treats encrypted transport as enabled unless an operator explicitly disables it.
-- **Provisioning Source**: The active provisioning secret is read from plugin settings when present; `Config.PROVISIONING_SECRET` is used only as a fallback.
+- **Android Plugin Policy**: Operational encryption is mandatory. Missing keys or cryptographic errors block transmission instead of falling back to plaintext.
+- **Provisioning Source**: The active per-device secret is read only from Android-Keystore-protected runtime state. No fallback secret is embedded in the APK.
 - **Local Secret Storage**: Custom provisioning secrets and staged offline bundles are stored in a no-backup file encrypted with Android Keystore AES-GCM on device. JVM/Robolectric tests use a process-local fallback key only for test execution.
-- **Provisioning Ceremony**: The plugin can generate/apply air-gapped bundles and send a plaintext stage-to-device command over a trusted local bearer so firmware can adopt new provisioning material without a rebuild.
-- **Readiness Warning**: Placeholder secrets can support rehearsal and UI preview, but Mission Assurance will flag that posture as not deployment-ready.
+- **Provisioning Ceremony**: Plaintext staging is accepted only during the two-minute window opened by holding the controller's physical provisioning button during boot. A successful secret is persisted in ESP32 NVS and the response is encrypted with the new key.
+- **Readiness Warning**: An unprovisioned plugin or controller is a no-transmit state.
 - **Enablement Requirement**: Firmware and plugin must use matching provisioning secret, version, and key-id metadata.
 - **Behavior**: Encrypted traffic uses AES-GCM with per-message nonce and authentication tag; malformed or mismatched encrypted envelopes are rejected.
 
@@ -32,7 +32,7 @@ The current Android plugin security model is surfaced directly to operators thro
 
 #### Key Provisioning
 **CRITICAL**: In production, encryption keys MUST be provisioned securely:
-- Use secure key storage (Android Keystore, ESP32 NVS with encryption)
+- Use Android Keystore and ESP32 NVS; enable ESP32 flash encryption, secure boot, and anti-rollback on field hardware
 - Implement key rotation policies
 - Never hardcode keys in source code
 - Use secure key exchange protocols
@@ -48,35 +48,33 @@ Follow these steps to enable end-to-end encryption:
    - If the secret will move offline, generate an air-gapped provisioning bundle from the plugin after the secret is loaded.
 
 2. **Configure Firmware**
-   - In `firmware/src/config.h`, replace the default `PROVISIONING_SECRET` with your generated secret.
+   - Do not compile the generated secret into firmware.
    - Replace the placeholder BLE UUIDs with deployment values that match the ATAK plugin.
-   - If MQTT is enabled, replace the placeholder Wi-Fi and MQTT credentials.
+   - Keep MQTT disabled for production. The current plaintext implementation is bench-only and requires the explicit `ALLOW_INSECURE_MQTT` override.
    - The firmware initializes transport security with `SECURITY_MODE_AES256_HMAC` after valid provisioning material is loaded.
-   - The firmware build now fails if placeholder provisioning, BLE UUID, or enabled MQTT credential values remain in place unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for bench rehearsal.
+   - Production builds fail when BLE UUIDs or companion UART pins are not configured.
    - Build and flash the firmware.
-   - For trusted local runtime rotation, you can also stage the secret later with **Stage Secret To Connected Device** instead of rebuilding immediately.
+   - Hold the physical provisioning button during boot and stage the secret within two minutes.
 
 3. **Configure Android Plugin**
    - Preferred method: open **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**.
    - Enter the deployment secret in **Provisioning Secret**.
-   - Confirm **Enable Encrypted Transport** is enabled.
    - Use **Generate Provisioning Bundle** to create an offline bundle when another operator or device needs the same material.
    - Use **Apply Provisioning Bundle** to load staged bundle material into the plugin.
-   - Use **Stage Secret To Connected Device** only on a trusted local bearer when runtime-provisioning firmware.
+   - Use **Stage Secret To Connected Device** only while physically controlling the device and its boot-time provisioning window is open.
    - Tap **Reload Security State** after security changes.
-   - If a fixed build-time fallback is required, set `atak_plugin/src/com/akitaengineering/meshtak/Config.java` `PROVISIONING_SECRET` to the same value.
 
 4. **Verify Encryption**
    - Review the **Mission Assurance** card for encryption, audit, interoperability, and provisioning status.
    - Check audit logs for security initialization and data send/receive events.
-   - Verify encrypted payloads use the `ENC:v1:k1:<hex>` format.
+   - Verify encrypted payloads use the `ENC:v2:k1:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>` format.
    - Confirm both sides can decrypt each other's messages.
 
 5. **Key Rotation**
    - To rotate keys, change the provisioning secret on both firmware and plugin simultaneously.
    - The plugin can generate a new runtime secret using **Rotate Provisioning Secret**, package it with **Generate Provisioning Bundle**, and apply it offline with **Apply Provisioning Bundle**.
    - Use **Stage Secret To Connected Device** during a trusted local ceremony so firmware adopts the same secret before deployment.
-   - Update the key-id (e.g., `k1` → `k2`) to distinguish new keys from old ones.
+   - The current protocol uses key-id `k1`; a future protocol revision is required before overlapping-key rotation is supported.
    - Tap **Reload Security State** or restart the plugin after the change.
 
 ### 2. Input Validation
@@ -94,7 +92,7 @@ Follow these steps to enable end-to-end encryption:
 - **Comprehensive Logging**: All security-relevant events are logged
 - **Event Types**: Connections, disconnections, commands, data transfers, security violations
 - **Severity Levels**: Info, Warning, Error, Critical
-- **Accountability**: Full audit trail for compliance and forensics
+- **Diagnostic Scope**: Redacted, bounded runtime events for troubleshooting; this is not a durable evidentiary audit trail
 
 #### Implementation
 - Firmware: `firmware/src/audit_log.h` and `audit_log.cpp`
@@ -111,7 +109,7 @@ Follow these steps to enable end-to-end encryption:
 - Configuration changes
 - Errors
 
-Firmware audit entries are only mirrored to the serial console when `DEBUG_AUDIT` is defined. The circular in-memory audit log remains active regardless.
+Firmware audit entries are redacted and kept in a bounded 128-entry in-memory ring. They reset on reboot and are mirrored to the serial console only when `DEBUG_AUDIT` is defined. Use an authenticated external logging system if durable evidentiary retention is required.
 
 #### Operator Actions
 - **Export Audit Log** is available from **Settings → Tool Preferences → Akita MeshTAK → Security and Provisioning**.
@@ -121,7 +119,7 @@ Firmware audit entries are only mirrored to the serial console when `DEBUG_AUDIT
 ### 4. Message Integrity
 - **AEAD Verification**: AES-GCM tag verification provides built-in integrity protection
 - **Tamper Detection**: Invalid tags or malformed encrypted envelopes are rejected and logged
-- **Replay Protection**: Timestamps and nonces prevent replay attacks (to be enhanced)
+- **Replay Protection**: Authenticated v2 timestamps and nonces reject duplicates within the active process/device session. The cache resets on restart, so deployments requiring restart-resistant replay defense must add persistent monotonic peer counters.
 
 ### 5. Authentication
 - **Device Authentication**: Device IDs validated
@@ -149,7 +147,7 @@ Firmware audit entries are only mirrored to the serial console when `DEBUG_AUDIT
 
 2. **Use Secure Storage**
    - Android Keystore for Android
-   - ESP32 NVS with encryption for firmware
+   - ESP32 NVS plus platform flash encryption for firmware
 
 3. **Validate All Inputs**
    - Always validate user input
@@ -187,7 +185,7 @@ Firmware audit entries are only mirrored to the serial console when `DEBUG_AUDIT
 
 4. **Network Security**
    - Use encrypted WiFi (WPA3 if available)
-   - Use TLS for MQTT (if enabled)
+   - Do not field the current MQTT implementation. Production MQTT requires certificate-validated TLS; `ALLOW_INSECURE_MQTT` is limited to isolated bench testing.
    - Isolate networks when possible
 
 5. **Physical Security**
@@ -224,17 +222,16 @@ In firmware build flags:
 - Preference keys are retained only as non-sensitive UI/service refresh signals.
 
 In the plugin settings UI:
-- Configure **Enable Encrypted Transport**
 - Configure or rotate **Provisioning Secret**
 - Generate or apply **Air-Gapped Provisioning Bundle** material as required
 - Use **Stage Secret To Connected Device** only during controlled provisioning ceremonies
 - Export audit logs as required
 - Reload security state after changes
 
-In `atak_plugin/src/com/akitaengineering/meshtak/Config.java`:
-- Set matching UUIDs
-- Maintain a valid build-time fallback provisioning secret only when required; runtime provisioning from settings is preferred
-- Set validation parameters
+For the Gradle release build:
+- Supply matching UUIDs with `AKITA_BLE_SERVICE_UUID`, `AKITA_BLE_COT_CHARACTERISTIC_UUID`, and `AKITA_BLE_WRITE_CHARACTERISTIC_UUID`
+- Never place provisioning secrets in Gradle inputs or release artifacts
+- Keep all deployment inputs and signing credentials outside source control
 
 ---
 
@@ -257,7 +254,7 @@ All security violations are logged with severity level WARNING or ERROR.
 ### Military/Law Enforcement Requirements
 
 The system is designed to meet requirements for:
-- **Accountability**: Full audit trail
+- **Accountability**: Bounded diagnostic audit events; use an authenticated external logging system when evidentiary retention is required
 - **Integrity**: Message integrity verification
 - **Confidentiality**: Encryption of sensitive data
 - **Availability**: Robust error handling and recovery
@@ -286,15 +283,15 @@ If you discover a security vulnerability:
 
 ## Version History
 
-- **v0.3.0**: Runtime provisioning and mission-assurance update
-   - Preference-backed provisioning secret with build-time fallback
-   - Encrypted transport policy surfaced in settings
+- **Unreleased**: Runtime provisioning and mission-assurance hardening
+   - Android Keystore-backed runtime provisioning state with no build-time secret fallback
+   - Mandatory fail-closed encrypted operational transport
    - Air-gapped provisioning bundle generation/apply and trusted local stage-to-device workflow
    - Audit export and security reload actions added to settings
    - Mission Assurance flags placeholder provisioning and degraded posture
 - **v0.2.0**: Initial security implementation
    - AES-256-GCM encrypted transport with authenticated integrity
-   - Versioned/key-id encrypted envelope format (`ENC:v1:k1:<hex>`)
+   - Versioned/key-id encrypted envelope format (`ENC:v2:k1:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>`)
    - Firmware encryption enabled by default; original plugin workflow required explicit opt-in after provisioning
    - Input validation
    - Audit logging

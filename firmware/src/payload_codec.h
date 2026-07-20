@@ -14,12 +14,12 @@ bool parseHexPayload(const String& hex, uint8_t* out, size_t outMax, size_t* out
 // Encode a raw byte buffer into a lowercase hex string.
 String encodeHexPayload(const uint8_t* data, size_t len);
 
-// Decode an incoming (potentially encrypted) payload string.
-// If the input starts with the encrypted prefix, decrypt it; otherwise pass through.
+// Decode authenticated operational traffic. Plaintext is always rejected and is
+// handled only by the physical-presence provisioning path.
 // Returns true on success, writing the plaintext to `output`.
-bool decodeIncomingPayload(const String& input, String& output);
+bool decodeIncomingPayload(const String& input, String& output, bool allowPhysicalProvisioning = false);
 
-// Encode an outgoing payload, encrypting it when encryption is active.
+// Encode an outgoing payload. Security must be initialized and enabled.
 // Returns true on success, writing the envelope to `output`.
 bool encodeOutgoingPayload(const uint8_t* data, size_t len, String& output);
 

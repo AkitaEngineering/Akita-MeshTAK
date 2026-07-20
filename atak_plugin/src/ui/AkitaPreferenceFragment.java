@@ -19,7 +19,7 @@ public class AkitaPreferenceFragment extends PluginPreferenceFragment implements
 
     public AkitaPreferenceFragment(android.content.Context pluginContext) {
         super(pluginContext, R.xml.preferences);
-        staticPluginContext = pluginContext;
+        staticPluginContext = pluginContext.getApplicationContext();
     }
 
     @Override

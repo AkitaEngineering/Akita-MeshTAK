@@ -14,30 +14,36 @@ This document defines the release and versioning process for coordinated firmwar
 
 ## Release Preconditions
 
-1. `CHANGELOG.md` is updated for the target version.
-2. CI passes:
+Release is a no-go unless every item below is satisfied:
+
+1. The worktree is clean and `CHANGELOG.md` is updated for the target version.
+2. CI passes on the exact commit being released:
    - `.github/workflows/ci.yml`
+   - deployment and OpenTAKServer CoT static checks
    - firmware `heltec_v3_ci`
    - Android unit tests with ATAK stubs
-3. Release inputs are available outside source control.
-4. Operator and technical documentation are updated if behavior changed.
+   - Android lint with ATAK stubs
+   - Android debug artifact assembly with ATAK stubs
+3. Release inputs are available outside source control. Signing keystores are outside the checkout and readable only by the release operator.
+4. The plugin builds against the official ATAK SDK, installs into the target ATAK version, and its signature is verified.
+5. Production firmware builds without `ALLOW_PLACEHOLDER_SECRET`, `ALLOW_UNWIRED_MESH_BRIDGE`, or `ALLOW_INSECURE_MQTT` and includes explicit mesh UART pins.
+6. BLE, USB serial, and the controller-to-Meshtastic UART are exercised on representative hardware, including mandatory encrypted traffic, physical-button provisioning rotation, fragmented mailbox acknowledgement, position-to-CoT, SOS, and reconnect behavior.
+7. OpenTAKServer CoT interoperability is verified using `documentation/opentakserver_compatibility.md` when that integration is in deployment scope.
+8. Operator and technical documentation are updated if behavior changed.
+9. Rollback artifacts and provisioning-secret rollback handling are validated before field deployment.
 
 ## Firmware Release Inputs
 
 Provide deployment values as environment variables before running `platformio`:
 
 - `AKITA_DEVICE_ID`
-- `AKITA_PROVISIONING_SECRET`
+- `AKITA_MESH_SERIAL_RX_PIN`
+- `AKITA_MESH_SERIAL_TX_PIN`
 - `AKITA_BLE_SERVICE_UUID`
 - `AKITA_BLE_COT_CHARACTERISTIC_UUID`
 - `AKITA_BLE_WRITE_CHARACTERISTIC_UUID`
-- `AKITA_MQTT_SERVER`
-- `AKITA_MQTT_PORT`
-- `AKITA_MQTT_TOPIC_PREFIX`
-- `AKITA_MQTT_WIFI_SSID`
-- `AKITA_MQTT_WIFI_PASSWORD`
-- `AKITA_MQTT_USERNAME`
-- `AKITA_MQTT_PASSWORD`
+
+MQTT must remain disabled in a production image until certificate-validated TLS is implemented. `AKITA_ALLOW_INSECURE_MQTT` is a bench-only override and is prohibited for release builds.
 
 Release firmware command:
 
@@ -59,7 +65,6 @@ Release builds require Java 17 or 21, Android SDK platform 35/build-tools 35.0.1
 
 Set either Gradle properties or matching environment variables for:
 
-- `akitaProvisioningSecret` / `AKITA_PROVISIONING_SECRET`
 - `akitaBleServiceUuid` / `AKITA_BLE_SERVICE_UUID`
 - `akitaCotCharacteristicUuid` / `AKITA_BLE_COT_CHARACTERISTIC_UUID`
 - `akitaWriteCharacteristicUuid` / `AKITA_BLE_WRITE_CHARACTERISTIC_UUID`
@@ -78,6 +83,14 @@ cd atak_plugin
 ./gradlew --no-daemon assembleRelease
 ```
 
+On POSIX release hosts, protect signing material before building:
+
+```bash
+chmod 600 "$AKITA_RELEASE_KEYSTORE_FILE"
+```
+
+The release build rejects keystores stored anywhere inside the source checkout.
+
 Debug/unit-test command with ATAK stubs:
 
 ```bash
@@ -93,6 +106,16 @@ Produce and retain:
 - Firmware binary from `firmware/.pio/build/heltec_v3/`
 - Audit of release inputs used
 - Updated `CHANGELOG.md`
+- SHA-256 checksums for every shipped artifact
+- APK signer verification output and signer certificate fingerprint
+- Hardware/interoperability acceptance record tied to the release commit
+
+Example artifact verification commands:
+
+```bash
+sha256sum atak_plugin/build/outputs/apk/release/*.apk firmware/.pio/build/heltec_v3/firmware.bin
+apksigner verify --verbose --print-certs atak_plugin/build/outputs/apk/release/*.apk
+```
 
 ## Tagging
 

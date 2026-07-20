@@ -10,6 +10,8 @@
 #include "display_handler.h"
 #include "audit_log.h"        // For audit logging
 #include "security.h"         // For security initialization
+#include "provisioning_store.h"
+#include "input_validation.h"
 
 void setupConfig() {
     // Placeholder function for config setup (data is read from config.h)
@@ -20,18 +22,29 @@ void setup() {
   Serial.println("Akita MeshTAK Firmware v" FIRMWARE_VERSION " Starting...");
   Serial.printf("Device ID: %s\n", DEVICE_ID);
 
+  if (validateDeviceId(String(DEVICE_ID)) != VALIDATION_OK) {
+    Serial.println("Critical Error: DEVICE_ID must be 1-64 letters, digits, dash, or underscore.");
+    while (true) delay(1000);
+  }
+
   setupConfig();
-  
+  setupProvisioningStore();
+
   // Initialize audit logging FIRST for accountability
   if (!initAuditLog()) {
     Serial.println("WARNING: Audit log initialization failed.");
   }
-  
-  if (!initSecurityFromProvisioning(String(DEVICE_ID), String(PROVISIONING_SECRET))) {
-    Serial.println("WARNING: Security initialization failed.");
-    logAuditEvent(AUDIT_EVENT_ERROR, 2, DEVICE_ID, "Security init failed", false);
+
+  String provisioningSecret = "";
+  loadProvisioningSecret(provisioningSecret);
+  if (!initSecurityFromProvisioning(String(DEVICE_ID), provisioningSecret)) {
+    Serial.println("Security is unprovisioned; operational traffic is locked.");
+    logAuditEvent(AUDIT_EVENT_ERROR, 2, DEVICE_ID, "Security unprovisioned", false);
   } else {
     logAuditEvent(AUDIT_EVENT_CONNECTION, 0, DEVICE_ID, "Security initialized", true);
+  }
+  for (size_t i = 0; i < provisioningSecret.length(); i++) {
+    provisioningSecret.setCharAt(i, '\0');
   }
 
   if (!setupMeshtastic()) {

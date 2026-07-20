@@ -28,8 +28,8 @@ typedef struct {
     uint32_t timestamp;
     AuditEventType event_type;
     uint8_t severity;        // 0=Info, 1=Warning, 2=Error, 3=Critical
-    char source[32];          // Source identifier (device ID, user, etc.)
-    char details[128];       // Event details
+    char source[16];          // Source identifier (device ID, user, etc.)
+    char details[80];         // Redacted event details
     bool success;            // Operation success status
 } AuditLogEntry;
 
@@ -37,7 +37,7 @@ typedef struct {
 bool initAuditLog();
 
 // Log an audit event
-void logAuditEvent(AuditEventType event_type, uint8_t severity, 
+void logAuditEvent(AuditEventType event_type, uint8_t severity,
                    const char* source, const char* details, bool success);
 
 // Get audit log entry count
@@ -45,12 +45,6 @@ uint32_t getAuditLogCount();
 
 // Read audit log entry (for retrieval/export)
 bool getAuditLogEntry(uint32_t index, AuditLogEntry* entry);
-
-// Clear audit log (use with caution - may be restricted)
-bool clearAuditLog();
-
-// Export audit log to serial (for debugging/monitoring)
-void exportAuditLog();
 
 #endif // AUDIT_LOG_H
 

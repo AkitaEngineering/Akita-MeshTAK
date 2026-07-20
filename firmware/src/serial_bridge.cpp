@@ -19,54 +19,64 @@ bool setupSerialBridge() {
 }
 
 static unsigned long lastSerialCommandMs = 0;
+static String g_serialInput = "";
+static bool g_discardOversizedSerialInput = false;
+
+static void processSerialRecord(String receivedData) {
+  receivedData.trim();
+  if (receivedData.length() == 0) return;
+
+  unsigned long now = millis();
+  if ((now - lastSerialCommandMs) < CMD_RATE_LIMIT_MS) {
+    logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 1, "SERIAL",
+                 "Rate limit exceeded - command dropped", false);
+    for (size_t i = 0; i < receivedData.length(); i++) receivedData.setCharAt(i, '\0');
+    return;
+  }
+  lastSerialCommandMs = now;
+  String decodedData = "";
+  if (!decodeIncomingPayload(receivedData, decodedData, true)) {
+    logAuditEvent(AUDIT_EVENT_AUTHENTICATION_FAILURE, 2, "SERIAL",
+                 "Encrypted payload decode failed", false);
+    for (size_t i = 0; i < receivedData.length(); i++) receivedData.setCharAt(i, '\0');
+    return;
+  }
+  logAuditEvent(AUDIT_EVENT_DATA_RECEIVED, 0, "SERIAL",
+                "Authenticated command received", true);
+  ValidationResult validation = validateCommand(decodedData);
+  if (validation == VALIDATION_OK) {
+    processIncomingCommand(decodedData);
+  } else {
+    logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 2, "SERIAL",
+                  "Invalid command - validation failed", false);
+  }
+  for (size_t i = 0; i < decodedData.length(); i++) decodedData.setCharAt(i, '\0');
+  for (size_t i = 0; i < receivedData.length(); i++) receivedData.setCharAt(i, '\0');
+}
 
 void loopSerialBridge() {
-  if (Serial.available() > 0) {
-    String receivedData = Serial.readStringUntil('\n');
-    receivedData.trim(); // Clean up whitespace
-    if (receivedData.length() > MAX_SERIAL_LINE_LENGTH) {
-      logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 2, "SERIAL",
-                   "Dropped oversized serial line", false);
-      return;
-    }
-    if (receivedData.length() > 0) {
-      // Rate limiting
-      unsigned long now = millis();
-      if ((now - lastSerialCommandMs) < CMD_RATE_LIMIT_MS) {
-        logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 1, "SERIAL",
-                     "Rate limit exceeded – command dropped", false);
-        return;
-      }
-      lastSerialCommandMs = now;
-      String decodedData = "";
-      if (!decodeIncomingPayload(receivedData, decodedData)) {
-        logAuditEvent(AUDIT_EVENT_AUTHENTICATION_FAILURE, 2, "SERIAL",
-               "Encrypted payload decode failed", false);
-        return;
-      }
-
-      // Security: Log serial data reception
-      logAuditEvent(AUDIT_EVENT_DATA_RECEIVED, 0, "SERIAL",
-           ("Data received: " + decodedData.substring(0, 32)).c_str(), true);
-
-      Serial.print("Received command via Serial: ");
-      Serial.println(decodedData);
-
-      // Input validation before processing
-      ValidationResult validation = validateCommand(decodedData);
-      if (validation == VALIDATION_OK) {
-        processIncomingCommand(decodedData); // Process the command
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+    if (c == '\n') {
+      if (!g_discardOversizedSerialInput) processSerialRecord(g_serialInput);
+      for (size_t i = 0; i < g_serialInput.length(); i++) g_serialInput.setCharAt(i, '\0');
+      g_serialInput = "";
+      g_discardOversizedSerialInput = false;
+    } else if (c != '\r' && !g_discardOversizedSerialInput) {
+      if (g_serialInput.length() < MAX_SERIAL_LINE_LENGTH) {
+        g_serialInput += c;
       } else {
+        g_serialInput = "";
+        g_discardOversizedSerialInput = true;
         logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 2, "SERIAL",
-                     "Invalid command - validation failed", false);
-        Serial.printf("SECURITY: Serial command validation failed: %d\n", validation);
+                      "Dropped oversized serial line", false);
       }
     }
   }
 }
 
 // Function to send CoT or Status data to ATAK
-void sendDataSerial(const uint8_t* data, size_t len, bool forcePlaintext) {
+void sendDataSerial(const uint8_t* data, size_t len) {
   // Input validation for outgoing data
   if (len == 0 || len > MAX_MESSAGE_LENGTH) {
     logAuditEvent(AUDIT_EVENT_ERROR, 1, "SERIAL", "Send failed - invalid data length", false);
@@ -74,21 +84,15 @@ void sendDataSerial(const uint8_t* data, size_t len, bool forcePlaintext) {
   }
 
   String outgoingPayload = "";
-  if (forcePlaintext) {
-    outgoingPayload = String((const char*)data).substring(0, len);
-  } else if (!encodeOutgoingPayload(data, len, outgoingPayload)) {
+  if (!encodeOutgoingPayload(data, len, outgoingPayload)) {
     logAuditEvent(AUDIT_EVENT_ERROR, 2, "SERIAL", "Send failed - encryption error", false);
     return;
   }
-  
+
   Serial.print(outgoingPayload);
   Serial.println(); // Send newline to ensure ATAK reads the line
   Serial.flush();
-  
-  Serial.print("Sent data via Serial: ");
-  Serial.print(outgoingPayload.substring(0, 64)); // Limit serial output
-  Serial.println();
-  
+
   logAuditEvent(AUDIT_EVENT_DATA_SENT, 0, "SERIAL",
                String("Data sent, len: " + String(outgoingPayload.length())).c_str(), true);
 }

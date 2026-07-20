@@ -125,7 +125,7 @@ public final class AkitaOperationalReadiness {
             return profileLabel + " workflows are rehearsable, but the deployment secret is still placeholder material. Rotate provisioning before field use.";
         }
         if (!AkitaProvisioningManager.isEncryptionEnabled(preferences)) {
-            return profileLabel + " workflows are configured with encryption disabled. Re-enable protected transport before fielding.";
+            return profileLabel + " workflows do not have authenticated transport available. Reprovision before fielding.";
         }
         if (mockMode) {
             return profileLabel + " workflows are in simulated assurance mode with crypto, audit, and ATAK interoperability indicators available for dry runs.";

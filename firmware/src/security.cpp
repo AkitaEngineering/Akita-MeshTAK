@@ -91,22 +91,22 @@ bool initSecurity(const uint8_t* aes_key, const uint8_t* hmac_key, uint8_t secur
             || isAllZero(hmac_key, HMAC_KEY_SIZE)) {
         return false;
     }
-    
+
     memcpy(g_aes_key, aes_key, AES_KEY_SIZE);
     memcpy(g_hmac_key, hmac_key, HMAC_KEY_SIZE);
     g_security_status.security_mode = security_mode;
     g_security_status.encryption_enabled = (security_mode != SECURITY_MODE_NONE);
     g_security_status.initialized = true;
     g_security_initialized = true;
-    
+
     // Generate initial auth token
     generateAuthToken(g_auth_token);
-    
+
     return true;
 }
 
 bool initSecurityFromProvisioning(const String& deviceId, const String& sharedSecret) {
-    if (deviceId.length() == 0 || sharedSecret.length() < 12) {
+    if (deviceId.length() == 0 || sharedSecret.length() < 16) {
         return false;
     }
 
@@ -128,21 +128,21 @@ bool initSecurityFromProvisioning(const String& deviceId, const String& sharedSe
     return initialized;
 }
 
-size_t encryptData(const uint8_t* plaintext, size_t plaintext_len, 
+size_t encryptData(const uint8_t* plaintext, size_t plaintext_len,
                    uint8_t* ciphertext, size_t ciphertext_max_len,
                    uint8_t* iv_out) {
     if (!g_security_initialized || plaintext == nullptr || ciphertext == nullptr) {
         return 0;
     }
-    
+
     if (plaintext_len == 0 || iv_out == nullptr || ciphertext_max_len < plaintext_len + GCM_TAG_SIZE) {
         return 0;
     }
-    
+
     // Generate random IV
     secureRandom(iv_out, IV_SIZE);
     memcpy(g_iv, iv_out, IV_SIZE);
-    
+
     mbedtls_gcm_context gcm;
     mbedtls_gcm_init(&gcm);
 
@@ -164,7 +164,7 @@ size_t encryptData(const uint8_t* plaintext, size_t plaintext_len,
     memcpy(ciphertext + plaintext_len, tag, GCM_TAG_SIZE);
     mbedtls_gcm_free(&gcm);
     g_security_status.messages_encrypted++;
-    
+
     return plaintext_len + GCM_TAG_SIZE;
 }
 
@@ -173,7 +173,7 @@ size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
     if (!g_security_initialized || ciphertext == nullptr || plaintext == nullptr || iv == nullptr) {
         return 0;
     }
-    
+
     if (ciphertext_len <= GCM_TAG_SIZE || plaintext_max_len < (ciphertext_len - GCM_TAG_SIZE)) {
         return 0;
     }
@@ -201,34 +201,37 @@ size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
 
     mbedtls_gcm_free(&gcm);
     g_security_status.messages_decrypted++;
-    
+
     return dataLen;
 }
 
-void generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out) {
+bool generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out) {
     if (hmac_out != nullptr) {
         memset(hmac_out, 0, HMAC_KEY_SIZE);
     }
 
     if (data == nullptr || hmac_out == nullptr || !g_security_initialized) {
-        return;
+        return false;
     }
-    
+
     mbedtls_md_context_t ctx;
     const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    
+
     mbedtls_md_init(&ctx);
     if (md_info == nullptr || mbedtls_md_setup(&ctx, md_info, 1) != 0) {
         mbedtls_md_free(&ctx);
-        return;
+        return false;
     }
 
+    bool success = true;
     if (mbedtls_md_hmac_starts(&ctx, g_hmac_key, HMAC_KEY_SIZE) != 0
             || mbedtls_md_hmac_update(&ctx, data, data_len) != 0
             || mbedtls_md_hmac_finish(&ctx, hmac_out) != 0) {
         memset(hmac_out, 0, HMAC_KEY_SIZE);
+        success = false;
     }
     mbedtls_md_free(&ctx);
+    return success;
 }
 
 bool verifyHMAC(const uint8_t* data, size_t data_len, const uint8_t* hmac) {
@@ -236,10 +239,13 @@ bool verifyHMAC(const uint8_t* data, size_t data_len, const uint8_t* hmac) {
         g_security_status.integrity_failures++;
         return false;
     }
-    
+
     uint8_t calculated_hmac[HMAC_KEY_SIZE] = {0};
-    generateHMAC(data, data_len, calculated_hmac);
-    
+    if (!generateHMAC(data, data_len, calculated_hmac)) {
+        g_security_status.integrity_failures++;
+        return false;
+    }
+
     // Constant-time comparison to prevent timing attacks
     volatile uint8_t diff = 0;
     for (size_t i = 0; i < HMAC_KEY_SIZE; i++) {
@@ -250,7 +256,7 @@ bool verifyHMAC(const uint8_t* data, size_t data_len, const uint8_t* hmac) {
     if (!valid) {
         g_security_status.integrity_failures++;
     }
-    
+
     return valid;
 }
 
@@ -273,7 +279,7 @@ bool verifyAuthToken(const uint8_t* token) {
 
 void secureRandom(uint8_t* buffer, size_t len) {
     if (buffer == nullptr || len == 0) return;
-    
+
     // Use ESP32 hardware random number generator
     for (size_t i = 0; i < len; i++) {
         buffer[i] = (uint8_t)esp_random();

@@ -7,6 +7,7 @@
 #include "cot_generation.h"   // For CoT runtime metadata
 #include "ble_setup.h"         // For sendDataBLE
 #include "serial_bridge.h"   // For sendDataSerial
+#include "provisioning_store.h"
 #include "audit_log.h"        // For audit logging
 #include "input_validation.h" // For input validation
 #include "security.h"         // For security operations
@@ -14,12 +15,12 @@
 #include <Arduino.h>
 #include <sys/time.h>
 
-static void sendStatusToAtak(const String& response, bool forcePlaintext = false) {
+static void sendStatusToAtak(const String& response) {
 #if defined(ENABLE_SERIAL) && ENABLE_SERIAL
-    sendDataSerial((const uint8_t*)response.c_str(), response.length(), forcePlaintext);
+    sendDataSerial((const uint8_t*)response.c_str(), response.length());
 #endif
 #if defined(ENABLE_BLE) && ENABLE_BLE
-    sendDataBLE((const uint8_t*)response.c_str(), response.length(), forcePlaintext);
+    sendDataBLE((const uint8_t*)response.c_str(), response.length());
 #endif
 }
 
@@ -34,8 +35,15 @@ static bool parseMailboxCommand(const String& cmd, String& messageId, String& fo
     messageId = body.substring(0, firstSep);
     format = body.substring(firstSep + 1, secondSep);
     payload = unescapeMailboxPayload(body.substring(secondSep + 1));
-    payload.trim();
-    return messageId.length() > 0 && payload.length() > 0;
+    if (messageId.length() == 0 || messageId.length() > 32 || payload.length() == 0
+            || (format != "TEXT" && format != "JSON" && format != "CUSTOM")) {
+        return false;
+    }
+    for (size_t i = 0; i < messageId.length(); i++) {
+        char c = messageId.charAt(i);
+        if (!isalnum(c) && c != '-' && c != '_') return false;
+    }
+    return true;
 }
 
 static void sendMailboxAck(const String& messageId, const char* status) {
@@ -87,11 +95,12 @@ void processIncomingCommand(const String& cmd) {
         return;
     }
 
-    // Log command reception
+    // Never record command bodies: provisioning and mission commands can carry
+    // sensitive material.
     logAuditEvent(AUDIT_EVENT_COMMAND_RECEIVED, 0, DEVICE_ID,
-                  ("Command: " + cmd).c_str(), true);
+                  "Validated command received", true);
 
-    if (cmd.startsWith(CMD_ALERT_SOS)) {
+    if (cmd == CMD_ALERT_SOS) {
         Serial.println("ALERT RECEIVED: SOS COMMAND TRIGGERED! BROADCASTING.");
 
         // Log SOS trigger - CRITICAL event
@@ -107,7 +116,7 @@ void processIncomingCommand(const String& cmd) {
         logAuditEvent(AUDIT_EVENT_COMMAND_EXECUTED, sent ? 0 : 2, DEVICE_ID,
                      sent ? "SOS broadcast successful" : "SOS broadcast failed", sent);
 
-    } else if (cmd.startsWith(CMD_GET_BATT)) {
+    } else if (cmd == CMD_GET_BATT) {
         float voltage = readBatteryVoltage();
         // Simple LiPo calculation (3.2V min, 4.2V max)
         int percent = (int)((voltage - 3.2) / (4.2 - 3.2) * 100);
@@ -119,7 +128,7 @@ void processIncomingCommand(const String& cmd) {
 
         logAuditEvent(AUDIT_EVENT_COMMAND_EXECUTED, 0, DEVICE_ID,
                      ("Battery status: " + String(percent) + "%").c_str(), true);
-    } else if (cmd.startsWith(CMD_GET_VERSION)) {
+    } else if (cmd == CMD_GET_VERSION) {
         String response = String(STATUS_VERSION_PREFIX) + FIRMWARE_VERSION;
         sendStatusToAtak(response);
 
@@ -128,8 +137,10 @@ void processIncomingCommand(const String& cmd) {
     } else if (cmd.startsWith(CMD_TIME_SYNC_PREFIX)) {
         String epochText = cmd.substring(strlen(CMD_TIME_SYNC_PREFIX));
         epochText.trim();
-        unsigned long long epochSeconds = strtoull(epochText.c_str(), nullptr, 10);
-        if (epochSeconds >= 1609459200ULL) {
+        char* parseEnd = nullptr;
+        unsigned long long epochSeconds = strtoull(epochText.c_str(), &parseEnd, 10);
+        bool parsedAll = parseEnd != nullptr && *parseEnd == '\0';
+        if (parsedAll && epochSeconds >= 1609459200ULL && epochSeconds <= 4102444800ULL) {
             timeval tv;
             tv.tv_sec = (time_t)epochSeconds;
             tv.tv_usec = 0;
@@ -168,17 +179,29 @@ void processIncomingCommand(const String& cmd) {
         logAuditEvent(AUDIT_EVENT_COMMAND_EXECUTED, sent ? 0 : 2, DEVICE_ID,
                      ("Mailbox relay " + format + " " + messageId).c_str(), sent);
     } else if (cmd.startsWith(CMD_PROVISION_STAGE_PREFIX)) {
-        String sharedSecret = cmd.substring(strlen(CMD_PROVISION_STAGE_PREFIX));
+        String provisioningValue = cmd.substring(strlen(CMD_PROVISION_STAGE_PREFIX));
+        int separator = provisioningValue.lastIndexOf(':');
+        String sharedSecret = provisioningValue.substring(0, separator);
+        String epochText = provisioningValue.substring(separator + 1);
         sharedSecret.trim();
-        bool staged = sharedSecret.length() >= 12 && initSecurityFromProvisioning(String(DEVICE_ID), sharedSecret);
+        unsigned long long epochSeconds = strtoull(epochText.c_str(), nullptr, 10);
+        timeval tv;
+        tv.tv_sec = (time_t)epochSeconds;
+        tv.tv_usec = 0;
+        bool clockSet = epochSeconds >= 1609459200ULL && epochSeconds <= 4102444800ULL
+            && settimeofday(&tv, nullptr) == 0;
+        bool staged = clockSet && persistProvisioningSecret(sharedSecret)
+            && initSecurityFromProvisioning(String(DEVICE_ID), sharedSecret);
         String responsePrefix = staged ? STATUS_PROVISION_STAGED_PREFIX : STATUS_PROVISION_FAILED_PREFIX;
         String response = String(responsePrefix) + ENCRYPTED_PAYLOAD_VERSION + ":" + ENCRYPTED_KEY_ID;
-        sendStatusToAtak(response, true);
+        sendStatusToAtak(response);
         logAuditEvent(AUDIT_EVENT_CONFIGURATION_CHANGE, staged ? 0 : 2, DEVICE_ID,
                      staged ? "Runtime provisioning staged" : "Runtime provisioning stage failed", staged);
+        for (size_t i = 0; i < sharedSecret.length(); i++) sharedSecret.setCharAt(i, '\0');
+        for (size_t i = 0; i < provisioningValue.length(); i++) provisioningValue.setCharAt(i, '\0');
     } else {
         // Unknown command
         logAuditEvent(AUDIT_EVENT_ERROR, 1, DEVICE_ID,
-                     ("Unknown command: " + cmd).c_str(), false);
+                     "Unknown validated command", false);
     }
 }

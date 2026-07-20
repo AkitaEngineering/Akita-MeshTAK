@@ -39,11 +39,6 @@
             android:title="@string/auto_failover_title"
             android:defaultValue="true" />
 
-        <SwitchPreference
-            android:key="security_encryption_enabled"
-            android:title="@string/encryption_enabled_title"
-            android:defaultValue="true" />
-
         <EditTextPreference
             android:key="security_provisioning_secret"
             android:title="@string/provisioning_secret_title"

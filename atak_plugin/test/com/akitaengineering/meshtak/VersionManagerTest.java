@@ -21,10 +21,13 @@ public class VersionManagerTest {
     }
 
     @Test
-    public void firmwareCompatibilityAcceptsAnyReportedVersion() {
+    public void firmwareCompatibilityEnforcesConfiguredRange() {
         assertTrue(VersionManager.isFirmwareCompatible(BuildConfig.MIN_FIRMWARE_VERSION));
-        assertTrue(VersionManager.isFirmwareCompatible("0.0.1"));
-        assertTrue(VersionManager.isFirmwareCompatible("9.0.0"));
+        assertTrue(VersionManager.isFirmwareCompatible(BuildConfig.MAX_FIRMWARE_VERSION));
+        assertFalse(VersionManager.isFirmwareCompatible("0.0.1"));
+        assertFalse(VersionManager.isFirmwareCompatible("9.0.0"));
+        assertFalse(VersionManager.isFirmwareCompatible("0.2"));
+        assertFalse(VersionManager.isFirmwareCompatible("invalid"));
         assertFalse(VersionManager.isFirmwareCompatible(""));
     }
 }

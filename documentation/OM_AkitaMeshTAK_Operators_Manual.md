@@ -2,11 +2,13 @@
 ## AKITA MESHTAK SYSTEM
 ## OPERATOR'S MANUAL
 
-**Document Number:** OM-AKITA-MESHTAK-001  
-**Revision:** 1.4  
-**Date:** 2026-04-14  
-**Classification:** UNCLASSIFIED  
-**Prepared By:** Akita Engineering  
+**Document Number:** OM-AKITA-MESHTAK-001
+**Revision:** 1.4
+**Date:** 2026-04-14
+**Classification:** UNCLASSIFIED
+
+> **Hardware architecture:** operate the Akita companion controller together with a separate UART-connected node running official Meshtastic firmware. The Akita image is not Meshtastic radio firmware.
+**Prepared By:** Akita Engineering
 **Approved By:** [Approval Authority]
 
 ---
@@ -77,7 +79,7 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 - **Secure Communication**: Encrypted and authenticated
 - **Mission Profiles**: Adjust workflow for SAR, law enforcement, coast guard, military, or private security
 - **Mission Assurance**: Surface encryption, audit, interoperability, and provisioning posture before transmission
-- **Guaranteed Delivery Mailbox**: Preserve queued frames, show `IN_FLIGHT` vs peer-delivered state, and support queue retry
+- **Acknowledgement-Tracked Delivery Mailbox**: Preserve queued frames, show `IN_FLIGHT` vs peer-delivered state, and support queue retry
 - **Bearer Failover**: Preserve queued traffic while rerouting between BLE and Serial when required
 - **Air-Gapped Provisioning Ceremony**: Generate, apply, and stage offline provisioning bundles during trusted local access
 - **Mission Replay**: Rehearse recent mailbox and provisioning checkpoints in Mock Transport Mode
@@ -117,22 +119,22 @@ Akita MeshTAK is a secure communication system that connects your ATAK (Android 
 ### 3.2 Daily Startup
 
 #### For BLE Connection:
-1. Power on Meshtastic device
+1. Power on the Meshtastic radio node and Akita companion controller
 2. Wait for device to initialize (LED indicators)
 3. Power on Android device
 4. Open ATAK
 5. Wait for connection (status shows "Connected" in green)
-6. Review Mission Assurance and confirm encrypted transport is enabled and there is no placeholder-secret warning for deployment use
+6. Review Mission Assurance and confirm authenticated transport is ready with no provisioning warning
 7. Do not transmit live traffic until Step 6 is satisfied
 
 #### For Serial Connection:
-1. Power on Meshtastic device
+1. Power on the Meshtastic radio node and Akita companion controller
 2. Connect USB cable between devices
 3. Grant USB permission if prompted
 4. Power on Android device
 5. Open ATAK
 6. Wait for connection (status shows "Connected" in green)
-7. Review Mission Assurance and confirm the route and security posture are operational with encrypted transport enabled
+7. Review Mission Assurance and confirm the route and authenticated security posture are operational
 8. Do not transmit live traffic until Step 7 is satisfied
 
 ---
@@ -146,7 +148,7 @@ The Akita MeshTAK toolbar shows:
 - **Secure Route**: BLE or Serial plus the active endpoint
 - **Profile**: Current mission profile
 - **Security**: Current provisioning and encrypted transport posture
-- **Status**: 
+- **Status**:
   - 🟢 **Connected** (green): System ready
   - 🟡 **Connecting** (yellow): Establishing connection
   - 🔴 **Disconnected/Error** (red): Connection failed
@@ -164,7 +166,7 @@ The Akita MeshTAK toolbar shows:
 
 #### 4.2.1 Send Data View
 1. Open "Send Data" view from ATAK menu
-2. Review the **Operational Summary**, **Mission Assurance**, **Guaranteed Delivery Mailbox**, and **Incident Board** cards
+2. Review the **Operational Summary**, **Mission Assurance**, **Acknowledgement-Tracked Delivery Mailbox**, and **Incident Board** cards
 3. Treat **Mission Assurance** as release authority for live traffic; if security is degraded, simulated, or placeholder-backed, stop and remediate before proceeding
 4. Optionally load a **Mission Playbook** or **Queue Action** from the active role pack
 5. Enter or review your message in the text field
@@ -273,7 +275,7 @@ The Akita MeshTAK toolbar shows:
 - **Auto Bearer Failover**: Preserve queue and reroute between BLE/Serial when possible
 - **BLE Device Name**: Device identifier for BLE
 - **Serial Baud Rate**: Communication speed (default: 115200)
-- **Enable Encrypted Transport**: Enables or disables protected payload transport; keep enabled for all operational traffic
+- **Encrypted Transport**: Mandatory for operational payloads and fail-closed when provisioning is unavailable
 - **Provisioning Secret**: Runtime deployment secret for the plugin; placeholder values are rehearsal-only and not authorized for live traffic
 - **Air-Gapped Provisioning Bundle**: Staged bundle text field
 - **Rotate Provisioning Secret**: Generates a new plugin-side secret
@@ -298,7 +300,7 @@ The Akita MeshTAK toolbar shows:
 - **Data Input Field**: Enter message text
 - **Operational Summary**: Route, payload budget, last send, and peer receipt ratio
 - **Mission Assurance**: Encryption, audit, interoperability, and provisioning posture
-- **Guaranteed Delivery Mailbox**: Pending / In Flight / Delivered counts, failover posture, and replay checkpoints
+- **Acknowledgement-Tracked Delivery Mailbox**: Pending / In Flight / Delivered counts, failover posture, and replay checkpoints
 - **Incident Board**: Incident title, role pack, tempo, and next action
 - **Payload/Format Charts**: Recent payload trend and data-format distribution
 - **Command History Spinner**: Select previous command
@@ -361,7 +363,7 @@ The Akita MeshTAK toolbar shows:
 
 **Solutions**:
 1. Verify connection status (must be "Connected")
-2. Review the **Guaranteed Delivery Mailbox** for pending, failed, or in-flight frames
+2. Review the **Acknowledgement-Tracked Delivery Mailbox** for pending, failed, or in-flight frames
 3. Check message format and payload budget
 4. Verify device has power
 5. Try sending test message or **Retry Queue**
@@ -383,7 +385,7 @@ The Akita MeshTAK toolbar shows:
 **Solutions**:
 1. Open **Settings → Tool Preferences → Akita MeshTAK**
 2. Enter a deployment-specific provisioning secret or use **Rotate Provisioning Secret**
-3. Confirm **Enable Encrypted Transport** is enabled
+3. Confirm Mission Assurance reports authenticated transport ready
 4. Tap **Reload Security State**
 5. Re-check Mission Assurance before field use
 6. Do not resume live traffic until the warning clears
@@ -443,13 +445,13 @@ The Akita MeshTAK toolbar shows:
 - **Audit Logs**: Audit logs may contain sensitive information. Secure storage required.
 - **Device Security**: Secure devices physically. Report lost or stolen devices immediately.
 - **Operational Priority**: Security and encrypted transport take precedence over convenience. If Mission Assurance is degraded, simulated, or placeholder-backed, do not transmit live mission data.
-- **Encryption Policy**: The Android plugin uses the active **Enable Encrypted Transport** setting and runtime provisioning secret from settings, with a build-time fallback only if no runtime secret is present. Placeholder secrets are acceptable for rehearsal only.
+- **Encryption Policy**: Operational transport encryption is mandatory. Runtime secrets are stored in protected state and no fallback secret is embedded in the APK or firmware.
 - **Metadata Match Required**: Firmware and plugin must use matching provisioning secret and encrypted envelope metadata (`version`, `key-id`).
-- **Runtime Staging**: **Stage Secret To Connected Device** intentionally uses plaintext over a trusted local bearer. Use it only during controlled provisioning ceremonies.
+- **Runtime Staging**: **Stage Secret To Connected Device** intentionally uses plaintext over a trusted local bearer and succeeds only during the controller's two-minute boot-time physical-presence window.
 
 #### CAUTIONS
 - **Network Security**: Be aware of network security implications
-- **Data Transmission**: Sensitive data is transmitted via AES-256-GCM envelopes (`ENC:v1:k1:<hex>`). If metadata mismatches, payloads are rejected.
+- **Data Transmission**: Sensitive data is transmitted via AES-256-GCM envelopes (`ENC:v2:k1:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>`). If metadata mismatches, payloads are rejected.
 
 ### 7.3 Physical Safety
 
@@ -525,7 +527,7 @@ The Akita MeshTAK toolbar shows:
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
-| 1.4 | 2026-04-14 | Added guaranteed-delivery mailbox, bearer failover, air-gapped provisioning ceremony, mission replay, and Night Green operator guidance | Akita Engineering |
+| 1.4 | 2026-04-14 | Added acknowledgement-tracked mailbox, bearer failover, air-gapped provisioning ceremony, mission replay, and Night Green operator guidance | Akita Engineering |
 | 1.3 | 2026-04-14 | Added mission assurance, incident board, tactical overlay, runtime provisioning, and updated operator workflow | Akita Engineering |
 | 1.2 | 2026-03-13 | Corrected encryption default state for Android plugin; added key provisioning references | Akita Engineering |
 | 1.1 | 2026-03-12 | Updated operator security guidance for AES-256-GCM, versioned encrypted envelopes, and key-id alignment checks | Akita Engineering |

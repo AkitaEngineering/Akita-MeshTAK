@@ -2,10 +2,12 @@
 ## AKITA MESHTAK SYSTEM
 ## QUICK REFERENCE CARD
 
-**Document Number:** QR-AKITA-MESHTAK-001  
-**Revision:** 1.4  
-**Date:** 2026-04-14  
+**Document Number:** QR-AKITA-MESHTAK-001
+**Revision:** 1.4
+**Date:** 2026-04-14
 **Classification:** UNCLASSIFIED
+
+> Use an Akita companion controller wired by UART to a separate node running official Meshtastic firmware.
 
 ---
 
@@ -14,7 +16,7 @@
 No live traffic is authorized until Mission Assurance shows operational encryption/provisioning posture and the security quick check passes.
 
 ### BLE Connection
-1. ☐ Power on Meshtastic device
+1. ☐ Power on the Meshtastic radio node and Akita companion controller
 2. ☐ Power on Android device
 3. ☐ Open ATAK
 4. ☐ Verify "Connected" (green) in toolbar
@@ -22,12 +24,12 @@ No live traffic is authorized until Mission Assurance shows operational encrypti
 
 ### Serial Connection
 1. ☐ Connect USB cable
-2. ☐ Power on Meshtastic device
+2. ☐ Power on the Meshtastic radio node and Akita companion controller
 3. ☐ Power on Android device
 4. ☐ Grant USB permission
 5. ☐ Open ATAK
 6. ☐ Verify "Connected" (green) in toolbar
-7. ☐ Verify Secure Route and Security indicators are operational and encrypted transport is enabled
+7. ☐ Verify Secure Route and Security indicators report authenticated transport ready
 
 ---
 
@@ -51,8 +53,8 @@ No live traffic is authorized until Mission Assurance shows operational encrypti
 | `CMD:GET_BATT` | Request battery status |
 | `CMD:GET_VERSION` | Request firmware version |
 | `CMD:ALERT:SOS` | Send emergency alert |
-| `CMD:MAILBOX:PUT:<id>:<format>:<payload>` | Queue guaranteed-delivery mission traffic |
-| `CMD:PROV:STAGE:<secret>` | Runtime-stage provisioning on a trusted local bearer |
+| `CMD:MAILBOX:PUT:<id>:<format>:<payload>` | Queue acknowledgement-tracked mission traffic |
+| `CMD:PROV:STAGE:<secret>:<epoch-seconds>` | Runtime-stage provisioning and clock bootstrap during the physical-presence window |
 
 ---
 
@@ -91,7 +93,7 @@ No live traffic is authorized until Mission Assurance shows operational encrypti
 ### Message Stuck In Flight
 - ☐ Confirm peer node is reachable on the mesh
 - ☐ Wait for peer mailbox acknowledgement to return
-- ☐ Review Guaranteed Delivery Mailbox for pending or failed frames
+- ☐ Review Acknowledgement-Tracked Delivery Mailbox for pending or failed frames
 - ☐ Use Retry Queue or enable Auto Bearer Failover
 
 ---
@@ -102,7 +104,7 @@ No live traffic is authorized until Mission Assurance shows operational encrypti
 - ☐ Verify mission profile and role pack
 - ☐ Review Mission Assurance
 - ☐ Confirm encrypted transport remains enabled before traffic release
-- ☐ Review Guaranteed Delivery Mailbox for pending or in-flight frames
+- ☐ Review Acknowledgement-Tracked Delivery Mailbox for pending or in-flight frames
 - ☐ Check battery level
 - ☐ Test message sending
 - ☐ Verify location data receiving
@@ -116,11 +118,11 @@ No live traffic is authorized until Mission Assurance shows operational encrypti
 
 - ☐ No live traffic if Mission Assurance is degraded, simulated, or placeholder-backed
 - ☐ Confirm active provisioning secret is configured for this deployment and is not placeholder material
-- ☐ Confirm firmware/plugin encrypted metadata match (`v1`, `k1`)
+- ☐ Confirm firmware/plugin encrypted metadata match (`v2`, `k1`)
 - ☐ Confirm firmware encryption enabled (default: on)
-- ☐ Confirm **Enable Encrypted Transport** remains enabled in plugin settings
+- ☐ Confirm Mission Assurance reports authenticated transport ready
 - ☐ If rotating in the field, verify the air-gapped bundle matches the deployment and stage only over a trusted local bearer
-- ☐ Confirm encrypted transport operational (envelope format: `ENC:v1:k1:<hex>`)
+- ☐ Confirm encrypted transport operational (envelope format: `ENC:v2:k1:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>`)
 - ☐ Export audit log after mission or exercise if required by SOP
 - ☐ If encrypted payloads are rejected, verify version/key-id alignment before field use
 
@@ -128,15 +130,15 @@ No live traffic is authorized until Mission Assurance shows operational encrypti
 
 ## CONTACT INFORMATION
 
-**Support**: support@akitaengineering.com  
+**Support**: support@akitaengineering.com
 **Emergency**: Follow operational procedures
 
 ---
 
 ## VERSION INFORMATION
 
-**Firmware**: 0.2.0  
-**Plugin**: 0.2.0  
+**Firmware**: 0.2.0
+**Plugin**: 0.2.0
 **Document**: QR-AKITA-MESHTAK-001 Rev 1.4
 
 ---

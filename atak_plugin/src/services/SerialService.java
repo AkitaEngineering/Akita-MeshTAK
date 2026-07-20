@@ -2,6 +2,7 @@
 // Description: Handles USB Serial communication, device discovery, health checks, and ATAK marker updates.
 package com.akitaengineering.meshtak.services;
 
+import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
@@ -13,6 +14,7 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
@@ -35,6 +37,7 @@ import com.akitaengineering.meshtak.Config;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.PayloadEnvelope;
 import com.akitaengineering.meshtak.SecurityManager;
+import com.akitaengineering.meshtak.SerialLineAccumulator;
 
 import java.io.IOException;
 import java.util.List;
@@ -55,10 +58,13 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     private int baudRate;
     private AkitaToolbar akitaToolbar;
     private SerialStatusListener serialStatusListener;
-    private String serialConnectionStatus = "Idle";
+    private volatile String serialConnectionStatus = "Idle";
     private boolean serialPortOpen;
     private SecurityManager securityManager;
     private AuditLogger auditLogger;
+    private final SerialLineAccumulator lineAccumulator = new SerialLineAccumulator(4096);
+    private final Object serialWriteLock = new Object();
+    private volatile boolean destroyed;
 
     // Constants read from Config.java
     private static final int HELTEC_VENDOR_ID = Config.HELTEC_VENDOR_ID;
@@ -80,6 +86,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     private final Runnable healthCheckRunnable = new Runnable() {
         @Override
         public void run() {
+            if (destroyed) return;
             if (serialConnectionStatus.equals("Connected")) {
                 queryDeviceStatus(Config.CMD_GET_BATT);
             }
@@ -96,34 +103,42 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                         if (device != null) {
                             Log.i(TAG, "USB permission granted for device: " + device.getDeviceName());
-                            openSerialPortWithTimeout();
+                            executorService.execute(SerialService.this::openSerialPortWithTimeout);
                         }
                     } else {
                         Log.e(TAG, "USB permission denied for device: " + device);
                         updateStatus("Error: USB permission denied");
                     }
                 }
-            } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
-                UsbDevice detachedDevice = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                if (detachedDevice != null && serialPort != null && detachedDevice.getDeviceId() == serialPort.getDriver().getDevice().getDeviceId()) {
-                    Log.i(TAG, "USB device detached: " + detachedDevice.getDeviceName());
-                    stopIoManager();
-                    closeSerialPort();
-                    updateStatus("Disconnected");
-                    reconnectAttemptCount = 0;
-
-                    // Audit log disconnection
-                    if (auditLogger != null) {
-                        auditLogger.log(AuditLogger.EventType.DISCONNECTION, AuditLogger.Severity.INFO,
-                                       "Serial", "USB device detached", true);
-                    }
-                    handler.postDelayed(SerialService.this::findAndOpenHeltecSerialPortWithRetry, RECONNECT_DELAY);
-                }
             }
         }
     };
 
+    private final BroadcastReceiver usbDetachReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!UsbManager.ACTION_USB_DEVICE_DETACHED.equals(intent.getAction())) {
+                return;
+            }
+            UsbDevice detachedDevice = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+            if (detachedDevice != null && serialPort != null
+                    && detachedDevice.getDeviceId() == serialPort.getDriver().getDevice().getDeviceId()) {
+                Log.i(TAG, "USB device detached: " + detachedDevice.getDeviceName());
+                stopIoManager();
+                closeSerialPort();
+                updateStatus("Disconnected");
+                reconnectAttemptCount = 0;
+
+                if (auditLogger != null) {
+                    auditLogger.log(AuditLogger.EventType.DISCONNECTION, AuditLogger.Severity.INFO,
+                            "Serial", "USB device detached", true);
+                }
+                scheduleReconnect();
+            }
+        }
+    };
     // --- Service Lifecycle and Setup ---
+    @SuppressLint("UnspecifiedRegisterReceiverFlag") // API <33 has no receiver-export flag overload.
     @Override
     public void onCreate() {
         super.onCreate();
@@ -137,9 +152,15 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         initializeSecurity();
 
         usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
-        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
-        registerReceiver(usbReceiver, filter);
+        IntentFilter permissionFilter = new IntentFilter(ACTION_USB_PERMISSION);
+        IntentFilter detachFilter = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbReceiver, permissionFilter, Context.RECEIVER_NOT_EXPORTED);
+            registerReceiver(usbDetachReceiver, detachFilter, Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(usbReceiver, permissionFilter);
+            registerReceiver(usbDetachReceiver, detachFilter);
+        }
         findAndOpenHeltecSerialPortWithRetry();
         handler.post(healthCheckRunnable);
 
@@ -154,8 +175,10 @@ public class SerialService extends Service implements SerialInputOutputManager.L
 
     @Override
     public void onDestroy() {
-        handler.removeCallbacks(healthCheckRunnable);
+        destroyed = true;
+        handler.removeCallbacksAndMessages(null);
         unregisterReceiver(usbReceiver);
+        unregisterReceiver(usbDetachReceiver);
         stopIoManager();
         closeSerialPort();
         executorService.shutdown();
@@ -181,7 +204,6 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         SharedPreferences preferences = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this);
         String deviceId = preferences.getString("ble_device_name", "AkitaNode01");
         String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(this);
-        boolean encryptionEnabled = AkitaProvisioningManager.isEncryptionEnabled(preferences);
 
         securityManager.reset();
         if (!securityManager.initializeFromProvisioning(deviceId, provisioningSecret)) {
@@ -191,9 +213,9 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             return;
         }
 
-        securityManager.setEncryptionEnabled(encryptionEnabled);
+        securityManager.setEncryptionEnabled(true);
         auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
-                "SerialService", encryptionEnabled ? "Security initialized" : "Security initialized with encryption disabled", true);
+                "SerialService", "Security initialized", true);
     }
 
     public void reloadSecurityConfiguration() {
@@ -203,26 +225,28 @@ public class SerialService extends Service implements SerialInputOutputManager.L
 
     private void updateStatus(final String status) {
         serialConnectionStatus = status;
-        if (serialStatusListener != null) {
-            serialStatusListener.onSerialStatusChanged(status);
-        }
-        if (akitaToolbar != null) {
-            akitaToolbar.setDetailedSerialStatus(status);
-        }
+        handler.post(() -> {
+            if (serialStatusListener != null) serialStatusListener.onSerialStatusChanged(status);
+            if (akitaToolbar != null) akitaToolbar.setDetailedSerialStatus(status);
+        });
     }
 
     private void findAndOpenHeltecSerialPortWithRetry() {
+        if (destroyed) return;
         if (reconnectAttemptCount >= MAX_RECONNECT_ATTEMPTS && MAX_RECONNECT_ATTEMPTS > 0) {
             Log.w(TAG, "Max serial reconnect attempts reached.");
             updateStatus("Error: Max reconnect attempts");
             return;
         }
         updateStatus("Connecting (Attempt " + (reconnectAttemptCount + 1) + ")");
-        handler.postDelayed(this::findAndOpenHeltecSerialPortInternal, RECONNECT_DELAY);
+        handler.postDelayed(() -> {
+            if (!destroyed) executorService.execute(this::findAndOpenHeltecSerialPortInternal);
+        }, RECONNECT_DELAY);
         reconnectAttemptCount++;
     }
 
     private void findAndOpenHeltecSerialPortInternal() {
+        if (destroyed) return;
         UsbSerialProber prober = UsbSerialProber.getDefaultProber();
         List<UsbSerialDriver> availableDrivers = prober.findAllDrivers(usbManager);
 
@@ -234,7 +258,9 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                     serialPort = ports.get(0);
                     UsbDeviceConnection connection = usbManager.openDevice(device);
                     if (connection == null) {
-                        PendingIntent permissionIntent = PendingIntent.getBroadcast(this, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_IMMUTABLE);
+                        Intent permissionRequest = new Intent(ACTION_USB_PERMISSION).setPackage(getPackageName());
+                        PendingIntent permissionIntent = PendingIntent.getBroadcast(
+                                this, 0, permissionRequest, PendingIntent.FLAG_IMMUTABLE);
                         usbManager.requestPermission(device, permissionIntent);
                         return;
                     }
@@ -245,10 +271,11 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         }
         Log.w(TAG, "Heltec V3 serial port not found. Retrying...");
         updateStatus("Disconnected");
-        handler.postDelayed(SerialService.this::findAndOpenHeltecSerialPortWithRetry, RECONNECT_DELAY);
+        scheduleReconnect();
     }
 
     private void openSerialPortWithTimeout() {
+        if (destroyed) return;
         // This is called after permission is granted, so we search again quickly
         UsbSerialProber prober = UsbSerialProber.getDefaultProber();
         List<UsbSerialDriver> availableDrivers = prober.findAllDrivers(usbManager);
@@ -267,17 +294,21 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             }
         }
         updateStatus("Error: Heltec not found");
-        handler.postDelayed(SerialService.this::findAndOpenHeltecSerialPortWithRetry, RECONNECT_DELAY);
+        scheduleReconnect();
     }
 
     private void openSerialPort(UsbDeviceConnection connection) {
+        if (destroyed) {
+            connection.close();
+            return;
+        }
         // Setup timeout to prevent hanging if open fails silently
         handler.postDelayed(() -> {
             if (ioManager == null && serialPort != null && serialPortOpen) {
                 Log.w(TAG, "Serial port open timed out.");
                 closeSerialPort();
                 updateStatus("Error: Open timed out");
-                handler.postDelayed(SerialService.this::findAndOpenHeltecSerialPortWithRetry, RECONNECT_DELAY);
+                scheduleReconnect();
             }
         }, OPEN_SERIAL_TIMEOUT);
 
@@ -300,7 +331,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             Log.e(TAG, "Error opening serial port: " + e.getMessage(), e);
             closeSerialPort();
             updateStatus("Error: " + e.getMessage());
-             handler.postDelayed(SerialService.this::findAndOpenHeltecSerialPortWithRetry, RECONNECT_DELAY);
+             scheduleReconnect();
         }
     }
 
@@ -332,6 +363,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             serialPort = null;
         }
         serialPortOpen = false;
+        lineAccumulator.reset();
     }
 
     // --- Interface Implementations ---
@@ -341,17 +373,32 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         stopIoManager();
         closeSerialPort();
         updateStatus("Error: I/O - " + e.getMessage());
-        handler.postDelayed(SerialService.this::findAndOpenHeltecSerialPortWithRetry, RECONNECT_DELAY);
+        scheduleReconnect();
+    }
+
+    private void scheduleReconnect() {
+        if (!destroyed) {
+            handler.postDelayed(SerialService.this::findAndOpenHeltecSerialPortWithRetry, RECONNECT_DELAY);
+        }
     }
 
     @Override
     public void onNewData(byte[] data) {
-        if (data == null || data.length == 0) {
+        if (destroyed || data == null || data.length == 0) {
             return;
         }
 
-        String received = new String(data, StandardCharsets.UTF_8);
-        String decodedPayload = decodePayload(received.trim());
+        for (String received : lineAccumulator.accept(data)) {
+            processSerialLine(received);
+        }
+    }
+
+    private void processSerialLine(String received) {
+        if (!received.startsWith(Config.ENCRYPTED_PAYLOAD_PREFIX)) {
+            Log.d(TAG, "Ignoring non-protocol serial line");
+            return;
+        }
+        String decodedPayload = decodePayload(received);
         if (decodedPayload == null) {
             if (auditLogger != null) {
                 auditLogger.log(AuditLogger.EventType.AUTHENTICATION_FAILURE, AuditLogger.Severity.WARNING,
@@ -360,14 +407,18 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             return;
         }
 
-        Log.i(TAG, "Received from serial, len=" + data.length);
+        Log.i(TAG, "Received protocol line, len=" + received.length());
 
         // Audit log data reception
         if (auditLogger != null) {
             auditLogger.log(AuditLogger.EventType.DATA_RECEIVED, AuditLogger.Severity.INFO,
-                           "Serial", "Data received, len: " + data.length, true);
+                           "Serial", "Data received, len: " + received.length(), true);
         }
 
+        handler.post(() -> processDecodedSerialPayload(decodedPayload));
+    }
+
+    private void processDecodedSerialPayload(String decodedPayload) {
         if (AkitaMissionControl.getInstance(getApplicationContext()).consumeIncomingStatus(decodedPayload, AkitaMissionControl.ROUTE_SERIAL)) {
             return;
         }
@@ -459,7 +510,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     }
 
     public boolean sendPlaintextData(byte[] data) {
-        return sendData(data, true);
+        return isProvisioningCommand(data) && sendData(data, true);
     }
 
     public boolean isReadyForTraffic() {
@@ -494,7 +545,14 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         }
 
         try {
-            if (!forcePlaintext && securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
+            if (forcePlaintext && !isProvisioningCommand(data)) {
+                return false;
+            }
+            if (!forcePlaintext) {
+                if (securityManager == null || !securityManager.isInitialized() || !securityManager.isEncryptionEnabled()) {
+                    Log.e(TAG, "Security unavailable; refusing plaintext fallback");
+                    return false;
+                }
                 dataToSend = encodeEncryptedPayloadBytes(data);
                 wipeSendBuffer = dataToSend != null;
                 if (dataToSend == null) {
@@ -507,7 +565,9 @@ public class SerialService extends Service implements SerialInputOutputManager.L
             System.arraycopy(dataToSend, 0, dataWithNewline, 0, dataToSend.length);
             dataWithNewline[dataToSend.length] = '\n';
 
-            serialPort.write(dataWithNewline, 500);
+            synchronized (serialWriteLock) {
+                serialPort.write(dataWithNewline, 500);
+            }
             Log.i(TAG, "Data sent via serial, len=" + data.length);
 
             // Audit log data send
@@ -574,6 +634,15 @@ public class SerialService extends Service implements SerialInputOutputManager.L
 
     private byte[] encodeEncryptedPayloadBytes(byte[] plaintext) {
         return PayloadEnvelope.encode(securityManager, plaintext);
+    }
+
+    private static boolean isProvisioningCommand(byte[] data) {
+        if (data == null) {
+            return false;
+        }
+        String value = new String(data, StandardCharsets.UTF_8).trim();
+        return value.startsWith(Config.CMD_PROVISION_STAGE_PREFIX)
+                && value.length() > Config.CMD_PROVISION_STAGE_PREFIX.length();
     }
 
     private String decodePayload(String payload) {

@@ -2,13 +2,17 @@
 // Description: Handles BLE communication, retries, health checks, and ATAK marker updates.
 package com.akitaengineering.meshtak.services;
 
+import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Service;
 import android.bluetooth.*;
 import android.bluetooth.le.*;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
@@ -29,12 +33,17 @@ import com.akitaengineering.meshtak.Config;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.PayloadEnvelope;
 import com.akitaengineering.meshtak.SecurityManager;
+import com.akitaengineering.meshtak.TransportFrameCodec;
 
 import java.util.UUID;
 import java.lang.Math;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.List;
 
+@SuppressLint("MissingPermission") // Every BLE entry point is guarded by hasRequiredBlePermissions().
 public class BLEService extends Service {
 
     private static final String TAG = "BLEService";
@@ -52,6 +61,13 @@ public class BLEService extends Service {
     private String bleConnectionStatus = "Idle";
     private SecurityManager securityManager;
     private AuditLogger auditLogger;
+    private final Deque<byte[]> pendingWrites = new ArrayDeque<>();
+    private final TransportFrameCodec.Reassembler inboundFrames = new TransportFrameCodec.Reassembler();
+    private boolean writeInProgress;
+    private boolean notificationsConfigured;
+    private boolean mtuNegotiationComplete;
+    private boolean destroyed;
+    private int negotiatedMtu = 23;
 
     // Constants read from Config.java
     private static final UUID SERVICE_UUID = Config.BLE_SERVICE_UUID;
@@ -66,6 +82,8 @@ public class BLEService extends Service {
     private static final long RE_SCAN_DELAY = 30000;
     private static final long CONNECTION_TIMEOUT = 15000;
     private static final long HEALTH_CHECK_INTERVAL = 30000;
+    private static final int REQUESTED_MTU = 247;
+    private static final int MIN_PROTOCOL_MTU = 64;
 
     private Runnable connectionTimeoutRunnable;
     private boolean scanReschedulePending = false;
@@ -81,10 +99,11 @@ public class BLEService extends Service {
     private final Runnable healthCheckRunnable = new Runnable() {
         @Override
         public void run() {
+            if (destroyed) return;
             if (bleConnectionStatus.equals("Connected")) {
                 queryDeviceStatus(Config.CMD_GET_BATT);
             }
-            handler.postDelayed(this, HEALTH_CHECK_INTERVAL);
+            if (!destroyed) handler.postDelayed(this, HEALTH_CHECK_INTERVAL);
         }
     };
 
@@ -130,8 +149,8 @@ public class BLEService extends Service {
 
     @Override
     public void onDestroy() {
-        handler.removeCallbacks(healthCheckRunnable);
-        handler.removeCallbacks(rescanRunnable);
+        destroyed = true;
+        handler.removeCallbacksAndMessages(null);
         disconnect();
         close();
         stopScan();
@@ -159,14 +178,13 @@ public class BLEService extends Service {
     private void loadPreferences() {
         String prefName = PreferenceManager.getDefaultSharedPreferences(this)
                 .getString("ble_device_name", targetDeviceName);
-        if (prefName != null && !prefName.trim().isEmpty()) {
+        if (isValidTargetDeviceName(prefName)) {
             targetDeviceName = prefName.trim();
         }
     }
 
     private void initializeSecurity() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        boolean encryptionEnabled = AkitaProvisioningManager.isEncryptionEnabled(preferences);
         String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(this);
 
         securityManager.reset();
@@ -177,9 +195,9 @@ public class BLEService extends Service {
             return;
         }
 
-        securityManager.setEncryptionEnabled(encryptionEnabled);
+        securityManager.setEncryptionEnabled(true);
         auditLogger.log(AuditLogger.EventType.CONFIGURATION_CHANGE, AuditLogger.Severity.INFO,
-                "BLEService", encryptionEnabled ? "Security initialized" : "Security initialized with encryption disabled", true);
+                "BLEService", "Security initialized", true);
     }
 
     public void reloadSecurityConfiguration() {
@@ -189,6 +207,12 @@ public class BLEService extends Service {
 
     private boolean scanning;
     private void startScan() {
+        if (destroyed) return;
+        if (!hasRequiredBlePermissions(true)) {
+            reportMissingBlePermission();
+            if (!destroyed) scheduleRescan();
+            return;
+        }
         if (!scanning && bluetoothAdapter != null && bluetoothAdapter.isEnabled() && bluetoothLeScanner == null) {
             bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
         }
@@ -202,22 +226,29 @@ public class BLEService extends Service {
     }
 
     private void stopScan() {
+        if (!hasRequiredBlePermissions(true)) {
+            scanning = false;
+            reportMissingBlePermission();
+            scheduleRescan();
+            return;
+        }
         if (scanning && bluetoothAdapter != null && bluetoothAdapter.isEnabled() && bluetoothLeScanner != null) {
             Log.d(TAG, "Stopping BLE scan.");
             scanning = false;
             bluetoothLeScanner.stopScan(leScanCallback);
         }
 
-        if (!bleConnectionStatus.equals("Connected") && !scanReschedulePending) {
-            scanReschedulePending = true;
-            handler.postDelayed(rescanRunnable, RE_SCAN_DELAY);
-        }
+        if (!destroyed) scheduleRescan();
     }
 
     private ScanCallback leScanCallback = new ScanCallback() {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
             super.onScanResult(callbackType, result);
+            if (!hasRequiredBlePermissions(true)) {
+                reportMissingBlePermission();
+                return;
+            }
             BluetoothDevice device = result.getDevice();
             if (device.getName() != null && device.getName().equals(targetDeviceName)) {
                 Log.i(TAG, "Found target BLE device: " + device.getAddress());
@@ -231,11 +262,15 @@ public class BLEService extends Service {
         public void onScanFailed(int errorCode) {
             Log.e(TAG, "BLE Scan Failed with error: " + errorCode);
             scanning = false;
-            handler.postDelayed(BLEService.this::startScan, 5000);
+            if (!destroyed) handler.postDelayed(BLEService.this::startScan, 5000);
         }
     };
 
     public boolean connect(final String address) {
+        if (!hasRequiredBlePermissions(false)) {
+            reportMissingBlePermission();
+            return false;
+        }
         if (bluetoothAdapter == null || address == null) {
             Log.w(TAG, "BluetoothAdapter not initialized or unspecified address.");
             return false;
@@ -272,6 +307,7 @@ public class BLEService extends Service {
     private void startConnectionTimeout() {
         stopConnectionTimeout();
         connectionTimeoutRunnable = () -> {
+            if (destroyed) return;
             Log.w(TAG, "Connection timeout reached.");
             disconnect();
             close();
@@ -301,6 +337,14 @@ public class BLEService extends Service {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             stopConnectionTimeout();
+            if (destroyed) {
+                gatt.close();
+                return;
+            }
+            if (!hasRequiredBlePermissions(false)) {
+                reportMissingBlePermission();
+                return;
+            }
             // Check GATT status first to properly distinguish errors from normal disconnections
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 Log.e(TAG, "onConnectionStateChange: GATT error for device " + gatt.getDevice().getAddress() + ", status: " + status + ", newState: " + newState);
@@ -326,7 +370,7 @@ public class BLEService extends Service {
             } else if (newState == android.bluetooth.BluetoothProfile.STATE_CONNECTED) {
                 Log.i(TAG, "onConnectionStateChange: Connected to GATT server for device " + gatt.getDevice().getAddress());
                 connectionRetryCount = 0;
-                bleConnectionStatus = "Connected";
+                bleConnectionStatus = "Configuring";
                 if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
                 if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Connected to " + gatt.getDevice().getAddress());
 
@@ -335,7 +379,18 @@ public class BLEService extends Service {
                                    "BLE", "Connected to " + gatt.getDevice().getAddress(), true);
                 }
 
-                bluetoothGatt.discoverServices();
+                negotiatedMtu = 23;
+                mtuNegotiationComplete = false;
+                notificationsConfigured = false;
+                inboundFrames.reset();
+                synchronized (pendingWrites) {
+                    clearPendingWritesLocked();
+                }
+                if (!gatt.requestMtu(REQUESTED_MTU)) {
+                    failTransportConfiguration("Unable to start BLE MTU negotiation");
+                } else {
+                    startConnectionTimeout();
+                }
             } else if (newState == android.bluetooth.BluetoothProfile.STATE_DISCONNECTED) {
                 Log.i(TAG, "onConnectionStateChange: Disconnected from GATT server for device " + gatt.getDevice().getAddress());
                 bleConnectionStatus = "Disconnected";
@@ -360,30 +415,54 @@ public class BLEService extends Service {
         }
 
         @Override
+        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+            mtuNegotiationComplete = true;
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                negotiatedMtu = mtu;
+            }
+            if (status != BluetoothGatt.GATT_SUCCESS || negotiatedMtu < MIN_PROTOCOL_MTU) {
+                failTransportConfiguration("BLE MTU negotiation did not meet the protocol minimum");
+            } else if (!gatt.discoverServices()) {
+                failTransportConfiguration("Unable to start BLE service discovery");
+            }
+        }
+
+        @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            if (!hasRequiredBlePermissions(false)) {
+                reportMissingBlePermission();
+                return;
+            }
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.i(TAG, "onServicesDiscovered: Services discovered for " + gatt.getDevice().getAddress());
                 BluetoothGattService service = gatt.getService(SERVICE_UUID);
                 if (service != null) {
                     BluetoothGattCharacteristic cotCharacteristic = service.getCharacteristic(COT_CHARACTERISTIC_UUID);
-                    if (cotCharacteristic != null) {
+                    BluetoothGattCharacteristic writeCharacteristic = service.getCharacteristic(WRITE_CHARACTERISTIC_UUID);
+                    if (cotCharacteristic != null && writeCharacteristic != null) {
                         boolean notificationsEnabled = gatt.setCharacteristicNotification(cotCharacteristic, true);
                         if (notificationsEnabled) {
                             Log.i(TAG, "Enabled notifications for CoT characteristic.");
                             BluetoothGattDescriptor cccd = cotCharacteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG);
                             if (cccd != null) {
-                                cccd.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                                gatt.writeDescriptor(cccd);
+                                cccd.setValue(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE);
+                                if (!gatt.writeDescriptor(cccd)) {
+                                    failTransportConfiguration("Unable to configure BLE indications");
+                                }
                             } else {
-                                Log.w(TAG, "CCCD descriptor not found for CoT characteristic");
+                                failTransportConfiguration("BLE indication descriptor is missing");
                             }
                         } else {
-                            // Notification enable failure handling
+                            failTransportConfiguration("Unable to enable BLE indications");
                         }
+                    } else {
+                        failTransportConfiguration("Required BLE characteristics are missing");
                     }
+                } else {
+                    failTransportConfiguration("Required BLE service is missing");
                 }
             } else {
-                // Service discovery failure handling
+                failTransportConfiguration("BLE service discovery failed");
             }
         }
 
@@ -401,7 +480,10 @@ public class BLEService extends Service {
                 return;
             }
 
-            String payload = new String(rawData, StandardCharsets.UTF_8).trim();
+            String payload = inboundFrames.accept(new String(rawData, StandardCharsets.UTF_8));
+            if (payload == null) {
+                return;
+            }
             String decodedPayload = decodePayload(payload);
             if (decodedPayload == null) {
                 if (auditLogger != null) {
@@ -417,6 +499,10 @@ public class BLEService extends Service {
                                "BLE", "Data received, len: " + rawData.length, true);
             }
 
+            handler.post(() -> processDecodedBlePayload(decodedPayload));
+        }
+
+        private void processDecodedBlePayload(String decodedPayload) {
             if (AkitaMissionControl.getInstance(getApplicationContext()).consumeIncomingStatus(decodedPayload, AkitaMissionControl.ROUTE_BLE)) {
                 return;
             }
@@ -430,13 +516,59 @@ public class BLEService extends Service {
 
         @Override public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                syncRuntimeState();
+                notificationsConfigured = true;
+                updateTransportReadiness();
+            } else {
+                failTransportConfiguration("BLE indication configuration failed");
+            }
+        }
+
+        @Override
+        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            synchronized (pendingWrites) {
+                byte[] completed = pendingWrites.pollFirst();
+                if (completed != null) Arrays.fill(completed, (byte) 0);
+                writeInProgress = false;
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    writeNextFrameLocked();
+                } else {
+                    clearPendingWritesLocked();
+                    Log.e(TAG, "BLE frame write failed with status " + status);
+                }
             }
         }
     };
 
+    private void updateTransportReadiness() {
+        if (notificationsConfigured && mtuNegotiationComplete
+                && negotiatedMtu >= MIN_PROTOCOL_MTU && bluetoothGatt != null) {
+            boolean becameReady = !"Connected".equals(bleConnectionStatus);
+            bleConnectionStatus = "Connected";
+            stopConnectionTimeout();
+            if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
+            if (becameReady) syncRuntimeState();
+        }
+    }
+
+    private void failTransportConfiguration(String reason) {
+        Log.e(TAG, reason);
+        bleConnectionStatus = "Error";
+        if (bleStatusListener != null) bleStatusListener.onBleStatusChanged(bleConnectionStatus);
+        if (akitaToolbar != null) akitaToolbar.setDetailedBleStatus("Error: " + reason);
+        if (auditLogger != null) {
+            auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
+                    "BLE", reason, false);
+        }
+        disconnect();
+        close();
+    }
+
     public void disconnect() {
         if (bluetoothGatt == null) return;
+        if (!hasRequiredBlePermissions(false)) {
+            reportMissingBlePermission();
+            return;
+        }
         bluetoothGatt.disconnect();
     }
 
@@ -444,6 +576,11 @@ public class BLEService extends Service {
         if (bluetoothGatt != null) {
             bluetoothGatt.close();
             bluetoothGatt = null;
+        }
+        notificationsConfigured = false;
+        mtuNegotiationComplete = false;
+        synchronized (pendingWrites) {
+            clearPendingWritesLocked();
         }
     }
 
@@ -529,11 +666,12 @@ public class BLEService extends Service {
     }
 
     public boolean sendPlaintextData(byte[] data) {
-      return sendData(data, true);
+      return isProvisioningCommand(data) && sendData(data, true);
     }
 
     public boolean isReadyForTraffic() {
-      return bleConnectionStatus.equals("Connected") && bluetoothGatt != null;
+      return bleConnectionStatus.equals("Connected") && bluetoothGatt != null
+              && notificationsConfigured && negotiatedMtu >= MIN_PROTOCOL_MTU;
     }
 
     public boolean sendData(byte[] data) {
@@ -543,6 +681,10 @@ public class BLEService extends Service {
     public boolean sendData(byte[] data, boolean forcePlaintext) {
             byte[] dataToSend = data;
             boolean wipeSendBuffer = false;
+      if (!hasRequiredBlePermissions(false)) {
+          reportMissingBlePermission();
+          return false;
+      }
       if (!bleConnectionStatus.equals("Connected") || bluetoothGatt == null) {
           if (auditLogger != null) {
               auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.WARNING,
@@ -560,7 +702,14 @@ public class BLEService extends Service {
           return false;
       }
       try {
-          if (!forcePlaintext && securityManager != null && securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
+          if (forcePlaintext && !isProvisioningCommand(data)) {
+              return false;
+          }
+          if (!forcePlaintext) {
+              if (securityManager == null || !securityManager.isInitialized() || !securityManager.isEncryptionEnabled()) {
+                  Log.e(TAG, "Security unavailable; refusing plaintext fallback");
+                  return false;
+              }
               dataToSend = encodeEncryptedPayloadBytes(data);
               wipeSendBuffer = dataToSend != null;
               if (dataToSend == null) {
@@ -587,19 +736,59 @@ public class BLEService extends Service {
               return false;
           }
 
-          writeCharacteristic.setValue(dataToSend);
-          boolean success = bluetoothGatt.writeCharacteristic(writeCharacteristic);
-
-          if (auditLogger != null) {
-              auditLogger.log(AuditLogger.EventType.DATA_SENT, AuditLogger.Severity.INFO,
-                             "BLE", "Data sent, len: " + data.length, success);
+          List<byte[]> frames;
+          try {
+              frames = TransportFrameCodec.frame(dataToSend, negotiatedMtu - 3);
+          } catch (IllegalArgumentException | IllegalStateException exception) {
+              Log.e(TAG, "Unable to frame BLE payload", exception);
+              return false;
           }
-          return success;
+          synchronized (pendingWrites) {
+              for (byte[] frame : frames) pendingWrites.addLast(frame);
+              writeNextFrameLocked();
+              boolean success = writeInProgress || !pendingWrites.isEmpty();
+              if (auditLogger != null) {
+                  auditLogger.log(AuditLogger.EventType.DATA_SENT, AuditLogger.Severity.INFO,
+                          "BLE", "Data queued, len: " + data.length, success);
+              }
+              return success;
+          }
       } finally {
           if (wipeSendBuffer) {
               Arrays.fill(dataToSend, (byte) 0);
           }
       }
+    }
+
+    private void writeNextFrameLocked() {
+        if (writeInProgress || pendingWrites.isEmpty() || bluetoothGatt == null) return;
+        BluetoothGattService service = bluetoothGatt.getService(SERVICE_UUID);
+        BluetoothGattCharacteristic characteristic = service == null
+                ? null : service.getCharacteristic(WRITE_CHARACTERISTIC_UUID);
+        if (characteristic == null) {
+            clearPendingWritesLocked();
+            return;
+        }
+        characteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+        characteristic.setValue(pendingWrites.peekFirst());
+        writeInProgress = bluetoothGatt.writeCharacteristic(characteristic);
+        if (!writeInProgress) clearPendingWritesLocked();
+    }
+
+    private void clearPendingWritesLocked() {
+        while (!pendingWrites.isEmpty()) {
+            Arrays.fill(pendingWrites.removeFirst(), (byte) 0);
+        }
+        writeInProgress = false;
+    }
+
+    private static boolean isProvisioningCommand(byte[] data) {
+        if (data == null) {
+            return false;
+        }
+        String value = new String(data, StandardCharsets.UTF_8).trim();
+        return value.startsWith(Config.CMD_PROVISION_STAGE_PREFIX)
+                && value.length() > Config.CMD_PROVISION_STAGE_PREFIX.length();
     }
 
     // --- External Setters and Getters ---
@@ -608,7 +797,32 @@ public class BLEService extends Service {
     public String getConnectionStatus() { return bleConnectionStatus; }
     public String getConnectedDeviceAddress() { return bluetoothDeviceAddress; }
     public void setMapView(MapView view) { this.mapView = view; }
-    public void setTargetDeviceName(String name) { this.targetDeviceName = name; }
+    public void setTargetDeviceName(String name) {
+        if (isValidTargetDeviceName(name)) {
+            String normalized = name.trim();
+            boolean changed = !normalized.equals(this.targetDeviceName);
+            this.targetDeviceName = normalized;
+            if (changed && securityManager != null) {
+                initializeSecurity();
+                disconnect();
+                close();
+                startScan();
+            }
+        } else {
+            Log.w(TAG, "Rejected invalid BLE target device name");
+        }
+    }
+
+    private static boolean isValidTargetDeviceName(String name) {
+        if (name == null) return false;
+        String value = name.trim();
+        if (value.isEmpty() || value.length() > 64) return false;
+        for (int index = 0; index < value.length(); index++) {
+            char c = value.charAt(index);
+            if (!Character.isLetterOrDigit(c) && c != '-' && c != '_') return false;
+        }
+        return true;
+    }
 
     private boolean consumeRuntimeStatus(String line) {
         if (line == null) {
@@ -645,6 +859,39 @@ public class BLEService extends Service {
 
     private String decodePayload(String payload) {
         return PayloadEnvelope.decode(securityManager, payload);
+    }
+
+    private boolean hasRequiredBlePermissions(boolean scanRequired) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+            return !scanRequired
+                    || checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED;
+        }
+        return !scanRequired
+                || checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void reportMissingBlePermission() {
+        bleConnectionStatus = "Permission Required";
+        if (bleStatusListener != null) {
+            bleStatusListener.onBleStatusChanged(bleConnectionStatus);
+        }
+        if (akitaToolbar != null) {
+            akitaToolbar.setDetailedBleStatus("Grant Bluetooth permissions in Android settings");
+        }
+        if (auditLogger != null) {
+            auditLogger.log(AuditLogger.EventType.SECURITY_VIOLATION, AuditLogger.Severity.WARNING,
+                    "BLE", "Required runtime Bluetooth permission is missing", false);
+        }
+    }
+
+    private void scheduleRescan() {
+        if (!destroyed && !bleConnectionStatus.equals("Connected") && !scanReschedulePending) {
+            scanReschedulePending = true;
+            handler.postDelayed(rescanRunnable, RE_SCAN_DELAY);
+        }
     }
 
     private static final byte[] HEX_DIGITS = "0123456789abcdef".getBytes(StandardCharsets.US_ASCII);

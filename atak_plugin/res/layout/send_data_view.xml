@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/send_dashboard_scroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -416,7 +417,7 @@
                 android:id="@+id/mailbox_card_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Guaranteed Delivery Mailbox"
+                android:text="Acknowledgement-Tracked Mailbox"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -791,6 +792,7 @@
                 android:textSize="13sp" />
 
             <com.akitaengineering.meshtak.ui.PayloadTrendChartView
+                tools:ignore="MissingClass"
                 android:id="@+id/payload_trend_chart"
                 android:layout_width="match_parent"
                 android:layout_height="190dp"
@@ -822,6 +824,7 @@
                 android:textSize="13sp" />
 
             <com.akitaengineering.meshtak.ui.FormatDistributionChartView
+                tools:ignore="MissingClass"
                 android:id="@+id/format_distribution_chart"
                 android:layout_width="match_parent"
                 android:layout_height="220dp"
@@ -962,6 +965,7 @@
                 android:layout_marginTop="12dp"
                 android:gravity="top|start"
                 android:hint="Enter CoT XML, JSON, or command"
+                android:importantForAutofill="no"
                 android:inputType="textMultiLine"
                 android:minLines="5"
                 android:padding="14dp" />

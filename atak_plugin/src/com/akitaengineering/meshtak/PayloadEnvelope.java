@@ -18,7 +18,8 @@ public final class PayloadEnvelope {
     }
 
     public static byte[] encode(SecurityManager securityManager, byte[] plaintext) {
-        if (securityManager == null || !securityManager.isInitialized()) {
+        if (securityManager == null || !securityManager.isInitialized()
+                || !securityManager.isEncryptionEnabled() || plaintext == null || plaintext.length == 0) {
             return null;
         }
 
@@ -52,8 +53,11 @@ public final class PayloadEnvelope {
         if (payload == null || payload.isEmpty()) {
             return null;
         }
+        // Operational traffic is always authenticated. Plaintext is reserved for
+        // the explicit physical-presence provisioning path and never reaches this
+        // decoder.
         if (!payload.startsWith(Config.ENCRYPTED_PAYLOAD_PREFIX)) {
-            return payload;
+            return null;
         }
         if (securityManager == null || !securityManager.isInitialized() || !securityManager.isEncryptionEnabled()) {
             return null;
@@ -61,9 +65,6 @@ public final class PayloadEnvelope {
 
         String body = payload.substring(Config.ENCRYPTED_PAYLOAD_PREFIX.length());
         String[] parts = body.split(":", -1);
-        if (parts.length == 3) {
-            return decodeV1(securityManager, parts);
-        }
         if (parts.length != 6) {
             return null;
         }
@@ -78,18 +79,22 @@ public final class PayloadEnvelope {
             return null;
         }
         long now = System.currentTimeMillis() / 1000L;
-        if (Math.abs(now - timestamp) > MAX_SKEW_SECONDS) {
+        if (timestamp < 0 || timestamp < now - MAX_SKEW_SECONDS || timestamp > now + MAX_SKEW_SECONDS) {
             return null;
         }
 
         String nonceKey = parts[1] + ":" + parts[3];
-        if (parts[3].length() < 16 || isReplay(nonceKey)) {
+        byte[] parsedNonce = parseHex(parts[3]);
+        if (parsedNonce == null || parsedNonce.length != 8 || hasSeenNonce(nonceKey)) {
+            wipe(parsedNonce);
             return null;
         }
+        wipe(parsedNonce);
 
         String signedData = parts[0] + ":" + parts[1] + ":" + parts[2] + ":" + parts[3] + ":" + parts[4];
-        byte[] expectedHmac = parseHex(parts[5]);
-        if (expectedHmac == null) {
+        byte[] expectedHmac = parts[5].length() == 64 ? parseHex(parts[5]) : null;
+        if (expectedHmac == null || expectedHmac.length != 32) {
+            wipe(expectedHmac);
             return null;
         }
         boolean valid = securityManager.verifyHMAC(signedData.getBytes(StandardCharsets.UTF_8), expectedHmac);
@@ -98,14 +103,12 @@ public final class PayloadEnvelope {
             return null;
         }
 
-        return decryptHex(securityManager, parts[4]);
-    }
-
-    private static String decodeV1(SecurityManager securityManager, String[] parts) {
-        if (!"v1".equals(parts[0]) || !Config.ENCRYPTED_KEY_ID.equals(parts[1])) {
+        String plaintext = decryptHex(securityManager, parts[4]);
+        if (plaintext == null) {
             return null;
         }
-        return decryptHex(securityManager, parts[2]);
+        rememberNonce(nonceKey);
+        return plaintext;
     }
 
     private static String decryptHex(SecurityManager securityManager, String hex) {
@@ -126,16 +129,16 @@ public final class PayloadEnvelope {
         }
     }
 
-    private static synchronized boolean isReplay(String nonceKey) {
-        if (SEEN_NONCES.contains(nonceKey)) {
-            return true;
-        }
+    private static synchronized boolean hasSeenNonce(String nonceKey) {
+        return SEEN_NONCES.contains(nonceKey);
+    }
+
+    private static synchronized void rememberNonce(String nonceKey) {
         SEEN_NONCES.add(nonceKey);
         while (SEEN_NONCES.size() > REPLAY_CACHE_LIMIT) {
             String oldest = SEEN_NONCES.iterator().next();
             SEEN_NONCES.remove(oldest);
         }
-        return false;
     }
 
     private static String encodeHex(byte[] data) {

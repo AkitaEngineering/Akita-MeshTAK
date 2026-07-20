@@ -7,6 +7,14 @@ The format follows Keep a Changelog and the project uses semantic versioning for
 ## [Unreleased]
 
 ### Fixed
+- Android secure provisioning storage now rejects non-file state targets, preserves legacy secrets when migration cannot persist, and surfaces write failures to callers.
+- Firmware builds now exact-pin PlatformIO, the ESP32 platform, and library versions instead of resolving mutable upstream dependencies.
+- Signing-key formats are ignored, release keystores are rejected from inside the checkout, and local signing material was moved out of the repository.
+- CI now runs deployment/CoT checks and assembles a debug plugin artifact in addition to unit tests and the firmware build.
+- Dependabot now monitors GitHub Actions and Android Gradle dependencies weekly.
+- Android BLE calls now fail safely when runtime permissions are absent, USB receivers declare export posture on Android 13+, and lint is enforced in CI.
+- Plaintext MQTT is fail-closed for production and requires an explicit isolated-bench override.
+- The firmware provisioning placeholder assertion now compares the resolved secret value directly instead of stringifying an already quoted macro.
 - Firmware provisioning now refuses to initialize security when PBKDF2 key derivation fails or produces zeroed key material.
 - Firmware HMAC generation now fails closed instead of leaving callers with undefined output on mbedTLS setup errors.
 - Firmware release guards now reject placeholder BLE characteristic UUIDs and MQTT deployment credentials, not just the primary service UUID/Wi-Fi SSID.

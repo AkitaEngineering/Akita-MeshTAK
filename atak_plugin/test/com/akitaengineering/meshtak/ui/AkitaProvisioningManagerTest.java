@@ -48,6 +48,16 @@ public class AkitaProvisioningManagerTest {
     }
 
     @Test
+    public void incompatibleOrUnsafeBundlesAreRejected() {
+        assertThrows(IllegalArgumentException.class, () ->
+                AkitaProvisioningManager.previewProvisioningBundle(
+                        "AKITA-PROV-1|NodeAlpha|v1|k1|1|BundleSecret123456"));
+        assertThrows(IllegalArgumentException.class, () ->
+                AkitaProvisioningManager.previewProvisioningBundle(
+                        "AKITA-PROV-1|Node Alpha|v2|k1|1|BundleSecret123456"));
+    }
+
+    @Test
     public void customProvisioningSecretOverridesFallback() {
         AkitaProvisioningManager.setCustomProvisioningSecret(context, "CustomSecret123456");
 
@@ -67,11 +77,14 @@ public class AkitaProvisioningManagerTest {
 
         AkitaProvisioningManager.setStagedProvisioningBundle(context, bundle);
 
-        assertEquals(com.akitaengineering.meshtak.Config.CMD_PROVISION_STAGE_PREFIX + "BundleSecret123456",
-                AkitaProvisioningManager.buildProvisioningStageCommand(context));
-        assertArrayEquals(
-            (com.akitaengineering.meshtak.Config.CMD_PROVISION_STAGE_PREFIX + "BundleSecret123456").getBytes(StandardCharsets.UTF_8),
-            AkitaProvisioningManager.buildProvisioningStageCommandBytes(context));
+        assertThrows(IllegalArgumentException.class,
+                () -> AkitaProvisioningManager.buildProvisioningStageCommandBytes(context));
+        AkitaProvisioningManager.applyProvisioningBundle(context);
+        assertProvisioningCommand(AkitaProvisioningManager.buildProvisioningStageCommand(context), "BundleSecret123456");
+        assertProvisioningCommand(new String(
+                AkitaProvisioningManager.buildProvisioningStageCommandBytes(context), StandardCharsets.UTF_8),
+                "BundleSecret123456");
+        assertEquals("NodeAlpha", preferences.getString("ble_device_name", ""));
         assertFalse(preferences.contains(AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE));
         assertTrue(preferences.contains(AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE_SIGNAL));
         assertTrue(stateFile.exists());
@@ -97,25 +110,31 @@ public class AkitaProvisioningManagerTest {
         assertFalse(preferences.contains(AkitaProvisioningManager.PREF_PROVISIONING_BUNDLE));
         assertFalse(preferences.contains(AkitaProvisioningManager.PREF_LAST_ROTATION_AT));
         assertFalse(preferences.contains(AkitaProvisioningManager.PREF_LAST_BUNDLE_GENERATED_AT));
-        assertEquals(com.akitaengineering.meshtak.Config.CMD_PROVISION_STAGE_PREFIX + "LegacySecret123456",
-                AkitaProvisioningManager.buildProvisioningStageCommand(context));
-        assertArrayEquals(
-            (com.akitaengineering.meshtak.Config.CMD_PROVISION_STAGE_PREFIX + "LegacySecret123456").getBytes(StandardCharsets.UTF_8),
-            AkitaProvisioningManager.buildProvisioningStageCommandBytes(context));
+        assertProvisioningCommand(AkitaProvisioningManager.buildProvisioningStageCommand(context), "LegacySecret123456");
+        assertProvisioningCommand(new String(
+                AkitaProvisioningManager.buildProvisioningStageCommandBytes(context), StandardCharsets.UTF_8),
+                "LegacySecret123456");
         assertTrue(stateFile.exists());
         assertStoredFileIsEncrypted("LegacySecret123456");
     }
 
     @Test
-    public void secureStoreWriteFailurePreservesLegacyPreferences() {
+    public void corruptSecureStoreBlocksLegacySecretFallback() {
         preferences.edit()
                 .putString(AkitaProvisioningManager.PREF_PROVISIONING_SECRET, "LegacySecret123456")
                 .commit();
 
         assertTrue(stateFile.mkdir());
 
-        assertEquals("LegacySecret123456", AkitaProvisioningManager.getActiveProvisioningSecret(context));
+        assertEquals("", AkitaProvisioningManager.getActiveProvisioningSecret(context));
         assertTrue(preferences.contains(AkitaProvisioningManager.PREF_PROVISIONING_SECRET));
+    }
+
+    private static void assertProvisioningCommand(String command, String secret) {
+        String prefix = com.akitaengineering.meshtak.Config.CMD_PROVISION_STAGE_PREFIX + secret + ":";
+        assertTrue(command.startsWith(prefix));
+        long epoch = Long.parseLong(command.substring(prefix.length()));
+        assertTrue(epoch >= 1609459200L && epoch <= 4102444800L);
     }
 
     @Test

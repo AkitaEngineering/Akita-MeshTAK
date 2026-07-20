@@ -3,13 +3,15 @@
 ## Introduction
 This guide provides information for developers who want to contribute to the **Akita MeshTAK Plugin**.
 
+> **Architecture boundary:** this repository's firmware is a companion-controller application. It requires a separate UART-connected node running official Meshtastic firmware and does not implement a native Meshtastic LoRa stack.
+
 ---
 
 # Project Overview
 
 The Akita MeshTAK system consists of two main components:
 
-- **Firmware:** Code running on Meshtastic devices (e.g., Heltec V3)  
+- **Firmware:** Code running on a companion ESP32/Heltec controller connected to a separate Meshtastic node
 - **ATAK Plugin:** Android application that integrates Meshtastic with ATAK
 
 ---
@@ -18,14 +20,14 @@ The Akita MeshTAK system consists of two main components:
 
 ```
 AkitaMeshTAK/
-├── firmware/ # Firmware for Meshtastic devices
+├── firmware/ # Companion-controller firmware
 │ ├── src/
 │ │ ├── main.cpp # Application entry point
 │ │ ├── config.h # CRITICAL: UUIDs / provisioning / guards / commands
 │ │ ├── ble_setup.h/.cpp # BLE peripheral setup
 │ │ ├── meshtastic_setup.h/.cpp # Meshtastic mesh integration
 │ │ ├── serial_bridge.h/.cpp # Serial/USB communication
-│ │ ├── mqtt_client.h/.cpp # Optional MQTT client
+│ │ ├── mqtt_client.h/.cpp # Isolated-bench MQTT client (plaintext; production blocked)
 │ │ ├── payload_codec.h/.cpp # Shared BLE/Serial encrypted envelope helpers
 │ │ ├── mailbox_escape.h/.cpp # Shared mailbox payload escape helpers
 │ │ ├── cot_generation.h/.cpp # CoT XML generation
@@ -69,14 +71,17 @@ AkitaMeshTAK/
 
 The firmware is built using **PlatformIO**.
 
-1. Install PlatformIO  
-2. Navigate to the `firmware/` directory  
-3. Configure `firmware/src/config.h`: UUIDs, `PROVISIONING_SECRET`, and MQTT credentials if `ENABLE_MQTT` is enabled  
-4. Placeholder BLE UUIDs, provisioning material, and MQTT credentials will fail the build unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for bench-only rehearsal  
-5. Build: ```pio run```
-6. Upload: ```pio run -t upload```
+1. Install PlatformIO
+2. Navigate to the `firmware/` directory
+3. Set deployment BLE UUIDs and explicit `AKITA_MESH_SERIAL_RX_PIN` / `AKITA_MESH_SERIAL_TX_PIN` values; wire those pins to a separate Meshtastic node
+4. Placeholder BLE UUIDs fail the build unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for bench-only rehearsal
+5. Provision secrets only through the boot-time physical-presence workflow; never compile them into firmware
+6. Keep MQTT disabled for production. Its plaintext implementation additionally requires `ALLOW_INSECURE_MQTT` for isolated bench testing
+7. Build: ```pio run -e heltec_v3```
+8. Upload: ```pio run -e heltec_v3 -t upload```
+CI-safe firmware validation uses PlatformIO 6.1.19 and `pio run -e heltec_v3_ci`. The ESP32 platform and firmware libraries are exact-pinned in `platformio.ini`; update pins only in a reviewed change accompanied by CI and hardware acceptance results.
 
-CI-safe firmware validation uses `pio run -e heltec_v3_ci`.
+For checkouts hosted on removable or FUSE-backed storage, redirect generated objects to a native filesystem if the ESP32 compiler stalls: `PLATFORMIO_BUILD_DIR=/tmp/akita-meshtak-build pio run -e heltec_v3_ci`.
 
 ---
 
@@ -84,19 +89,19 @@ CI-safe firmware validation uses `pio run -e heltec_v3_ci`.
 
 The ATAK plugin is built using **Android Studio** or the Gradle wrapper from the command line.
 
-1. Install Android Studio (or the Android command-line tools) and Android SDK (platform 35, build-tools 35.0.1)  
-2. Use Java 17 or 21 for Android builds  
-3. For release builds, obtain the official ATAK SDK jar and pass its path with `AKITA_ATAK_SDK_JAR` or `-PakitaAtakSdkJar`  
-4. Open `atak_plugin/` in Android Studio — it will create `local.properties` automatically.  
-   *Or* create `atak_plugin/local.properties` manually with your SDK path:  
+1. Install Android Studio (or the Android command-line tools) and Android SDK (platform 35, build-tools 35.0.1)
+2. Use Java 17 or 21 for Android builds
+3. For release builds, obtain the official ATAK SDK jar and pass its path with `AKITA_ATAK_SDK_JAR` or `-PakitaAtakSdkJar`
+4. Open `atak_plugin/` in Android Studio — it will create `local.properties` automatically.
+   *Or* create `atak_plugin/local.properties` manually with your SDK path:
    ```properties
    sdk.dir=/path/to/your/Android/Sdk
-   ```  
-   *Or* set the `ANDROID_HOME` environment variable instead. `local.properties` is gitignored and machine-specific.  
-5. Supply build inputs with Gradle properties or environment variables instead of editing source files. Release builds validate provisioning secret, UUIDs, ATAK SDK presence, and signing material before packaging.  
-6. Build:  
-   - **Android Studio:** Build → Build Bundle(s) / APK(s) → Build APK(s)  
-   - **Command line debug/tests:** `cd atak_plugin && ./gradlew test -PakitaUseAtakStub=true`  
+   ```
+   *Or* set the `ANDROID_HOME` environment variable instead. `local.properties` is gitignored and machine-specific.
+5. Supply build inputs with Gradle properties or environment variables instead of editing source files. Release builds validate provisioning secret, UUIDs, ATAK SDK presence, and signing material before packaging.
+6. Build:
+   - **Android Studio:** Build → Build Bundle(s) / APK(s) → Build APK(s)
+   - **Command line debug/tests:** `cd atak_plugin && ./gradlew test -PakitaUseAtakStub=true`
    - **Command line debug APK:** `cd atak_plugin && ./gradlew assembleDebug` (or `.\gradlew.bat assembleDebug` on Windows)
    - **Command line release APK:** `cd atak_plugin && ./gradlew assembleRelease`
 
@@ -107,36 +112,36 @@ The ATAK plugin is built using **Android Studio** or the Gradle wrapper from the
 Communication uses a simple string-based command protocol.
 
 ## ATAK → Firmware
-- `CMD:GET_BATT`  
-Requests battery status  
-- `CMD:GET_VERSION`  
-Requests firmware version  
-- `CMD:ALERT:SOS`  
-Triggers SOS alert broadcast  
-- `CMD:MAILBOX:PUT:<messageId>:<format>:<payload>`  
-Queues guaranteed-delivery mission traffic for relay by the firmware  
-- `CMD:PROV:STAGE:<secret>`  
-Stages runtime provisioning material to the connected device over a trusted local bearer  
+- `CMD:GET_BATT`
+Requests battery status
+- `CMD:GET_VERSION`
+Requests firmware version
+- `CMD:ALERT:SOS`
+Triggers SOS alert broadcast
+- `CMD:MAILBOX:PUT:<messageId>:<format>:<payload>`
+Queues acknowledgement-tracked mission traffic for relay by the firmware
+- `CMD:PROV:STAGE:<secret>:<epoch-seconds>` (physical-presence provisioning only)
+Stages runtime provisioning material to the connected device over a trusted local bearer
 
 ## Firmware → ATAK
-- `STATUS:BATT:XX%`  
-Response to battery query (e.g., `STATUS:BATT:85%`)  
-- `STATUS:VERSION:X.Y.Z`  
-Response to version query (e.g., `STATUS:VERSION:0.2.0`)  
-- `STATUS:MAILBOX:ACK:<messageId>:IN_FLIGHT|FAILED`  
-Local acknowledgement that a mailbox frame was accepted for relay or failed locally  
-- `STATUS:MAILBOX:ACK:<messageId>:DELIVERED:<peerNode>`  
-Peer mailbox receipt confirming end-to-end delivery across the mesh  
-- `STATUS:MAILBOX:RX:<originNode>:<messageId>:<format>:<payload>`  
-Inbound mission traffic received from the mesh  
-- `STATUS:PROV:STAGED:<version>:<key-id>` / `STATUS:PROV:FAILED:<version>:<key-id>`  
-Runtime provisioning stage result returned by firmware  
+- `STATUS:BATT:XX%`
+Response to battery query (e.g., `STATUS:BATT:85%`)
+- `STATUS:VERSION:X.Y.Z`
+Response to version query (e.g., `STATUS:VERSION:0.2.0`)
+- `STATUS:MAILBOX:ACK:<messageId>:IN_FLIGHT|FAILED`
+Local acknowledgement that a mailbox frame was accepted for relay or failed locally
+- `STATUS:MAILBOX:ACK:<messageId>:DELIVERED:<peerNode>`
+Peer mailbox receipt confirming end-to-end delivery across the mesh
+- `STATUS:MAILBOX:RX:<originNode>:<messageId>:<format>:<payload>`
+Inbound mission traffic received from the mesh
+- `STATUS:PROV:STAGED:<version>:<key-id>` / `STATUS:PROV:FAILED:<version>:<key-id>`
+Runtime provisioning stage result returned by firmware
 
 All other received data is treated as **CoT XML**.
 
 Protocol definitions exist in:
 
-- `firmware/src/config.h`  
+- `firmware/src/config.h`
 - `atak_plugin/src/com/akitaengineering/meshtak/Config.java`
 
 Shared transport helpers live in `firmware/src/payload_codec.h/.cpp` and `firmware/src/mailbox_escape.h/.cpp` so BLE and Serial paths stay consistent.
@@ -145,13 +150,13 @@ Shared transport helpers live in `firmware/src/payload_codec.h/.cpp` and `firmwa
 
 # Contributing Guidelines
 
-1. Fork the repository  
-2. Create a new branch for your feature or fix  
-3. Follow code style conventions (Google Java/C++ style)  
-4. Write clear commit messages  
-5. Update documentation for your changes  
-6. Test thoroughly  
-7. Submit a pull request  
+1. Fork the repository
+2. Create a new branch for your feature or fix
+3. Follow code style conventions (Google Java/C++ style)
+4. Write clear commit messages
+5. Update documentation for your changes
+6. Test thoroughly
+7. Submit a pull request
 
 ## Release Management
 
@@ -163,7 +168,7 @@ Shared transport helpers live in `firmware/src/payload_codec.h/.cpp` and `firmwa
 
 # License
 
-This project is licensed under the **GNU General Public License v3.0**.  
+This project is licensed under the **GNU General Public License v3.0**.
 See the `LICENSE` and `COPYING` files in the root directory.
 
 **Copyright (C) 2026 Akita Engineering**

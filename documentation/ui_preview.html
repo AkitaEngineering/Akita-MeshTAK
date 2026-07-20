@@ -724,7 +724,7 @@
         <div class="dashboard-body">
           <section class="summary">
             <h3>Operational Summary</h3>
-            <p class="summary-copy">Search &amp; Rescue posture is connected over BLE for AkitaNode01, but Mission Assurance is holding live traffic until the staged bundle is applied to the device. Traffic queues inside the guaranteed-delivery mailbox, reroutes with failover if Serial is the only live bearer, and closes only after a peer receipt comes back across the mesh.</p>
+            <p class="summary-copy">Search &amp; Rescue posture is connected over BLE for AkitaNode01, but Mission Assurance is holding live traffic until the staged bundle is applied to the device. Traffic queues inside the acknowledgement-tracked mailbox, reroutes with failover if Serial is the only live bearer, and closes only after a peer receipt comes back across the mesh.</p>
 
             <div class="stats">
               <div class="stat">
@@ -785,7 +785,7 @@
           </section>
 
           <section class="card">
-            <h3>Guaranteed Delivery Mailbox</h3>
+            <h3>Acknowledgement-Tracked Mailbox</h3>
             <p class="section-subtitle">The selected bearer writes locally first, returns IN_FLIGHT once the radio accepts the frame, and closes DELIVERED only after a peer mailbox acknowledgement returns over the mesh.</p>
 
             <div class="stats">
@@ -867,7 +867,7 @@
                   <strong style="font-size:18px;">Prepare extraction update</strong>
                 </div>
               </div>
-              <p class="field-note">Queue SAR Field Team actions into the guaranteed-delivery composer.</p>
+              <p class="field-note">Queue SAR Field Team actions into the acknowledgement-tracked composer.</p>
               <div class="playbook-row">
                 <select class="select">
                   <option>Extraction Update</option>
@@ -963,7 +963,7 @@
       </section>
     </div>
 
-    <p class="preview-note">This preview is a visual approximation of the implemented plugin UI, not a live ATAK render. The warning state shown here is intentional: do not release live traffic until Mission Assurance clears provisioning warnings and encrypted transport remains enabled. The plugin combines ATAK-native tactical overlays, guaranteed-delivery mailbox routing, provisioning ceremony controls, incident boards, and mission replay before device testing.</p>
+    <p class="preview-note">This preview is a visual approximation of the implemented plugin UI, not a live ATAK render. The warning state shown here is intentional: do not release live traffic until Mission Assurance clears provisioning warnings and encrypted transport is ready. The plugin combines ATAK-native tactical overlays, acknowledgement-tracked mailbox routing, provisioning ceremony controls, incident boards, and mission replay before device testing.</p>
   </div>
 
   <script>

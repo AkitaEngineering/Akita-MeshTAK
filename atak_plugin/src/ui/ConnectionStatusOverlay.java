@@ -36,6 +36,8 @@ public class ConnectionStatusOverlay extends View {
     private final int cornerRadius;
     private final Context context;
     private final MapView mapView;
+    private final RectF backgroundBounds = new RectF();
+    private final RectF accentBounds = new RectF();
 
     public ConnectionStatusOverlay(Context context, MapView mapView) {
         super(context);
@@ -116,19 +118,20 @@ public class ConnectionStatusOverlay extends View {
             mutedPaint.measureText(freshnessLine));
         float totalWidth = Math.max(320f * context.getResources().getDisplayMetrics().density, contentWidth + (textPadding * 2));
         float totalHeight = 248f * context.getResources().getDisplayMetrics().density;
-        RectF background = new RectF(textPadding, textPadding, textPadding + totalWidth, textPadding + totalHeight);
-        canvas.drawRoundRect(background, cornerRadius, cornerRadius, backgroundPaint);
-        canvas.drawRoundRect(background, cornerRadius, cornerRadius, strokePaint);
+        backgroundBounds.set(textPadding, textPadding, textPadding + totalWidth, textPadding + totalHeight);
+        canvas.drawRoundRect(backgroundBounds, cornerRadius, cornerRadius, backgroundPaint);
+        canvas.drawRoundRect(backgroundBounds, cornerRadius, cornerRadius, strokePaint);
 
         float accentHeight = 10f * context.getResources().getDisplayMetrics().density;
-        RectF accentStrip = new RectF(background.left, background.top, background.right, background.top + accentHeight);
-        canvas.drawRoundRect(accentStrip, cornerRadius, cornerRadius, accentPaint);
+        accentBounds.set(backgroundBounds.left, backgroundBounds.top, backgroundBounds.right,
+                backgroundBounds.top + accentHeight);
+        canvas.drawRoundRect(accentBounds, cornerRadius, cornerRadius, accentPaint);
 
         float x = textPadding * 2;
-        float y = background.top + accentHeight + (headerPaint.getTextSize() * 1.25f);
+        float y = backgroundBounds.top + accentHeight + (headerPaint.getTextSize() * 1.25f);
         canvas.drawText("Akita MeshTAK", x, y, headerPaint);
 
-        float subtitleX = background.right - textPadding;
+        float subtitleX = backgroundBounds.right - textPadding;
         subtitlePaint.setTextAlign(Paint.Align.RIGHT);
         canvas.drawText(AkitaTheme.getThemeLabel(context), subtitleX, y, subtitlePaint);
 
@@ -143,10 +146,10 @@ public class ConnectionStatusOverlay extends View {
         canvas.drawText(profileLine, x, y, mutedPaint);
 
         y += textPaint.getTextSize() * 1.75f;
-        drawStatusRow(canvas, background, y, "BLE", stripPrefix(bleStatus, "BLE: "), lastBleUpdate, palette);
+        drawStatusRow(canvas, backgroundBounds, y, "BLE", stripPrefix(bleStatus, "BLE: "), lastBleUpdate, palette);
 
         y += 48f * context.getResources().getDisplayMetrics().density;
-        drawStatusRow(canvas, background, y, "SER", stripPrefix(serialStatus, "Serial: "), lastSerialUpdate, palette);
+        drawStatusRow(canvas, backgroundBounds, y, "SER", stripPrefix(serialStatus, "Serial: "), lastSerialUpdate, palette);
 
         y += 54f * context.getResources().getDisplayMetrics().density;
         canvas.drawText(freshnessLine, x, y, mutedPaint);

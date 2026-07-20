@@ -7,6 +7,8 @@ import android.graphics.drawable.GradientDrawable;
 
 import androidx.preference.PreferenceManager;
 
+import java.util.Locale;
+
 public final class AkitaTheme {
 
     public static final String PREF_UI_THEME = "ui_theme";
@@ -157,7 +159,7 @@ public final class AkitaTheme {
         if (palette.monochrome) {
             return palette.accent;
         }
-        String lowerStatus = status == null ? "" : status.toLowerCase();
+        String lowerStatus = status == null ? "" : status.toLowerCase(Locale.ROOT);
         if (lowerStatus.contains("connected") || lowerStatus.contains("ready") || lowerStatus.contains("good")) {
             return palette.success;
         }

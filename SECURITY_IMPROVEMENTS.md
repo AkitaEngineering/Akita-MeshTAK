@@ -11,7 +11,7 @@ This document summarizes the comprehensive security, accountability, encryption,
 **Status**: Implemented
 
 - **AES-256-GCM Encryption**: Authenticated encryption for BLE and Serial communications
-- **Versioned Envelope**: `ENC:v1:k1:<hex>` transport format with protocol version and key-id metadata
+- **Versioned Envelope**: `ENC:v2:k1:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>` transport format with protocol version and key-id metadata
 - **Authenticated Integrity**: AES-GCM authentication tag verification during decrypt
 - **Secure Key Management**: Framework for secure key provisioning
 - **Fail-Closed Provisioning**: Security initialization now rejects failed/zeroed derived keys instead of reporting a live secure session
@@ -87,12 +87,13 @@ This document summarizes the comprehensive security, accountability, encryption,
 - Connection state management
 
 ### 6. MQTT Security Enhancements
-**Status**: Implemented
+**Status**: Bench-only; production blocked pending TLS
 
 - **Input Validation**: All MQTT messages validated
-- **Secure Credentials**: Framework for secure credential storage
 - **Connection Timeouts**: Prevent hanging connections
 - **Audit Logging**: All MQTT events logged
+- **Fail-Closed Release Posture**: Enabling the current plaintext client requires the explicit `ALLOW_INSECURE_MQTT` bench override
+- **Production Gap**: Certificate-validated TLS is not yet implemented; MQTT must remain disabled in field images
 - **Files Modified**:
   - `firmware/src/mqtt_client.cpp`
 
@@ -211,9 +212,9 @@ This document summarizes the comprehensive security, accountability, encryption,
 **Current Implementation**: Credentials are placeholders.
 
 **Production Requirements**:
-1. WiFi credentials: Use secure storage
-2. MQTT credentials: Use secure storage or certificates
-3. Never hardcode credentials
+1. Implement certificate-validated TLS before enabling MQTT
+2. Store Wi-Fi and MQTT credentials outside source control
+3. Never set `ALLOW_INSECURE_MQTT` in a field image
 4. Use environment-specific configuration
 
 ### Important: Audit Log Retention
@@ -296,7 +297,7 @@ The system is designed to meet requirements for:
 - **Audit Logging**: Comprehensive event logging
 - **Input Validation**: All inputs validated and sanitized
 - **Error Handling**: Robust error recovery
-- **MQTT Security**: Enhanced security for MQTT
+- **MQTT Security**: Plaintext MQTT fails closed unless an isolated-bench override is explicit; production TLS remains outstanding
 - **Version Checking**: Compatibility validation
 - **Thread Safety**: Improved resource management
 - **Accountability**: Full audit trail for all operations
@@ -307,7 +308,7 @@ The system is designed to meet requirements for:
 **Lines of Code Added**: ~3000+
 
 Protocol update note:
-- Encrypted transport format: `ENC:v1:k1:<hex>`
+- Encrypted transport format: `ENC:v2:k1:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>`
 - Crypto mode: AES-256-GCM (nonce + auth tag)
 
 ---

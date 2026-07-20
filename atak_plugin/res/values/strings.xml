@@ -15,7 +15,6 @@
     <string name="auto_failover_title">Auto Bearer Failover</string>
     <string name="provisioning_secret_title">Provisioning Secret</string>
     <string name="provisioning_bundle_title">Air-Gapped Provisioning Bundle</string>
-    <string name="encryption_enabled_title">Enable Encrypted Transport</string>
     <string name="rotate_secret_title">Rotate Provisioning Secret</string>
     <string name="generate_bundle_title">Generate Provisioning Bundle</string>
     <string name="apply_bundle_title">Apply Provisioning Bundle</string>

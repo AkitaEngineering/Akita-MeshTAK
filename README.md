@@ -18,10 +18,11 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 
 ### IMPORTANT: READ BEFORE COMPILING
 
-- **Firmware**: Prefer build-time environment variables over source edits. `firmware/tools/load_build_config.py` injects deployment values such as BLE UUIDs, device ID, provisioning secret, and MQTT credentials. Placeholder UUIDs, provisioning material, and MQTT credentials still fail the production firmware build unless you explicitly define `ALLOW_PLACEHOLDER_SECRET` or use the `heltec_v3_ci` rehearsal target.
-- **ATAK Plugin**: Do not edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java` for deployment values. Supply provisioning secret, BLE UUIDs, USB IDs, and the ATAK SDK jar path through Gradle properties or environment variables as documented in `atak_plugin/README.md` and `atak_plugin/ATAK_SDK_REQUIREMENTS.md`.
+- **Hardware architecture**: This repository builds a companion controller, not native Meshtastic radio firmware. The controller must be wired by UART to a separate node running official Meshtastic firmware. Production builds require explicit `AKITA_MESH_SERIAL_RX_PIN` and `AKITA_MESH_SERIAL_TX_PIN` values.
+- **Firmware**: Prefer build-time environment variables over source edits. `firmware/tools/load_build_config.py` injects BLE UUIDs, device ID, and UART pins. PlatformIO, the ESP32 platform, and firmware libraries are exact-pinned; update those pins only with CI plus hardware acceptance testing.
+- **ATAK Plugin**: No provisioning secret is embedded in the APK. Supply BLE UUIDs, USB IDs, and the ATAK SDK jar path through Gradle properties or environment variables. Signing keystores must stay outside the source checkout with owner-only permissions.
 - **Java Runtime**: Android builds require Java 17 or 21. Gradle/AGP validation is not reliable on Java 26 at the time of writing.
-- **Provisioning Secret**: Operators can generate an air-gapped provisioning bundle, apply it locally, and stage the active secret to a connected device over a trusted local bearer. Placeholder secrets are acceptable for rehearsal only and are surfaced as degraded posture in Mission Assurance.
+- **Provisioning Secret**: Use a per-device generated secret. Hold the controller's physical provisioning button during boot, then stage the secret within the two-minute window. The secret is stored in Android Keystore-protected state and ESP32 NVS; enable ESP32 flash encryption and secure boot for field hardware.
 
 ---
 
@@ -34,7 +35,7 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 - **Device Health Monitoring**: Displays the battery percentage of the connected Meshtastic device directly in the ATAK toolbar.
 - **Mission Profiles**: Tailor the workflow for Search and Rescue, Law Enforcement, Coast Guard, Military, or Private Security operations.
 - **Mission Assurance Dashboard**: Surface encryption, audit, interoperability, and provisioning posture before release of field traffic.
-- **Guaranteed Delivery Mailbox**: Queue mission traffic until a bearer is available, transition frames to `IN_FLIGHT` when the radio accepts them, and close delivery only when a peer mailbox receipt returns across the mesh.
+- **Acknowledgement-Tracked Mailbox**: Durably queue mission traffic until a bearer is available, transition frames to `IN_FLIGHT` when accepted, and mark them delivered only after a peer receipt. Radio or peer failure can still prevent delivery.
 - **Bearer Failover With Queue Preservation**: Preserve queued traffic and reroute between BLE and Serial when the preferred bearer is unavailable.
 - **Air-Gapped Provisioning Ceremony**: Generate and apply offline provisioning bundles, then runtime-stage the active secret to a connected device over a trusted local route.
 - **Mission Replay and Digital Twin**: Rehearse the last mailbox timeline in Mock Transport Mode, including queued frames, peer acknowledgements, and provisioning events.
@@ -46,7 +47,7 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 **Versatile Connectivity Options**:
 - Bluetooth Low Energy (BLE)
 - Serial (USB)
-- (Optional) MQTT
+- MQTT for isolated bench testing only; production builds block the current plaintext MQTT bearer pending TLS support
 
 **Intuitive Data Management**:
 - Data Format Selection (Plain Text, JSON, Custom)
@@ -61,10 +62,10 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 
 **Security and Accountability**:
 - PBKDF2-HMAC-SHA256 transport key derivation from provisioning material with device/purpose salt
-- Preference-backed provisioning secret management with runtime-first behavior and guarded build-time fallback
-- Air-gapped provisioning bundle generation/apply plus trusted local stage-to-device workflow
-- Encrypted transport enable/disable control from settings
-- Firmware placeholder guards for provisioning, BLE UUIDs, and MQTT credentials
+- Android-Keystore-protected per-device provisioning state with no APK-embedded fallback secret
+- Physical-presence provisioning window backed by ESP32 NVS
+- Mandatory fail-closed encrypted operational transport
+- Firmware guards for UART wiring, BLE UUIDs, and MQTT credentials
 - Audit log export, debug-gated firmware serial mirroring, and security state reload actions
 - BLE/Serial command rate limiting to blunt command-flood attempts
 

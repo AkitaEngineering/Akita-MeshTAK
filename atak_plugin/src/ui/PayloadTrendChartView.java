@@ -19,6 +19,8 @@ public class PayloadTrendChartView extends View {
     private final Paint pointPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint emptyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path linePath = new Path();
+    private final Path fillPath = new Path();
     private AkitaTheme.Palette palette;
     private int maxValue = 512;
 
@@ -111,8 +113,8 @@ public class PayloadTrendChartView extends View {
             return;
         }
 
-        Path linePath = new Path();
-        Path fillPath = new Path();
+        linePath.reset();
+        fillPath.reset();
         float stepX = values.size() == 1 ? 0 : chartWidth / (values.size() - 1f);
 
         for (int i = 0; i < values.size(); i++) {

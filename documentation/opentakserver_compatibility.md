@@ -42,7 +42,7 @@ The plugin now synchronizes firmware time from the ATAK device clock after BLE o
 | SSL client certificate enrollment | Handled by ATAK/OpenTAKServer, not the Akita plugin |
 | Mission API / Data Sync | Handled by ATAK/OpenTAKServer, not the Akita plugin |
 | Data packages | Handled by ATAK/OpenTAKServer, not the Akita plugin |
-| Native OpenTAKServer Meshtastic MQTT bridge | Not implemented in Akita firmware; Akita uses its own BLE/serial/MQTT paths |
+| Native OpenTAKServer Meshtastic MQTT bridge | Not implemented in Akita firmware; production uses BLE/serial, while Akita's plaintext MQTT path is isolated-bench only |
 
 ## Validation Checklist
 

@@ -3,6 +3,7 @@
 #include "config.h"
 #include <TinyGPS++.h>
 #include <time.h>
+#include <math.h>
 
 static String g_cotMissionName = "";
 
@@ -72,6 +73,11 @@ static time_t currentCotEpoch() {
 }
 
 String generateLocationCoT(const String& deviceId, float latitude, float longitude, float altitude) {
+  if (!isfinite(latitude) || !isfinite(longitude) || !isfinite(altitude)
+      || latitude < -90.0f || latitude > 90.0f
+      || longitude < -180.0f || longitude > 180.0f) {
+    return "";
+  }
   static uint32_t uidCounter = 0;
   String safeDeviceId = escapeXmlAttribute(deviceId);
   String eventUid = safeDeviceId + "-" + String(millis()) + "-" + String(uidCounter++);
@@ -108,8 +114,8 @@ String generateLocationCoT(const String& deviceId, float latitude, float longitu
       safeVersion.c_str());
 
   if (n < 0 || n >= (int)sizeof(buf)) {
-    // Truncated — return whatever fits.
-    buf[sizeof(buf) - 1] = '\0';
+    memset(buf, 0, sizeof(buf));
+    return "";
   }
   return String(buf);
 }

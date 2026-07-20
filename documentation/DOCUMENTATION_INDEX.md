@@ -136,7 +136,7 @@ This document provides an index to all documentation for the Akita MeshTAK Syste
 
 #### 8. UI Preview
 **File**: `ui_preview.html`
-**Purpose**: No-hardware visualization of the current dashboard, toolbar, guaranteed-delivery mailbox, provisioning ceremony controls, replay workflow, and Night Red / Night Green presentation modes
+**Purpose**: No-hardware visualization of the current dashboard, toolbar, acknowledgement-tracked mailbox, provisioning ceremony controls, replay workflow, and Night Red / Night Green presentation modes
 
 **Contents**:
 - Dashboard theme preview (Dark Ops, Light Ops, Night Red, Night Green)

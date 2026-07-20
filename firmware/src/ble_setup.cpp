@@ -10,6 +10,8 @@
 #include "input_validation.h" // For input validation
 #include "security.h"         // For payload encryption/decryption
 #include "payload_codec.h"    // Shared encode/decode utilities
+#include "transport_framing.h"
+#include <algorithm>
 #include <string.h>
 
 BLEUUID serviceUUID(BLE_SERVICE_UUID);
@@ -39,35 +41,42 @@ class CommandCallback: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
         std::string value = pCharacteristic->getValue();
         if (value.length() > 0 && value.length() <= MAX_SERIAL_LINE_LENGTH) {
-            // Rate limiting
+            String frame = "";
+            frame.reserve(value.length());
+            for (size_t i = 0; i < value.length(); i++) {
+                frame += (char)value[i];
+            }
+            String cmd = "";
+            bool completeFrame = consumeBleFrame(frame, cmd);
+            for (size_t i = 0; i < frame.length(); i++) frame.setCharAt(i, '\0');
+            std::fill(value.begin(), value.end(), '\0');
+            if (!completeFrame) {
+              return;
+            }
+            cmd.trim();
+
+            // Rate-limit complete protocol messages, not individual BLE
+            // fragments; otherwise valid multi-frame commands are discarded.
             unsigned long now = millis();
             if ((now - lastBleCommandMs) < CMD_RATE_LIMIT_MS) {
               logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 1, "BLE",
-                           "Rate limit exceeded – command dropped", false);
+                           "Rate limit exceeded - command dropped", false);
+              for (size_t i = 0; i < cmd.length(); i++) cmd.setCharAt(i, '\0');
               return;
             }
             lastBleCommandMs = now;
-            String cmd = "";
-            cmd.reserve(value.length());
-            for (size_t i = 0; i < value.length(); i++) {
-                cmd += (char)value[i];
-            }
-            cmd.trim(); // Clean up any whitespace
 
             String decodedCmd = "";
-            if (!decodeIncomingPayload(cmd, decodedCmd)) {
+            if (!decodeIncomingPayload(cmd, decodedCmd, true)) {
               logAuditEvent(AUDIT_EVENT_AUTHENTICATION_FAILURE, 2, "BLE",
                      "Encrypted payload decode failed", false);
               return;
             }
-            
+
             // Security: Log BLE data reception
-            logAuditEvent(AUDIT_EVENT_DATA_RECEIVED, 0, "BLE", 
-                   ("Data received: " + decodedCmd.substring(0, 32)).c_str(), true);
-            
-            Serial.print("Received command via BLE: ");
-            Serial.println(decodedCmd);
-            
+            logAuditEvent(AUDIT_EVENT_DATA_RECEIVED, 0, "BLE",
+                   "Authenticated command received", true);
+
             // Input validation before processing
             ValidationResult validation = validateCommand(decodedCmd);
             if (validation == VALIDATION_OK) {
@@ -77,6 +86,8 @@ class CommandCallback: public BLECharacteristicCallbacks {
                              "Invalid command - validation failed", false);
                 Serial.printf("SECURITY: BLE command validation failed: %d\n", validation);
             }
+            for (size_t i = 0; i < decodedCmd.length(); i++) decodedCmd.setCharAt(i, '\0');
+            for (size_t i = 0; i < cmd.length(); i++) cmd.setCharAt(i, '\0');
         }
     }
 };
@@ -92,15 +103,14 @@ bool setupBLE() {
   // CoT Characteristic (Notifications to ATAK)
   pCoTCharacteristic = pService->createCharacteristic(
                       cotCharacteristicUUID,
-                      BLECharacteristic::PROPERTY_NOTIFY
+                      BLECharacteristic::PROPERTY_INDICATE
                     );
   pCoTCharacteristic->addDescriptor(new BLE2902()); // Standard BLE descriptor
 
   // Write Characteristic (Commands from ATAK)
   pWriteCharacteristic = pService->createCharacteristic(
                       writeCharacteristicUUID,
-                      BLECharacteristic::PROPERTY_WRITE |
-                      BLECharacteristic::PROPERTY_WRITE_NR 
+                      BLECharacteristic::PROPERTY_WRITE
                     );
   pWriteCharacteristic->setCallbacks(new CommandCallback()); // Set the command callback
 
@@ -116,17 +126,17 @@ bool setupBLE() {
 
 void loopBLE() {
   // Logic for handling BLE loop tasks, if any
-  delay(100); 
+  delay(100);
 }
 
 // Function to send CoT or Status data to ATAK
-void sendDataBLE(const uint8_t* data, size_t len, bool forcePlaintext) {
+void sendDataBLE(const uint8_t* data, size_t len) {
   if (pCoTCharacteristic == nullptr || pServer->getConnectedCount() == 0) {
     Serial.println("BLE not connected, cannot send data.");
     logAuditEvent(AUDIT_EVENT_ERROR, 1, "BLE", "Send failed - not connected", false);
     return;
   }
-  
+
   // Input validation for outgoing data
   if (len == 0 || len > MAX_MESSAGE_LENGTH) {
     logAuditEvent(AUDIT_EVENT_ERROR, 1, "BLE", "Send failed - invalid data length", false);
@@ -134,22 +144,29 @@ void sendDataBLE(const uint8_t* data, size_t len, bool forcePlaintext) {
   }
 
   String outgoingPayload = "";
-  if (forcePlaintext) {
-    outgoingPayload = String((const char*)data).substring(0, len);
-  } else if (!encodeOutgoingPayload(data, len, outgoingPayload)) {
+  if (!encodeOutgoingPayload(data, len, outgoingPayload)) {
     logAuditEvent(AUDIT_EVENT_ERROR, 2, "BLE", "Send failed - encryption error", false);
     return;
   }
-  
-  pCoTCharacteristic->setValue(outgoingPayload.c_str());
-  pCoTCharacteristic->notify();
-  
-  {
-    Serial.print("Sent data via BLE: ");
-    Serial.print(outgoingPayload.substring(0, 64)); // Limit serial output
-    Serial.println();
-    logAuditEvent(AUDIT_EVENT_DATA_SENT, 0, "BLE", 
-                 String("Data sent, len: " + String(outgoingPayload.length())).c_str(), true);
+
+  char messageIdBuffer[9];
+  snprintf(messageIdBuffer, sizeof(messageIdBuffer), "%08lx", (unsigned long)esp_random());
+  String messageId(messageIdBuffer);
+  size_t frameCount = (outgoingPayload.length() + BLE_FRAME_PAYLOAD_BYTES - 1) / BLE_FRAME_PAYLOAD_BYTES;
+  if (frameCount == 0 || frameCount > BLE_MAX_FRAME_PARTS) {
+    logAuditEvent(AUDIT_EVENT_ERROR, 2, "BLE", "Send failed - frame count exceeded", false);
+    return;
   }
+  for (size_t index = 0; index < frameCount; index++) {
+    size_t start = index * BLE_FRAME_PAYLOAD_BYTES;
+    size_t end = start + BLE_FRAME_PAYLOAD_BYTES;
+    if (end > outgoingPayload.length()) end = outgoingPayload.length();
+    String frame = buildBleFrame(messageId, index, frameCount, outgoingPayload.substring(start, end));
+    pCoTCharacteristic->setValue(frame.c_str());
+    pCoTCharacteristic->indicate();
+  }
+
+  logAuditEvent(AUDIT_EVENT_DATA_SENT, 0, "BLE",
+               String("Data sent, len: " + String(outgoingPayload.length())).c_str(), true);
 }
 #endif

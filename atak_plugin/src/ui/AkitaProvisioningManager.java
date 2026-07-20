@@ -75,7 +75,7 @@ public final class AkitaProvisioningManager {
         if (hasText(state.customSecret)) {
             return state.customSecret;
         }
-        return Config.PROVISIONING_SECRET;
+        return "";
     }
 
     public static String getActiveProvisioningSecret(SharedPreferences preferences) {
@@ -83,7 +83,7 @@ public final class AkitaProvisioningManager {
         if (hasText(state.customSecret)) {
             return state.customSecret;
         }
-        return Config.PROVISIONING_SECRET;
+        return "";
     }
 
     public static boolean hasCustomSecret(Context context) {
@@ -109,7 +109,9 @@ public final class AkitaProvisioningManager {
     }
 
     public static boolean isEncryptionEnabled(SharedPreferences preferences) {
-        return preferences.getBoolean(PREF_ENCRYPTION_ENABLED, true);
+        // Operational encryption is mandatory. Retain the preference key only so
+        // older installations migrate without changing protocol behavior.
+        return true;
     }
 
     public static String rotateProvisioningSecret(Context context) {
@@ -125,9 +127,11 @@ public final class AkitaProvisioningManager {
     }
 
     public static void setCustomProvisioningSecret(Context context, String secret) {
+        String normalizedSecret = normalizeValue(secret);
+        validateSecret(normalizedSecret);
         SharedPreferences preferences = getPreferences(context);
         ProvisioningState state = getStateStore(context).readState();
-        state.customSecret = normalizeValue(secret);
+        state.customSecret = normalizedSecret;
         persistStateOrThrow(context, state);
         clearSensitivePreferenceMirrors(preferences);
         signalSensitiveStateChanged(preferences, true, false);
@@ -138,9 +142,7 @@ public final class AkitaProvisioningManager {
         if (hasText(state.customSecret)) {
             return "Custom secret configured: " + maskSecret(state.customSecret);
         }
-        return isActiveSecretPlaceholder(context)
-                ? "Using build-time placeholder secret"
-                : "Using build-time deployment secret";
+        return "Unprovisioned — generate or import a per-device secret";
     }
 
     public static String getProvisioningSummary(SharedPreferences preferences) {
@@ -148,15 +150,15 @@ public final class AkitaProvisioningManager {
         if (hasText(state.customSecret)) {
             return "Custom secret configured: " + maskSecret(state.customSecret);
         }
-        return isActiveSecretPlaceholder(preferences)
-                ? "Using build-time placeholder secret"
-                : "Using build-time deployment secret";
+        return "Unprovisioned — generate or import a per-device secret";
     }
 
     public static String createProvisioningBundle(Context context, String deviceAlias) {
         SharedPreferences preferences = getPreferences(context);
         ProvisioningState state = getStateStore(context).readState();
         String alias = sanitizeBundleField(deviceAlias);
+        String activeSecret = getActiveProvisioningSecret(context);
+        validateSecret(activeSecret);
         String bundle = String.format(
                 Locale.US,
                 "%s|%s|%s|%s|%d|%s",
@@ -165,10 +167,10 @@ public final class AkitaProvisioningManager {
                 Config.ENCRYPTED_PAYLOAD_VERSION,
                 Config.ENCRYPTED_KEY_ID,
                 isEncryptionEnabled(preferences) ? 1 : 0,
-                getActiveProvisioningSecret(context));
+                activeSecret);
         state.stagedBundle = bundle;
         state.lastBundleGeneratedAt = System.currentTimeMillis();
-            persistStateOrThrow(context, state);
+        persistStateOrThrow(context, state);
         clearSensitivePreferenceMirrors(preferences);
         signalSensitiveStateChanged(preferences, false, true);
         AkitaMissionControl.getInstance(context).recordProvisioningEvent(
@@ -204,9 +206,11 @@ public final class AkitaProvisioningManager {
         ProvisioningState state = getStateStore(context).readState();
         ProvisioningBundle bundle = parseProvisioningBundle(state.stagedBundle);
         state.customSecret = bundle.secret;
+        state.stagedBundle = "";
         state.lastRotationAt = System.currentTimeMillis();
         persistStateOrThrow(context, state);
         preferences.edit()
+                .putString("ble_device_name", bundle.deviceAlias)
                 .putBoolean(PREF_ENCRYPTION_ENABLED, bundle.encryptionEnabled)
                 .apply();
         clearSensitivePreferenceMirrors(preferences);
@@ -219,25 +223,24 @@ public final class AkitaProvisioningManager {
     }
 
     public static String buildProvisioningStageCommand(Context context) {
-        ProvisioningState state = getStateStore(context).readState();
-        if (hasText(state.stagedBundle)) {
-            return Config.CMD_PROVISION_STAGE_PREFIX + parseProvisioningBundle(state.stagedBundle).secret;
-        }
-        return Config.CMD_PROVISION_STAGE_PREFIX + getActiveProvisioningSecret(context);
+        String secret = getActiveProvisioningSecret(context);
+        validateSecret(secret);
+        return Config.CMD_PROVISION_STAGE_PREFIX + secret + ":" + (System.currentTimeMillis() / 1000L);
     }
 
     public static byte[] buildProvisioningStageCommandBytes(Context context) {
-        ProvisioningState state = getStateStore(context).readState();
-        String secret = hasText(state.stagedBundle)
-                ? parseProvisioningBundle(state.stagedBundle).secret
-                : getActiveProvisioningSecret(context);
+        String secret = getActiveProvisioningSecret(context);
+        validateSecret(secret);
 
         byte[] prefixBytes = Config.CMD_PROVISION_STAGE_PREFIX.getBytes(StandardCharsets.UTF_8);
         byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
-        byte[] commandBytes = new byte[prefixBytes.length + secretBytes.length];
+        byte[] timestampBytes = (":" + (System.currentTimeMillis() / 1000L)).getBytes(StandardCharsets.US_ASCII);
+        byte[] commandBytes = new byte[prefixBytes.length + secretBytes.length + timestampBytes.length];
         System.arraycopy(prefixBytes, 0, commandBytes, 0, prefixBytes.length);
         System.arraycopy(secretBytes, 0, commandBytes, prefixBytes.length, secretBytes.length);
+        System.arraycopy(timestampBytes, 0, commandBytes, prefixBytes.length + secretBytes.length, timestampBytes.length);
         wipe(secretBytes);
+        wipe(timestampBytes);
         return commandBytes;
     }
 
@@ -431,14 +434,15 @@ public final class AkitaProvisioningManager {
             try (FileInputStream inputStream = stateFile.openRead()) {
                 payloadBytes = readAllBytes(inputStream);
                 if (payloadBytes.length == 0) {
-                    return migrateLegacyState();
+                    Log.e(TAG, "Encrypted provisioning state is empty; refusing legacy fallback");
+                    return new ProvisioningState("", "", 0L, 0L);
                 }
                 ProvisioningState state = parseStoredState(payloadBytes);
                 clearSensitivePreferenceMirrors(preferences);
                 return state;
             } catch (IOException | JSONException | GeneralSecurityException exception) {
-                Log.w(TAG, "Failed to read encrypted provisioning state; falling back to legacy preferences", exception);
-                return migrateLegacyState();
+                Log.e(TAG, "Failed to read encrypted provisioning state; refusing legacy fallback", exception);
+                return new ProvisioningState("", "", 0L, 0L);
             } finally {
                 wipe(payloadBytes);
             }
@@ -449,6 +453,11 @@ public final class AkitaProvisioningManager {
             byte[] serializedState = null;
             byte[] encryptedPayload = null;
             try {
+                File baseFile = stateFile.getBaseFile();
+                if (baseFile.exists() && !baseFile.isFile()) {
+                    Log.w(TAG, "Refusing to replace non-file provisioning state path: " + stateFilePath);
+                    return false;
+                }
                 outputStream = stateFile.startWrite();
                 serializedState = state.toJson().toString().getBytes(StandardCharsets.UTF_8);
                 encryptedPayload = stateCipher.encrypt(serializedState);
@@ -614,19 +623,31 @@ public final class AkitaProvisioningManager {
         String alias = sanitizeBundleField(parts[1]);
         String version = parts[2].trim();
         String keyId = parts[3].trim();
-        boolean encryptionEnabled = "1".equals(parts[4].trim());
-        String secret = parts[5].trim();
-        if (secret.length() < 12) {
-            throw new IllegalArgumentException("Provisioning bundle secret is too short.");
+        if (!Config.ENCRYPTED_PAYLOAD_VERSION.equals(version)
+                || !Config.ENCRYPTED_KEY_ID.equals(keyId)) {
+            throw new IllegalArgumentException("Provisioning bundle protocol metadata is incompatible.");
         }
+        boolean encryptionEnabled = "1".equals(parts[4].trim());
+        if (!encryptionEnabled) {
+            throw new IllegalArgumentException("Provisioning bundles must enable encryption.");
+        }
+        String secret = parts[5].trim();
+        validateSecret(secret);
         return new ProvisioningBundle(alias, version, keyId, encryptionEnabled, secret);
     }
 
     private static String sanitizeBundleField(String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return "AkitaNode01";
+        String alias = value == null ? "" : value.trim();
+        if (alias.isEmpty() || alias.length() > 64) {
+            throw new IllegalArgumentException("Device aliases must contain 1 to 64 characters.");
         }
-        return value.trim().replace('|', '_');
+        for (int index = 0; index < alias.length(); index++) {
+            char c = alias.charAt(index);
+            if (!Character.isLetterOrDigit(c) && c != '-' && c != '_') {
+                throw new IllegalArgumentException("Device aliases may contain only letters, digits, dash, and underscore.");
+            }
+        }
+        return alias;
     }
 
     private static ProvisioningStateStore getStateStore(Context context) {
@@ -660,6 +681,18 @@ public final class AkitaProvisioningManager {
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private static void validateSecret(String secret) {
+        if (secret == null || secret.length() < 16 || secret.length() > 128) {
+            throw new IllegalArgumentException("Provisioning secrets must contain 16 to 128 characters.");
+        }
+        for (int index = 0; index < secret.length(); index++) {
+            char c = secret.charAt(index);
+            if (!Character.isLetterOrDigit(c) && c != '-' && c != '_' && c != '.') {
+                throw new IllegalArgumentException("Provisioning secrets may contain only letters, digits, dash, underscore, and period.");
+            }
+        }
     }
 
     private static String normalizeValue(String value) {

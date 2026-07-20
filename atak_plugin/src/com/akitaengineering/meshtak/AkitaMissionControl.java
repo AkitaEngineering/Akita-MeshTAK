@@ -18,6 +18,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -251,6 +253,9 @@ public final class AkitaMissionControl {
 
     public synchronized MailboxRecord queueMessage(String format, String payload, String preferredRoute) {
         List<MailboxRecord> records = readMailboxRecords();
+        if (records.size() >= MAX_MAILBOX_RECORDS && findRemovableMailboxIndex(records) < 0) {
+            throw new IllegalStateException("Mission mailbox is full of active traffic; wait for acknowledgements before queuing more data.");
+        }
         long now = System.currentTimeMillis();
         MailboxRecord record = new MailboxRecord(
                 createMessageId(),
@@ -274,7 +279,7 @@ public final class AkitaMissionControl {
                 STATUS_PENDING,
                 record.format,
                 record.payload,
-                "Message queued for guaranteed delivery"));
+                "Message queued pending a peer acknowledgement"));
         trimReplayEvents(events);
         writeState(records, events);
         return record;
@@ -673,12 +678,16 @@ public final class AkitaMissionControl {
     }
 
     private void writeState(List<MailboxRecord> records, List<ReplayEvent> events) {
-        stateStore.writeState(records, events);
+        if (!stateStore.writeState(records, events)) {
+            throw new IllegalStateException("Unable to persist encrypted mission state.");
+        }
         signalStateChanged(true, true);
     }
 
     private void persistReplayEvents(List<ReplayEvent> events) {
-        stateStore.writeReplayEvents(events);
+        if (!stateStore.writeReplayEvents(events)) {
+            throw new IllegalStateException("Unable to persist encrypted mission replay state.");
+        }
         signalStateChanged(false, true);
     }
 
@@ -892,8 +901,10 @@ public final class AkitaMissionControl {
 
     private final class MissionStateStore {
         private static final String STATE_FILE_NAME = "akita-mission-state.json";
+        private static final int MAX_STATE_FILE_BYTES = 1024 * 1024;
 
         private final AtomicFile stateFile;
+        private final AppStateCipher stateCipher = new AppStateCipher("akita_mission_state_key");
 
         private MissionStateStore(Context context) {
             File stateDirectory = context.getNoBackupFilesDir();
@@ -905,45 +916,86 @@ public final class AkitaMissionControl {
                 return migrateLegacyState();
             }
 
+            byte[] stored = null;
+            byte[] plaintext = null;
             try (FileInputStream inputStream = stateFile.openRead()) {
-                String payload = new String(readAllBytes(inputStream), StandardCharsets.UTF_8);
-                if (payload.trim().isEmpty()) {
-                    return new MissionStateSnapshot(new ArrayList<>(), new ArrayList<>());
+                stored = readAllBytes(inputStream);
+                try {
+                    plaintext = stateCipher.decrypt(stored);
+                    return parseStatePayload(new String(plaintext, StandardCharsets.UTF_8));
+                } catch (GeneralSecurityException encryptedReadFailure) {
+                    MissionStateSnapshot legacy = parseLegacyPlaintextState(stored);
+                    if (!writeState(legacy.mailboxRecords, legacy.replayEvents)) {
+                        Log.e(TAG, "Unable to encrypt legacy mission state; leaving it unread until migration succeeds");
+                        return new MissionStateSnapshot(new ArrayList<>(), new ArrayList<>());
+                    }
+                    Log.i(TAG, "Migrated legacy plaintext mission state to authenticated storage");
+                    return legacy;
                 }
-
-                JSONObject root = new JSONObject(payload);
-                return new MissionStateSnapshot(
-                        parseMailboxRecords(root.optJSONArray("mailboxRecords")),
-                        parseReplayEvents(root.optJSONArray("replayEvents")));
-            } catch (IOException | JSONException e) {
-                Log.w(TAG, "Failed to read mission state from disk; falling back to legacy preferences", e);
-                return migrateLegacyState();
+            } catch (IOException | JSONException | GeneralSecurityException e) {
+                Log.e(TAG, "Failed to read authenticated mission state; quarantining corrupt data", e);
+                quarantineCorruptState();
+                return new MissionStateSnapshot(new ArrayList<>(), new ArrayList<>());
+            } finally {
+                if (stored != null) Arrays.fill(stored, (byte) 0);
+                if (plaintext != null) Arrays.fill(plaintext, (byte) 0);
             }
         }
 
-        private void writeState(List<MailboxRecord> records, List<ReplayEvent> events) {
+        private MissionStateSnapshot parseStatePayload(String payload) throws JSONException {
+            if (payload.trim().isEmpty()) {
+                return new MissionStateSnapshot(new ArrayList<>(), new ArrayList<>());
+            }
+            JSONObject root = new JSONObject(payload);
+            if (root.optInt("schemaVersion", -1) != 1) {
+                throw new JSONException("Unsupported mission state schema");
+            }
+            return new MissionStateSnapshot(
+                    parseMailboxRecords(root.optJSONArray("mailboxRecords")),
+                    parseReplayEvents(root.optJSONArray("replayEvents")));
+        }
+
+        private MissionStateSnapshot parseLegacyPlaintextState(byte[] stored)
+                throws JSONException, GeneralSecurityException {
+            String candidate = new String(stored, StandardCharsets.UTF_8).trim();
+            if (!candidate.startsWith("{") || candidate.contains("\"storageFormat\"")) {
+                throw new GeneralSecurityException("State file is neither authenticated nor a supported legacy file.");
+            }
+            return parseStatePayload(candidate);
+        }
+
+        private boolean writeState(List<MailboxRecord> records, List<ReplayEvent> events) {
             FileOutputStream outputStream = null;
+            byte[] plaintext = null;
+            byte[] encrypted = null;
             try {
                 JSONObject root = new JSONObject();
                 root.put("schemaVersion", 1);
                 root.put("mailboxRecords", new JSONArray(serializeMailboxRecords(records)));
                 root.put("replayEvents", new JSONArray(serializeReplayEvents(events)));
 
+                plaintext = root.toString().getBytes(StandardCharsets.UTF_8);
+                encrypted = stateCipher.encrypt(plaintext);
                 outputStream = stateFile.startWrite();
-                outputStream.write(root.toString().getBytes(StandardCharsets.UTF_8));
+                outputStream.write(encrypted);
                 outputStream.flush();
                 stateFile.finishWrite(outputStream);
-            } catch (IOException | JSONException e) {
+                return true;
+            } catch (IOException | JSONException | GeneralSecurityException e) {
                 Log.w(TAG, "Failed to persist mission state to disk", e);
                 if (outputStream != null) {
                     stateFile.failWrite(outputStream);
                 }
+                return false;
+            } finally {
+                if (plaintext != null) Arrays.fill(plaintext, (byte) 0);
+                if (encrypted != null) Arrays.fill(encrypted, (byte) 0);
             }
         }
 
-        private void writeReplayEvents(List<ReplayEvent> events) {
+        private boolean writeReplayEvents(List<ReplayEvent> events) {
             MissionStateSnapshot snapshot = readStateSnapshot();
-            writeState(snapshot.mailboxRecords, events);
+            return writeState(snapshot.mailboxRecords, events);
         }
 
         private MissionStateSnapshot migrateLegacyState() {
@@ -953,6 +1005,15 @@ public final class AkitaMissionControl {
                 writeState(records, events);
             }
             return new MissionStateSnapshot(records, events);
+        }
+
+        private void quarantineCorruptState() {
+            File baseFile = stateFile.getBaseFile();
+            if (!baseFile.exists()) return;
+            File quarantine = new File(baseFile.getParentFile(), baseFile.getName() + ".corrupt-" + System.currentTimeMillis());
+            if (!baseFile.renameTo(quarantine)) {
+                Log.e(TAG, "Unable to quarantine corrupt mission state file");
+            }
         }
 
         private List<MailboxRecord> readLegacyMailboxRecords() {
@@ -1026,6 +1087,9 @@ public final class AkitaMissionControl {
             byte[] buffer = new byte[4096];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
+                if (outputStream.size() + bytesRead > MAX_STATE_FILE_BYTES) {
+                    throw new IOException("Mission state file exceeds the safety limit");
+                }
                 outputStream.write(buffer, 0, bytesRead);
             }
             return outputStream.toByteArray();

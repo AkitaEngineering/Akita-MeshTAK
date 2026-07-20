@@ -43,7 +43,7 @@ bool initSecurityFromProvisioning(const String& deviceId, const String& sharedSe
 
 // Encrypt data with AES-256-GCM
 // Returns encrypted data length, or 0 on error
-size_t encryptData(const uint8_t* plaintext, size_t plaintext_len, 
+size_t encryptData(const uint8_t* plaintext, size_t plaintext_len,
                    uint8_t* ciphertext, size_t ciphertext_max_len,
                    uint8_t* iv_out);
 
@@ -53,7 +53,9 @@ size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
                    const uint8_t* iv, uint8_t* plaintext, size_t plaintext_max_len);
 
 // Generate HMAC-SHA256 for message integrity
-void generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out);
+// Returns false on any cryptographic failure. Callers must not use hmac_out
+// unless this function succeeds.
+bool generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out);
 
 // Verify HMAC-SHA256 for message integrity
 // Returns true if HMAC is valid

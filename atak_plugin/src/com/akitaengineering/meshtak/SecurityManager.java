@@ -17,6 +17,7 @@ import java.security.SecureRandom;
 import java.security.spec.KeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Security Manager for encryption, authentication, and message integrity.
@@ -30,37 +31,37 @@ public class SecurityManager {
     private static final int IV_SIZE = 12;
     private static final int GCM_TAG_BITS = 128;
     private static final int HMAC_SIZE = 32;
-    private static final int MIN_PROVISIONING_SECRET_LENGTH = 12;
-    
+    private static final int MIN_PROVISIONING_SECRET_LENGTH = 16;
+
     private SecretKey aesKey;
     private SecretKey hmacKey;
     private volatile boolean initialized = false;
     private volatile boolean encryptionEnabled = true;
-    
+
     // Security statistics
     private long messagesEncrypted = 0;
     private long messagesDecrypted = 0;
     private long integrityFailures = 0;
     private long authFailures = 0;
-    
+
     private static SecurityManager instance;
-    
+
     private SecurityManager() {
         // Private constructor for singleton
     }
-    
+
     public static synchronized SecurityManager getInstance() {
         if (instance == null) {
             instance = new SecurityManager();
         }
         return instance;
     }
-    
+
     /**
      * Initialize security with keys.
      * In production, keys should be provisioned securely, not hardcoded.
      */
-    public boolean initialize(byte[] aesKeyBytes, byte[] hmacKeyBytes) {
+    public synchronized boolean initialize(byte[] aesKeyBytes, byte[] hmacKeyBytes) {
         try {
             if (aesKeyBytes == null || aesKeyBytes.length != AES_KEY_SIZE / 8) {
                 Log.e(TAG, "Invalid AES key length");
@@ -70,7 +71,7 @@ public class SecurityManager {
                 Log.e(TAG, "Refusing to initialize with an all-zero AES key");
                 return false;
             }
-            
+
             if (hmacKeyBytes == null || hmacKeyBytes.length != HMAC_SIZE) {
                 Log.e(TAG, "Invalid HMAC key length");
                 return false;
@@ -79,11 +80,11 @@ public class SecurityManager {
                 Log.e(TAG, "Refusing to initialize with an all-zero HMAC key");
                 return false;
             }
-            
+
             aesKey = new SecretKeySpec(aesKeyBytes, "AES");
             hmacKey = new SecretKeySpec(hmacKeyBytes, HMAC_ALGORITHM);
             initialized = true;
-            
+
             Log.i(TAG, "Security manager initialized successfully");
             return true;
         } catch (Exception e) {
@@ -91,11 +92,11 @@ public class SecurityManager {
             return false;
         }
     }
-    
+
     /**
      * Generate new keys (for initial setup).
      */
-    public boolean generateKeys() {
+    public synchronized boolean generateKeys() {
         byte[] generatedAesKey = null;
         byte[] generatedHmacKey = null;
         try {
@@ -103,7 +104,7 @@ public class SecurityManager {
             KeyGenerator keyGen = KeyGenerator.getInstance("AES");
             keyGen.init(AES_KEY_SIZE);
             SecretKey newAesKey = keyGen.generateKey();
-            
+
             // Generate HMAC key
             KeyGenerator hmacKeyGen = KeyGenerator.getInstance("HmacSHA256");
             hmacKeyGen.init(256);
@@ -124,7 +125,7 @@ public class SecurityManager {
     /**
      * Derive deterministic AES/HMAC keys from provisioning material.
      */
-    public boolean initializeFromProvisioning(String deviceId, String sharedSecret) {
+    public synchronized boolean initializeFromProvisioning(String deviceId, String sharedSecret) {
         if (deviceId == null || deviceId.isEmpty() || sharedSecret == null || sharedSecret.isEmpty()) {
             Log.e(TAG, "Provisioning material is missing");
             return false;
@@ -132,11 +133,6 @@ public class SecurityManager {
         if (sharedSecret.length() < MIN_PROVISIONING_SECRET_LENGTH) {
             Log.e(TAG, "Provisioning secret is too short");
             return false;
-        }
-
-        if (Config.isPlaceholderSecret() && Config.PROVISIONING_SECRET.equals(sharedSecret)) {
-            Log.w(TAG, "SECURITY WARNING: Provisioning secret is still set to the compile-time placeholder. "
-                    + "Replace Config.PROVISIONING_SECRET before deploying to production.");
         }
 
         char[] sharedSecretChars = sharedSecret.toCharArray();
@@ -173,23 +169,21 @@ public class SecurityManager {
             wipe(saltBytes);
         }
     }
-    
+
     /**
      * Encrypt data with AES-256-GCM.
      */
-    public byte[] encrypt(byte[] plaintext) {
+    public synchronized byte[] encrypt(byte[] plaintext) {
         if (!initialized || plaintext == null) {
             Log.e(TAG, "Security not initialized or null plaintext");
             return null;
         }
 
-        // Compatibility: if encryption is not enabled, return plaintext copy
         if (!encryptionEnabled) {
-            Log.w(TAG, "Encryption disabled – returning plaintext copy");
-            byte[] copy = Arrays.copyOf(plaintext, plaintext.length);
-            return copy;
+            Log.e(TAG, "Encryption is disabled; refusing to encrypt operational traffic");
+            return null;
         }
-        
+
         byte[] iv = null;
         byte[] ciphertext = null;
         try {
@@ -201,12 +195,12 @@ public class SecurityManager {
             cipher.init(Cipher.ENCRYPT_MODE, aesKey, gcmSpec);
 
             ciphertext = cipher.doFinal(plaintext);
-            
+
             // Prepend IV to ciphertext
             byte[] result = new byte[IV_SIZE + ciphertext.length];
             System.arraycopy(iv, 0, result, 0, IV_SIZE);
             System.arraycopy(ciphertext, 0, result, IV_SIZE, ciphertext.length);
-            
+
             messagesEncrypted++;
             return result;
         } catch (Exception e) {
@@ -217,34 +211,32 @@ public class SecurityManager {
             wipe(ciphertext);
         }
     }
-    
+
     /**
      * Decrypt data with AES-256-GCM.
      */
-    public byte[] decrypt(byte[] ciphertext) {
+    public synchronized byte[] decrypt(byte[] ciphertext) {
         if (!initialized || ciphertext == null || ciphertext.length < IV_SIZE) {
             Log.e(TAG, "Security not initialized or invalid ciphertext");
             return null;
         }
 
-        // Compatibility: if encryption is not enabled, return ciphertext copy
         if (!encryptionEnabled) {
-            Log.w(TAG, "Encryption disabled – returning data without decryption");
-            byte[] copy = Arrays.copyOf(ciphertext, ciphertext.length);
-            return copy;
+            Log.e(TAG, "Encryption is disabled; refusing to decrypt operational traffic");
+            return null;
         }
-        
+
         byte[] iv = null;
         byte[] encryptedData = null;
         try {
             // Extract IV
             iv = Arrays.copyOfRange(ciphertext, 0, IV_SIZE);
             encryptedData = Arrays.copyOfRange(ciphertext, IV_SIZE, ciphertext.length);
-            
+
             Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
             GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_BITS, iv);
             cipher.init(Cipher.DECRYPT_MODE, aesKey, gcmSpec);
-            
+
             byte[] plaintext = cipher.doFinal(encryptedData);
             messagesDecrypted++;
             return plaintext;
@@ -257,15 +249,15 @@ public class SecurityManager {
             wipe(encryptedData);
         }
     }
-    
+
     /**
      * Generate HMAC for message integrity.
      */
-    public byte[] generateHMAC(byte[] data) {
+    public synchronized byte[] generateHMAC(byte[] data) {
         if (!initialized || data == null) {
             return null;
         }
-        
+
         try {
             javax.crypto.Mac mac = javax.crypto.Mac.getInstance(HMAC_ALGORITHM);
             mac.init(hmacKey);
@@ -275,16 +267,16 @@ public class SecurityManager {
             return null;
         }
     }
-    
+
     /**
      * Verify HMAC for message integrity.
      */
-    public boolean verifyHMAC(byte[] data, byte[] hmac) {
+    public synchronized boolean verifyHMAC(byte[] data, byte[] hmac) {
         if (!initialized || data == null || hmac == null) {
             integrityFailures++;
             return false;
         }
-        
+
         byte[] calculatedHMAC = generateHMAC(data);
         try {
             if (calculatedHMAC == null) {
@@ -301,7 +293,7 @@ public class SecurityManager {
             wipe(calculatedHMAC);
         }
     }
-    
+
     /**
      * Validate input string for security.
      */
@@ -309,32 +301,32 @@ public class SecurityManager {
         if (input == null) {
             return false;
         }
-        
+
         if (input.length() > maxLength) {
             return false;
         }
-        
+
         // Check for injection patterns
-        String lowerInput = input.toLowerCase();
+        String lowerInput = input.toLowerCase(Locale.ROOT);
         String[] dangerousPatterns = {
             "<script", "javascript:", "onerror=", "onload=",
             "eval(", "exec(", "system(", "<?php", "${", "$(", "`"
         };
-        
+
         for (String pattern : dangerousPatterns) {
             if (lowerInput.contains(pattern)) {
                 Log.w(TAG, "Injection pattern detected: " + pattern);
                 return false;
             }
         }
-        
+
         return true;
     }
-    
+
     public boolean isInitialized() {
         return initialized;
     }
-    
+
     public boolean isEncryptionEnabled() {
         return encryptionEnabled;
     }
@@ -346,23 +338,23 @@ public class SecurityManager {
         encryptionEnabled = true;
     }
 
-    public void setEncryptionEnabled(boolean enabled) {
+    public synchronized void setEncryptionEnabled(boolean enabled) {
         this.encryptionEnabled = enabled;
         Log.i(TAG, "Encryption enabled set to: " + enabled);
     }
-    
+
     public long getMessagesEncrypted() {
         return messagesEncrypted;
     }
-    
+
     public long getMessagesDecrypted() {
         return messagesDecrypted;
     }
-    
+
     public long getIntegrityFailures() {
         return integrityFailures;
     }
-    
+
     public long getAuthFailures() {
         return authFailures;
     }

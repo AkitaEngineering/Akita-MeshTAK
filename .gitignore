@@ -29,6 +29,7 @@ documentation/private/
 
 # PlatformIO
 .pio/
+compile_commands.json
 firmware/.pio/
 
 # OS files
@@ -38,3 +39,9 @@ Thumbs.db
 # Large binaries
 *.jar
 !atak_plugin/libs/*.jar
+
+# Signing keys and certificates (must remain outside the checkout)
+*.keystore
+*.jks
+*.p12
+*.pfx

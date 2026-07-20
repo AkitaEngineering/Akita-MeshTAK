@@ -8,6 +8,7 @@ import android.os.Looper;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -40,6 +41,7 @@ import java.util.Locale;
 
 public class SendDataView extends LinearLayout implements SharedPreferences.OnSharedPreferenceChangeListener {
 
+    private static final String TAG = "SendDataView";
     private static final String PREF_COMMAND_HISTORY = "dashboard_command_history";
     private static final String PREF_RECENT_PAYLOADS = "dashboard_recent_payloads";
     private static final String PREF_SUCCESSFUL_SENDS = "dashboard_successful_sends";
@@ -462,8 +464,17 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
             return;
         }
 
-        missionControl.queueMessage(selectedFormat, payload, connectionMethod);
-        AkitaMissionControl.DispatchBatchResult dispatchResult = flushPendingMailbox(false);
+        AkitaMissionControl.DispatchBatchResult dispatchResult;
+        try {
+            missionControl.queueMessage(selectedFormat, payload, connectionMethod);
+            dispatchResult = flushPendingMailbox(false);
+        } catch (IllegalStateException exception) {
+            Log.e(TAG, "Unable to persist or queue mission traffic", exception);
+            recordFailedSend();
+            Toast.makeText(context, exception.getMessage(), Toast.LENGTH_LONG).show();
+            refreshDashboard();
+            return;
+        }
 
         addToCommandHistory(data);
         dataToSendEditText.getText().clear();

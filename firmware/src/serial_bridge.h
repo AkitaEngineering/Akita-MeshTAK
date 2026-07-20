@@ -9,7 +9,7 @@
   #include <Arduino.h> // Include for size_t
   bool setupSerialBridge();
   void loopSerialBridge();
-  void sendDataSerial(const uint8_t* data, size_t len, bool forcePlaintext = false);
+void sendDataSerial(const uint8_t* data, size_t len);
 #endif
 
 #endif

@@ -95,8 +95,8 @@ public class MissionMapOverlay extends View {
         List<AkitaMissionMarkerRegistry.TrackedMarker> staleMarkers = registry.getStaleMarkers(STALE_THRESHOLD_MILLIS);
         AkitaMissionMarkerRegistry.TrackedMarker anchorMarker = registry.getMostRecentMarker();
 
-        PointF anchor = resolveAnchorPoint(mapView, anchorMarker, canvas.getWidth(), canvas.getHeight());
-        float sectorRadius = Math.min(canvas.getWidth(), canvas.getHeight()) * 0.16f;
+        PointF anchor = resolveAnchorPoint(mapView, anchorMarker, getWidth(), getHeight());
+        float sectorRadius = Math.min(getWidth(), getHeight()) * 0.16f;
         float geofenceHalfSize = sectorRadius * 1.35f;
 
         drawRouteHealthBanner(canvas, palette, incidentState, registry.getTrackedMarkerCount(), staleMarkers.size());
@@ -112,9 +112,9 @@ public class MissionMapOverlay extends View {
                                        int trackedCount,
                                        int staleCount) {
         float density = context.getResources().getDisplayMetrics().density;
-        float left = canvas.getWidth() - (300f * density);
+        float left = getWidth() - (300f * density);
         float top = 18f * density;
-        float right = canvas.getWidth() - (18f * density);
+        float right = getWidth() - (18f * density);
         float bottom = top + (88f * density);
         RectF card = new RectF(left, top, right, bottom);
 

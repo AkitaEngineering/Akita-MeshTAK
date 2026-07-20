@@ -2,11 +2,13 @@
 ## AKITA MESHTAK SYSTEM
 ## TECHNICAL MANUAL
 
-**Document Number:** TM-AKITA-MESHTAK-001  
-**Revision:** 1.4  
-**Date:** 2026-04-14  
-**Classification:** UNCLASSIFIED  
-**Prepared By:** Akita Engineering  
+**Document Number:** TM-AKITA-MESHTAK-001
+**Revision:** 1.4
+**Date:** 2026-04-14
+**Classification:** UNCLASSIFIED
+
+> **Architecture boundary:** Akita firmware runs on a companion ESP32/Heltec controller and talks by UART to a separate node running official Meshtastic firmware. It does not replace Meshtastic firmware or drive the companion board's onboard LoRa radio.
+**Prepared By:** Akita Engineering
 **Approved By:** [Approval Authority]
 
 ---
@@ -66,7 +68,7 @@ This manual covers:
 This manual applies to:
 - Akita MeshTAK Firmware Version 0.2.0 and later
 - Akita MeshTAK Android Plugin Version 0.2.0 and later
-- Heltec V3 and compatible Meshtastic devices
+- ESP32/Heltec companion controllers plus separate UART-connected Meshtastic radio nodes
 - Android devices running ATAK (Android Tactical Assault Kit)
 
 ### 1.4 User Responsibilities
@@ -110,20 +112,23 @@ Users of this manual are responsible for:
 ## 3. SYSTEM DESCRIPTION
 
 ### 3.1 System Overview
-The Akita MeshTAK System is a secure communication and situational awareness platform that integrates Meshtastic mesh networking with the Android Tactical Assault Kit (ATAK). The system enables off-grid communication, location tracking, emergency alerts, device health monitoring, guaranteed-delivery mailbox routing, failover preservation between BLE and Serial, and runtime provisioning ceremonies in environments where traditional communication infrastructure is unavailable or compromised.
+The Akita MeshTAK System is a secure communication and situational awareness platform that integrates Meshtastic mesh networking with the Android Tactical Assault Kit (ATAK). The system enables off-grid communication, location tracking, emergency alerts, device health monitoring, acknowledgement-tracked mailbox routing, failover preservation between BLE and Serial, and runtime provisioning ceremonies in environments where traditional communication infrastructure is unavailable or compromised.
 
 ### 3.2 System Components
 
 #### 3.2.1 Hardware Components
-1. **Meshtastic Device (Heltec V3 or compatible)**
-   - ESP32 microcontroller
-   - LoRa radio transceiver
+1. **Akita Companion Controller (ESP32/Heltec V3 or compatible)**
+   - ESP32 microcontroller running Akita firmware
    - Bluetooth Low Energy (BLE) capability
    - USB Serial interface
    - Battery power management
    - Display (optional)
 
-2. **Android Device**
+2. **Meshtastic Radio Node**
+   - Separate supported radio running official Meshtastic firmware
+   - UART connection to the companion controller
+
+3. **Android Device**
    - Android 7.0 (API 24) or later
    - Bluetooth 4.0 or later
    - USB On-The-Go (OTG) support
@@ -154,7 +159,7 @@ The Akita MeshTAK System is a secure communication and situational awareness pla
        |
        +---> [Serial Service] <---> [USB Serial] <---> [Firmware]
        |
-       +---> [MQTT Service] <---> [WiFi/MQTT] <---> [Firmware] (Optional)
+       +---> [MQTT Service] <---> [WiFi/MQTT] <---> [Firmware] (Isolated bench only; plaintext)
 ```
 
 Mission Control inside the plugin persists mailbox queue records, replay checkpoints, and failover state before traffic reaches the active bearer. The provisioning manager handles air-gapped bundle generation, local bundle application, and trusted local stage-to-device actions.
@@ -163,7 +168,7 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 1. **Location Data (CoT)**
    - Meshtastic Network → Firmware → Plugin → ATAK Map
 
-2. **Guaranteed Delivery Mailbox**
+2. **Acknowledgement-Tracked Delivery Mailbox**
    - ATAK → Plugin mailbox queue → BLE/Serial bearer → Firmware mailbox relay → Meshtastic Network → peer mailbox acknowledgement → Firmware → Plugin dashboard
 
 3. **Provisioning Ceremony**
@@ -179,7 +184,7 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 - **Key Size**: 256 bits
 - **Nonce**: 96 bits (random per message)
 - **Authentication Tag**: 128 bits
-- **Envelope Format**: `ENC:v1:k1:<hex>`
+- **Envelope Format**: `ENC:v2:k1:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>`
 
 #### 3.4.2 Integrity
 - **Transport Integrity**: AES-GCM authentication tag verification
@@ -217,7 +222,7 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 - **Build System**: PlatformIO
 - **Compiler**: GCC for ESP32
 - **Libraries**:
-  - Meshtastic Arduino Library (v0.0.7)
+  - Meshtastic Arduino Library (v0.0.7, pinned commit `77cdc035dbc3813c5f64efa24d20dcb698cdfc59`)
   - BLE Library (ESP32)
   - mbedTLS (for encryption)
 
@@ -232,7 +237,8 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 - **BLE**:
   - Service UUID: Configurable (see Section 6.2)
   - Characteristic UUIDs: Configurable
-  - MTU: 20 bytes (default), 512 bytes (negotiated)
+  - ATT MTU: 23 bytes by default; the plugin requests 247 and requires at least 64
+  - Application payloads are split into bounded, ordered frames sized to the negotiated ATT payload
   - Range: 10-50 meters (line of sight)
 
 - **Serial**:
@@ -253,7 +259,7 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
    - Local relay acknowledgement: `STATUS:MAILBOX:ACK:<messageId>:IN_FLIGHT|FAILED`
    - Peer delivery acknowledgement: `STATUS:MAILBOX:ACK:<messageId>:DELIVERED:<peerNode>`
    - Inbound mission traffic: `STATUS:MAILBOX:RX:<originNode>:<messageId>:<format>:<payload>`
-   - Runtime staging command: `CMD:PROV:STAGE:<secret>`
+   - Runtime staging command: `CMD:PROV:STAGE:<secret>:<epoch-seconds>`
    - Runtime staging status: `STATUS:PROV:STAGED:<version>:<key-id>` or `STATUS:PROV:FAILED:<version>:<key-id>`
 
 ### 4.2 Android Plugin Specifications
@@ -353,25 +359,25 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 3. Navigate to `firmware/` directory
 
 #### 5.2.2 Configuration
-1. Open `firmware/src/config.h`
-2. Configure the following parameters:
+1. Prefer the `AKITA_*` environment variables documented in `firmware/README.md`; source edits must never contain committed deployment secrets.
+2. Configure the following parameters through supported environment inputs or, for development-only constants, `firmware/src/config.h`:
    - `DEVICE_ID`: Unique device identifier
    - `BLE_SERVICE_UUID`: BLE service UUID
    - `BLE_COT_CHARACTERISTIC_UUID`: CoT characteristic UUID
    - `BLE_WRITE_CHARACTERISTIC_UUID`: Write characteristic UUID
-   - `PROVISIONING_SECRET`: Deployment provisioning secret
+   - `MESH_SERIAL_RX_PIN`, `MESH_SERIAL_TX_PIN`: UART pins wired to the separate Meshtastic node
    - `LORA_REGION`: LoRa region (EU868, US915, etc.)
-   - `MQTT_SERVER`, `MQTT_WIFI_SSID`, `MQTT_WIFI_PASSWORD`, `MQTT_USERNAME`, `MQTT_PASSWORD`: Required if MQTT is enabled
+   - `MQTT_SERVER`, `MQTT_WIFI_SSID`, `MQTT_WIFI_PASSWORD`, `MQTT_USERNAME`, `MQTT_PASSWORD`: Bench-only inputs if MQTT is enabled
    - `CMD_RATE_LIMIT_MS`: Minimum accepted command interval on BLE/Serial transports
 
-**CRITICAL**: UUIDs must match between firmware and Android plugin. Firmware builds fail if placeholder provisioning material, BLE UUIDs, or enabled MQTT credentials remain in place unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for bench-only rehearsal.
+**CRITICAL**: UUIDs must match between firmware and Android plugin, and production builds require explicit mesh UART pins. Firmware builds fail if placeholder BLE UUIDs remain unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined for bench-only rehearsal. Provisioning secrets are never compile-time inputs. MQTT is plaintext and prohibited in production; enabling it additionally requires `ALLOW_INSECURE_MQTT` for isolated bench testing.
 
 #### 5.2.3 Build Procedure
 1. Connect device to computer via USB
 2. Open terminal in `firmware/` directory
-3. Execute: `pio run`
+3. Execute: `pio run -e heltec_v3`
 4. Verify build completes without errors
-5. Execute: `pio run -t upload`
+5. Execute: `pio run -e heltec_v3 -t upload`
 6. Verify upload completes successfully
 
 #### 5.2.4 Verification
@@ -397,13 +403,13 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 
 #### 5.3.2 Configuration
 1. Open `atak_plugin/` in Android Studio
-2. Edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java`
-3. Configure the following parameters:
-   - `BLE_SERVICE_UUID`: Must match firmware
-   - `COT_CHARACTERISTIC_UUID`: Must match firmware
-   - `WRITE_CHARACTERISTIC_UUID`: Must match firmware
-   - `HELTEC_VENDOR_ID`: USB vendor ID (decimal)
-   - `HELTEC_PRODUCT_ID`: USB product ID (decimal)
+2. Supply release values through Gradle properties or environment variables; do not edit `Config.java`.
+3. Configure the following inputs:
+   - `AKITA_BLE_SERVICE_UUID`: Must match firmware
+   - `AKITA_BLE_COT_CHARACTERISTIC_UUID`: Must match firmware
+   - `AKITA_BLE_WRITE_CHARACTERISTIC_UUID`: Must match firmware
+   - `AKITA_HELTEC_VENDOR_ID`: USB vendor ID (decimal)
+   - `AKITA_HELTEC_PRODUCT_ID`: USB product ID (decimal)
 
 **CRITICAL**: All UUIDs and IDs must match firmware configuration.
 
@@ -462,21 +468,18 @@ Edit `firmware/src/config.h`:
 ### 6.2 Android Plugin Configuration
 
 #### 6.2.1 BLE Configuration
-Edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java`:
-```java
-public static final UUID BLE_SERVICE_UUID = 
-    UUID.fromString("0000181A-0000-1000-8000-00805F9B34FB");
-public static final UUID COT_CHARACTERISTIC_UUID = 
-    UUID.fromString("00002A6E-0000-1000-8000-00805F9B34FB");
-public static final UUID WRITE_CHARACTERISTIC_UUID = 
-    UUID.fromString("00002A6C-0000-1000-8000-00805F9B34FB");
+Supply the matching deployment UUIDs to Gradle:
+```bash
+export AKITA_BLE_SERVICE_UUID="<deployment service UUID>"
+export AKITA_BLE_COT_CHARACTERISTIC_UUID="<deployment CoT UUID>"
+export AKITA_BLE_WRITE_CHARACTERISTIC_UUID="<deployment write UUID>"
 ```
 
 #### 6.2.2 USB Configuration
-Edit `atak_plugin/src/com/akitaengineering/meshtak/Config.java`:
-```java
-public static final int HELTEC_VENDOR_ID = 1027;  // Decimal
-public static final int HELTEC_PRODUCT_ID = 24577;  // Decimal
+Supply decimal USB identifiers to Gradle:
+```bash
+export AKITA_HELTEC_VENDOR_ID="1027"
+export AKITA_HELTEC_PRODUCT_ID="24577"
 ```
 
 **NOTE**: Use `lsusb` (Linux) or Device Manager (Windows) to find vendor/product IDs.
@@ -492,8 +495,7 @@ Configure via ATAK settings:
    - BLE Device Name: Device identifier
    - Serial Baud Rate: 115200 (default)
    - Auto Bearer Failover: Preserve queued traffic and reroute between BLE/Serial when required
-   - Enable Encrypted Transport: Protected transport policy
-   - Provisioning Secret: Runtime deployment secret override
+   - Provisioning Secret: Required runtime deployment secret
    - Air-Gapped Provisioning Bundle: Offline bundle staging field
    - Rotate Provisioning Secret / Generate Provisioning Bundle / Apply Provisioning Bundle / Stage Secret To Connected Device / Reload Security State: Security lifecycle controls
    - Mock Transport Mode: No-hardware rehearsal and replay mode
@@ -504,8 +506,8 @@ Configure via ATAK settings:
 **WARNING**: Keys must be provisioned securely. Never hardcode keys in source code.
 
 **Firmware**:
-1. Configure deployment provisioning secret and active key-id metadata
-2. Store keys in ESP32 NVS (Non-Volatile Storage) with encryption
+1. Hold the physical provisioning button while booting and stage the deployment secret within the two-minute window
+2. Store the derived provisioning input in ESP32 NVS; enable ESP32 flash encryption and secure boot for production hardware
 3. Implement key rotation policy (recommended: 90 days)
 
 **Android Plugin**:
@@ -517,13 +519,13 @@ Configure via ATAK settings:
 
 **Encryption Activation (Current Behavior)**:
 - Firmware default: Encryption is enabled (SECURITY_MODE_AES256_HMAC) when provisioning metadata is valid.
-- Android plugin default: Encryption policy is controlled by the `security_encryption_enabled` setting and is enabled unless an operator explicitly disables it.
-- Android plugin provisioning source: The plugin uses the runtime provisioning secret from settings when present, with `Config.PROVISIONING_SECRET` as a fallback.
+- Android plugin policy: Operational transport encryption is mandatory and cannot be disabled in settings.
+- Android plugin provisioning source: Runtime provisioning state is protected by Android Keystore-backed authenticated encryption; no secret is embedded in the APK.
 - Key derivation: Firmware and plugin derive transport keys with PBKDF2-HMAC-SHA256 using provisioning material plus device/purpose salt.
 - Air-gapped provisioning workflow: The plugin can generate/apply bundle material offline and runtime-stage it to firmware over a trusted local bearer.
 - Mission Assurance: Placeholder provisioning material is surfaced to the operator as a degraded posture even if rehearsal traffic is possible.
 - Firmware and plugin must share matching provisioning secret, envelope version, and key-id.
-- Placeholder BLE UUIDs, provisioning values, and enabled MQTT credentials are build-blocking unless `ALLOW_PLACEHOLDER_SECRET` is explicitly defined.
+- Placeholder BLE UUIDs and unwired mesh-UART pins are build-blocking. Plaintext MQTT is independently build-blocked unless the isolated-bench `ALLOW_INSECURE_MQTT` override is defined.
 - Encrypted payloads with unknown version/key-id are rejected and logged.
 
 #### 6.3.2 Encryption Configuration
@@ -545,7 +547,7 @@ Configure via ATAK settings:
 ### 7.1 Initial Startup
 
 #### 7.1.1 Power-On Sequence
-1. Power on Meshtastic device
+1. Power on the Meshtastic radio node and Akita companion controller
 2. Wait for device initialization (LED indicators)
 3. Power on Android device
 4. Launch ATAK application
@@ -580,7 +582,7 @@ Configure via ATAK settings:
 
 #### 7.2.2 Sending Data
 1. Open "Send Data" view from ATAK menu
-2. Review the operational summary, mission assurance, guaranteed delivery mailbox, and incident board cards
+2. Review the operational summary, mission assurance, acknowledgement-tracked mailbox, and incident board cards
 3. Optionally load a mission playbook or role-pack queue action
 4. Enter message text
 5. Select data format (Plain Text, JSON, Custom)
@@ -710,7 +712,7 @@ Maintain maintenance log with:
 **Corrective Actions**:
 1. Verify USB cable connection
 2. Grant USB permission when prompted
-3. Verify vendor/product IDs in Config.java
+3. Verify the `AKITA_HELTEC_VENDOR_ID` and `AKITA_HELTEC_PRODUCT_ID` values used for the APK build
 4. Verify baud rate matches firmware (default: 115200)
 5. Install USB drivers if required
 6. Try different USB cable
@@ -731,7 +733,7 @@ Maintain maintenance log with:
 2. Check CoT XML format
 3. Verify encryption keys match
 4. Check audit logs for integrity failures
-5. Test with plain text data (if encryption disabled)
+5. Reprovision both endpoints if authenticated traffic still fails; operational plaintext fallback is intentionally unavailable
 
 #### 9.2.2 Commands Not Executed
 **Symptoms**: Commands sent but not executed
@@ -764,7 +766,7 @@ Maintain maintenance log with:
 1. Verify keys match between devices
 2. Regenerate and provision new keys
 3. Check key storage integrity
-4. Verify envelope metadata (`v1`, `k1`) matches on firmware and plugin
+4. Verify envelope metadata (`v2`, `k1`) matches on firmware and plugin
 5. Review security configuration
 
 #### 9.3.2 Integrity Failures
@@ -828,7 +830,7 @@ CMD:ALERT:SOS
 ```
 **Response**: Alert broadcast on Meshtastic network
 
-**Guaranteed Delivery Mailbox Queue**:
+**Acknowledgement-Tracked Delivery Mailbox Queue**:
 ```
 CMD:MAILBOX:PUT:<messageId>:<format>:<payload>
 ```
@@ -836,7 +838,7 @@ CMD:MAILBOX:PUT:<messageId>:<format>:<payload>
 
 **Runtime Provisioning Stage**:
 ```
-CMD:PROV:STAGE:<secret>
+CMD:PROV:STAGE:<secret>:<epoch-seconds>
 ```
 **Response**: `STATUS:PROV:STAGED:<version>:<key-id>` or `STATUS:PROV:FAILED:<version>:<key-id>`
 
@@ -1041,7 +1043,7 @@ See Section 6 for configuration examples.
 
 | Revision | Date | Description | Author |
 |----------|------|-------------|--------|
-| 1.4 | 2026-04-14 | Added guaranteed-delivery mailbox, peer receipt protocol, air-gapped provisioning ceremony, failover controls, replay workflow, and Night Green configuration details | Akita Engineering |
+| 1.4 | 2026-04-14 | Added acknowledgement-tracked mailbox, peer receipt protocol, air-gapped provisioning ceremony, failover controls, replay workflow, and Night Green configuration details | Akita Engineering |
 | 1.3 | 2026-04-14 | Updated runtime provisioning workflow, mission-assurance behavior, mission profile settings, and tactical overlay operation notes | Akita Engineering |
 | 1.2 | 2026-03-13 | Updated Meshtastic library version; fixed APK output path; corrected encryption default state for Android plugin; updated document revision | Akita Engineering |
 | 1.1 | 2026-03-12 | Updated security architecture/specifications to AES-256-GCM and versioned key-id encrypted envelope model | Akita Engineering |

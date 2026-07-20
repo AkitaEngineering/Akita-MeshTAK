@@ -17,21 +17,12 @@
 #endif
 
 // --- Security Provisioning ---
-// Replace this secret during provisioning. Keep firmware/plugin values aligned.
-#ifndef PROVISIONING_SECRET
-#define PROVISIONING_SECRET "REPLACE_WITH_DEPLOYMENT_SECRET"
+// Secrets are accepted only during the physical-presence provisioning window
+// and are stored in NVS; deployment secrets are never compiled into firmware.
+#ifndef PROVISION_BUTTON_PIN
+#define PROVISION_BUTTON_PIN 0
 #endif
-
-// Compile-time guard: fail the build if the placeholder secret has not been
-// replaced. Comment out only for local-bench testing behind ENABLE_MQTT=0.
-#if !defined(ALLOW_PLACEHOLDER_SECRET)
-  #define _AKITA_STRINGIFY(x) #x
-  #define _AKITA_TO_STRING(x) _AKITA_STRINGIFY(x)
-  static_assert(
-    __builtin_strcmp(_AKITA_TO_STRING(PROVISIONING_SECRET), "REPLACE_WITH_DEPLOYMENT_SECRET") != 0,
-    "PROVISIONING_SECRET still contains the placeholder value. "
-    "Replace it before deploying, or define ALLOW_PLACEHOLDER_SECRET for bench testing.");
-#endif
+#define PROVISIONING_WINDOW_MS 120000UL
 
 // --- Serial input safety ---
 #define MAX_SERIAL_LINE_LENGTH 2048
@@ -47,9 +38,20 @@
 #define LORA_REGION EU868
 
 // --- Meshtastic Serial Bridge Configuration ---
+#ifndef MESH_SERIAL_RX_PIN
 #define MESH_SERIAL_RX_PIN -1
+#endif
+#ifndef MESH_SERIAL_TX_PIN
 #define MESH_SERIAL_TX_PIN -1
+#endif
 #define MESH_SERIAL_BAUD 9600
+
+#if !defined(ALLOW_UNWIRED_MESH_BRIDGE)
+  static_assert(MESH_SERIAL_RX_PIN >= 0 && MESH_SERIAL_TX_PIN >= 0,
+    "This application is a Meshtastic companion controller. Set non-negative "
+    "MESH_SERIAL_RX_PIN and MESH_SERIAL_TX_PIN values connected to a separate "
+    "Meshtastic node before building a deployment image.");
+#endif
 
 // --- Connectivity Options ---
 #define ENABLE_BLE 1
@@ -108,6 +110,13 @@
 
 // --- MQTT Configuration ---
 #if defined(ENABLE_MQTT) && ENABLE_MQTT
+  // The current MQTT client uses a plaintext TCP bearer. It is intentionally
+  // blocked unless a bench-only override is explicit so it cannot be enabled
+  // accidentally in a field image. Production MQTT requires a future TLS client.
+  #if !defined(ALLOW_INSECURE_MQTT)
+    #error "MQTT is not production-authorized without TLS. Keep ENABLE_MQTT=0, or define ALLOW_INSECURE_MQTT for isolated bench testing only."
+  #endif
+
   #ifndef MQTT_SERVER
     #define MQTT_SERVER "YOUR_MQTT_SERVER"
   #endif
