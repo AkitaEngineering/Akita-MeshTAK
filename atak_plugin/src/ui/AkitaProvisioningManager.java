@@ -118,8 +118,7 @@ public final class AkitaProvisioningManager {
         SharedPreferences preferences = getPreferences(context);
         String rotatedSecret = generateSecret();
         ProvisioningState state = getStateStore(context).readState();
-        state.customSecret = rotatedSecret;
-        state.lastRotationAt = System.currentTimeMillis();
+        applySecretRotation(state, rotatedSecret, Config.nextKeyId(state.currentKeyId));
         persistStateOrThrow(context, state);
         clearSensitivePreferenceMirrors(preferences);
         signalSensitiveStateChanged(preferences, true, false);
@@ -131,10 +130,33 @@ public final class AkitaProvisioningManager {
         validateSecret(normalizedSecret);
         SharedPreferences preferences = getPreferences(context);
         ProvisioningState state = getStateStore(context).readState();
-        state.customSecret = normalizedSecret;
+        if (hasText(state.customSecret) && !state.customSecret.equals(normalizedSecret)) {
+            applySecretRotation(state, normalizedSecret, Config.nextKeyId(state.currentKeyId));
+        } else {
+            state.customSecret = normalizedSecret;
+            if (!Config.isKnownKeyId(state.currentKeyId)) {
+                state.currentKeyId = Config.ENCRYPTED_KEY_ID;
+            }
+        }
         persistStateOrThrow(context, state);
         clearSensitivePreferenceMirrors(preferences);
         signalSensitiveStateChanged(preferences, true, false);
+    }
+
+    public static String getActiveKeyId(Context context) {
+        return Config.normalizeKeyId(getStateStore(context).readState().currentKeyId);
+    }
+
+    public static String getActiveKeyId(SharedPreferences preferences) {
+        return Config.normalizeKeyId(readState(preferences).currentKeyId);
+    }
+
+    public static String getPreviousProvisioningSecret(Context context) {
+        return getStateStore(context).readState().previousSecret;
+    }
+
+    public static String getPreviousProvisioningSecret(SharedPreferences preferences) {
+        return readState(preferences).previousSecret;
     }
 
     public static String getProvisioningSummary(Context context) {
@@ -165,7 +187,7 @@ public final class AkitaProvisioningManager {
                 BUNDLE_PREFIX,
                 alias,
                 Config.ENCRYPTED_PAYLOAD_VERSION,
-                Config.ENCRYPTED_KEY_ID,
+                Config.normalizeKeyId(state.currentKeyId),
                 isEncryptionEnabled(preferences) ? 1 : 0,
                 activeSecret);
         state.stagedBundle = bundle;
@@ -205,9 +227,8 @@ public final class AkitaProvisioningManager {
         SharedPreferences preferences = getPreferences(context);
         ProvisioningState state = getStateStore(context).readState();
         ProvisioningBundle bundle = parseProvisioningBundle(state.stagedBundle);
-        state.customSecret = bundle.secret;
+        applySecretRotation(state, bundle.secret, bundle.keyId);
         state.stagedBundle = "";
-        state.lastRotationAt = System.currentTimeMillis();
         persistStateOrThrow(context, state);
         preferences.edit()
                 .putString("ble_device_name", bundle.deviceAlias)
@@ -291,17 +312,38 @@ public final class AkitaProvisioningManager {
     public static String getRotationSummary(Context context) {
         ProvisioningState state = getStateStore(context).readState();
         if (state.lastRotationAt <= 0L) {
-            return hasText(state.customSecret) ? "Custom secret loaded" : "No recorded rotation";
+            return hasText(state.customSecret)
+                    ? "Custom secret loaded • " + Config.normalizeKeyId(state.currentKeyId)
+                    : "No recorded rotation";
         }
-        return describeRotationAge(state.lastRotationAt);
+        return describeRotationAge(state.lastRotationAt) + " • " + describeKeySlots(state);
     }
 
     public static String getRotationSummary(SharedPreferences preferences) {
         ProvisioningState state = readState(preferences);
         if (state.lastRotationAt <= 0L) {
-            return hasText(state.customSecret) ? "Custom secret loaded" : "No recorded rotation";
+            return hasText(state.customSecret)
+                    ? "Custom secret loaded • " + Config.normalizeKeyId(state.currentKeyId)
+                    : "No recorded rotation";
         }
-        return describeRotationAge(state.lastRotationAt);
+        return describeRotationAge(state.lastRotationAt) + " • " + describeKeySlots(state);
+    }
+
+    private static String describeKeySlots(ProvisioningState state) {
+        String current = Config.normalizeKeyId(state.currentKeyId);
+        if (hasText(state.previousSecret)) {
+            return current + " active • " + Config.nextKeyId(current) + " overlap";
+        }
+        return current + " active";
+    }
+
+    private static void applySecretRotation(ProvisioningState state, String newSecret, String newKeyId) {
+        if (hasText(state.customSecret) && !state.customSecret.equals(newSecret)) {
+            state.previousSecret = state.customSecret;
+        }
+        state.customSecret = newSecret;
+        state.currentKeyId = Config.normalizeKeyId(newKeyId);
+        state.lastRotationAt = System.currentTimeMillis();
     }
 
     private static String describeRotationAge(long rotatedAt) {
@@ -360,15 +402,21 @@ public final class AkitaProvisioningManager {
 
     private static final class ProvisioningState {
         private String customSecret;
+        private String previousSecret;
+        private String currentKeyId;
         private String stagedBundle;
         private long lastRotationAt;
         private long lastBundleGeneratedAt;
 
         private ProvisioningState(String customSecret,
+                                  String previousSecret,
+                                  String currentKeyId,
                                   String stagedBundle,
                                   long lastRotationAt,
                                   long lastBundleGeneratedAt) {
             this.customSecret = customSecret;
+            this.previousSecret = previousSecret;
+            this.currentKeyId = Config.normalizeKeyId(currentKeyId);
             this.stagedBundle = stagedBundle;
             this.lastRotationAt = lastRotationAt;
             this.lastBundleGeneratedAt = lastBundleGeneratedAt;
@@ -376,8 +424,10 @@ public final class AkitaProvisioningManager {
 
         private JSONObject toJson() throws JSONException {
             JSONObject json = new JSONObject();
-            json.put("schemaVersion", 1);
+            json.put("schemaVersion", 2);
             json.put("customSecret", customSecret);
+            json.put("previousSecret", previousSecret);
+            json.put("currentKeyId", currentKeyId);
             json.put("stagedBundle", stagedBundle);
             json.put("lastRotationAt", lastRotationAt);
             json.put("lastBundleGeneratedAt", lastBundleGeneratedAt);
@@ -387,6 +437,8 @@ public final class AkitaProvisioningManager {
         private static ProvisioningState fromJson(JSONObject json) {
             return new ProvisioningState(
                     normalizeValue(json.optString("customSecret", "")),
+                    normalizeValue(json.optString("previousSecret", "")),
+                    normalizeValue(json.optString("currentKeyId", Config.ENCRYPTED_KEY_ID)),
                     normalizeValue(json.optString("stagedBundle", "")),
                     json.optLong("lastRotationAt", 0L),
                     json.optLong("lastBundleGeneratedAt", 0L));
@@ -395,6 +447,8 @@ public final class AkitaProvisioningManager {
         private static ProvisioningState fromLegacyPreferences(SharedPreferences preferences) {
             return new ProvisioningState(
                     normalizeValue(preferences.getString(PREF_PROVISIONING_SECRET, "")),
+                    "",
+                    Config.ENCRYPTED_KEY_ID,
                     normalizeValue(preferences.getString(PREF_PROVISIONING_BUNDLE, "")),
                     preferences.getLong(PREF_LAST_ROTATION_AT, 0L),
                     preferences.getLong(PREF_LAST_BUNDLE_GENERATED_AT, 0L));
@@ -435,14 +489,14 @@ public final class AkitaProvisioningManager {
                 payloadBytes = readAllBytes(inputStream);
                 if (payloadBytes.length == 0) {
                     Log.e(TAG, "Encrypted provisioning state is empty; refusing legacy fallback");
-                    return new ProvisioningState("", "", 0L, 0L);
+                    return new ProvisioningState("", "", Config.ENCRYPTED_KEY_ID, "", 0L, 0L);
                 }
                 ProvisioningState state = parseStoredState(payloadBytes);
                 clearSensitivePreferenceMirrors(preferences);
                 return state;
             } catch (IOException | JSONException | GeneralSecurityException exception) {
                 Log.e(TAG, "Failed to read encrypted provisioning state; refusing legacy fallback", exception);
-                return new ProvisioningState("", "", 0L, 0L);
+                return new ProvisioningState("", "", Config.ENCRYPTED_KEY_ID, "", 0L, 0L);
             } finally {
                 wipe(payloadBytes);
             }
@@ -623,8 +677,7 @@ public final class AkitaProvisioningManager {
         String alias = sanitizeBundleField(parts[1]);
         String version = parts[2].trim();
         String keyId = parts[3].trim();
-        if (!Config.ENCRYPTED_PAYLOAD_VERSION.equals(version)
-                || !Config.ENCRYPTED_KEY_ID.equals(keyId)) {
+        if (!Config.ENCRYPTED_PAYLOAD_VERSION.equals(version) || !Config.isKnownKeyId(keyId)) {
             throw new IllegalArgumentException("Provisioning bundle protocol metadata is incompatible.");
         }
         boolean encryptionEnabled = "1".equals(parts[4].trim());

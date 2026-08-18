@@ -31,7 +31,8 @@ ValidationResult validateCommand(const String& command) {
         return VALIDATION_ERROR_TOO_LONG;
     }
 
-    if (command == CMD_GET_BATT || command == CMD_ALERT_SOS || command == CMD_GET_VERSION) {
+    if (command == CMD_GET_BATT || command == CMD_ALERT_SOS || command == CMD_GET_VERSION
+            || command == CMD_GET_SEC_STATE) {
         return VALIDATION_OK;
     }
 

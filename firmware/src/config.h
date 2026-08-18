@@ -6,7 +6,7 @@
 #include <Arduino.h>
 
 #ifndef AKITA_VERSION_NAME
-#define AKITA_VERSION_NAME "0.2.0"
+#define AKITA_VERSION_NAME "0.2.1"
 #endif
 
 #define FIRMWARE_VERSION AKITA_VERSION_NAME
@@ -32,7 +32,17 @@
 #define CMD_RATE_LIMIT_MS 50
 #define ENCRYPTED_PAYLOAD_PREFIX "ENC:"
 #define ENCRYPTED_PAYLOAD_VERSION "v2"
-#define ENCRYPTED_KEY_ID "k1"
+#define KEY_ID_K1 "k1"
+#define KEY_ID_K2 "k2"
+#define ENCRYPTED_KEY_ID KEY_ID_K1
+
+static inline bool isKnownKeyId(const String& keyId) {
+  return keyId == KEY_ID_K1 || keyId == KEY_ID_K2;
+}
+
+static inline String nextKeyId(const String& keyId) {
+  return keyId == KEY_ID_K2 ? String(KEY_ID_K1) : String(KEY_ID_K2);
+}
 
 // --- LoRa Configuration ---
 #define LORA_REGION EU868
@@ -92,12 +102,14 @@
 #define CMD_GET_BATT "CMD:GET_BATT"
 #define CMD_ALERT_SOS "CMD:ALERT:SOS"
 #define CMD_GET_VERSION "CMD:GET_VERSION"
+#define CMD_GET_SEC_STATE "CMD:GET_SEC_STATE"
 #define CMD_TIME_SYNC_PREFIX "CMD:TIME:SYNC:"
 #define CMD_COT_MISSION_PREFIX "CMD:COT:MISSION:"
 #define CMD_MAILBOX_PUT_PREFIX "CMD:MAILBOX:PUT:"
 #define CMD_PROVISION_STAGE_PREFIX "CMD:PROV:STAGE:"
 #define STATUS_BATT_PREFIX "STATUS:BATT:"
 #define STATUS_VERSION_PREFIX "STATUS:VERSION:"
+#define STATUS_SEC_STATE_PREFIX "STATUS:SEC_STATE:"
 #define STATUS_TIME_SYNC_PREFIX "STATUS:TIME:SYNC:"
 #define STATUS_COT_MISSION_PREFIX "STATUS:COT:MISSION:"
 #define STATUS_MAILBOX_ACK_PREFIX "STATUS:MAILBOX:ACK:"

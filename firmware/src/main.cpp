@@ -11,6 +11,7 @@
 #include "audit_log.h"        // For audit logging
 #include "security.h"         // For security initialization
 #include "provisioning_store.h"
+#include "replay_guard.h"
 #include "input_validation.h"
 
 void setupConfig() {
@@ -29,22 +30,18 @@ void setup() {
 
   setupConfig();
   setupProvisioningStore();
+  setupReplayGuard();
 
   // Initialize audit logging FIRST for accountability
   if (!initAuditLog()) {
     Serial.println("WARNING: Audit log initialization failed.");
   }
 
-  String provisioningSecret = "";
-  loadProvisioningSecret(provisioningSecret);
-  if (!initSecurityFromProvisioning(String(DEVICE_ID), provisioningSecret)) {
+  if (!initSecurityFromStore()) {
     Serial.println("Security is unprovisioned; operational traffic is locked.");
     logAuditEvent(AUDIT_EVENT_ERROR, 2, DEVICE_ID, "Security unprovisioned", false);
   } else {
     logAuditEvent(AUDIT_EVENT_CONNECTION, 0, DEVICE_ID, "Security initialized", true);
-  }
-  for (size_t i = 0; i < provisioningSecret.length(); i++) {
-    provisioningSecret.setCharAt(i, '\0');
   }
 
   if (!setupMeshtastic()) {

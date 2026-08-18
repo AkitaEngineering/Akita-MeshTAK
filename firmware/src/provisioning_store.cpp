@@ -5,6 +5,8 @@
 
 static const char* NVS_NAMESPACE = "akita-sec";
 static const char* NVS_SECRET_KEY = "device-secret";
+static const char* NVS_PREV_SECRET_KEY = "prev-secret";
+static const char* NVS_KEY_ID_KEY = "key-id";
 static bool g_windowEnabled = false;
 static unsigned long g_windowOpenedAt = 0;
 
@@ -37,24 +39,62 @@ bool isPlaintextProvisioningCommandAllowed(const String& command) {
 }
 
 bool loadProvisioningSecret(String& secret) {
+  ProvisioningMaterial material;
+  if (!loadProvisioningMaterial(material)) {
+    secret = "";
+    return false;
+  }
+  secret = material.currentSecret;
+  return true;
+}
+
+bool loadProvisioningMaterial(ProvisioningMaterial& material) {
   Preferences preferences;
   if (!preferences.begin(NVS_NAMESPACE, true)) {
     return false;
   }
-  secret = preferences.getString(NVS_SECRET_KEY, "");
+  material.currentSecret = preferences.getString(NVS_SECRET_KEY, "");
+  material.previousSecret = preferences.getString(NVS_PREV_SECRET_KEY, "");
+  material.currentKeyId = preferences.getString(NVS_KEY_ID_KEY, ENCRYPTED_KEY_ID);
   preferences.end();
-  return isValidSecret(secret);
+  if (!isKnownKeyId(material.currentKeyId)) {
+    material.currentKeyId = ENCRYPTED_KEY_ID;
+  }
+  if (!isValidSecret(material.previousSecret)) {
+    material.previousSecret = "";
+  }
+  return isValidSecret(material.currentSecret);
 }
 
 bool persistProvisioningSecret(const String& secret) {
   if (!isProvisioningWindowOpen() || !isValidSecret(secret)) {
     return false;
   }
+
+  ProvisioningMaterial existing;
+  String previousSecret = "";
+  String keyId = ENCRYPTED_KEY_ID;
+  if (loadProvisioningMaterial(existing)) {
+    if (existing.currentSecret != secret) {
+      previousSecret = existing.currentSecret;
+      keyId = nextKeyId(existing.currentKeyId);
+    } else {
+      previousSecret = existing.previousSecret;
+      keyId = existing.currentKeyId;
+    }
+  }
+
   Preferences preferences;
   if (!preferences.begin(NVS_NAMESPACE, false)) {
     return false;
   }
   size_t written = preferences.putString(NVS_SECRET_KEY, secret);
+  if (previousSecret.length() > 0) {
+    preferences.putString(NVS_PREV_SECRET_KEY, previousSecret);
+  } else {
+    preferences.remove(NVS_PREV_SECRET_KEY);
+  }
+  preferences.putString(NVS_KEY_ID_KEY, keyId);
   preferences.end();
   if (written == 0) {
     return false;

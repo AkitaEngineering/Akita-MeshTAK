@@ -73,8 +73,8 @@ Follow these steps to enable end-to-end encryption:
 5. **Key Rotation**
    - To rotate keys, change the provisioning secret on both firmware and plugin simultaneously.
    - The plugin can generate a new runtime secret using **Rotate Provisioning Secret**, package it with **Generate Provisioning Bundle**, and apply it offline with **Apply Provisioning Bundle**.
-   - Use **Stage Secret To Connected Device** during a trusted local ceremony so firmware adopts the same secret before deployment.
-   - The current protocol uses key-id `k1`; a future protocol revision is required before overlapping-key rotation is supported.
+   - Use **Stage Secret To Connected Device** during a trusted local ceremony so firmware adopts the same secret and flipped key-id before deployment. The previous slot stays loaded until the next rotation.
+   - Rotation flips the active key-id between `k1` and `k2` and keeps the previous slot loaded so in-flight `ENC:v2` frames remain readable during the overlap window.
    - Tap **Reload Security State** or restart the plugin after the change.
 
 ### 2. Input Validation
@@ -119,7 +119,7 @@ Firmware audit entries are redacted and kept in a bounded 128-entry in-memory ri
 ### 4. Message Integrity
 - **AEAD Verification**: AES-GCM tag verification provides built-in integrity protection
 - **Tamper Detection**: Invalid tags or malformed encrypted envelopes are rejected and logged
-- **Replay Protection**: Authenticated v2 timestamps and nonces reject duplicates within the active process/device session. The cache resets on restart, so deployments requiring restart-resistant replay defense must add persistent monotonic peer counters.
+- **Replay Protection**: Authenticated v2 timestamps and nonces reject duplicates. The plugin persists the nonce cache in no-backup app storage; firmware persists the cache and watermark in NVS so a reboot cannot replay a recently accepted frame.
 
 ### 5. Authentication
 - **Device Authentication**: Device IDs validated
@@ -289,6 +289,10 @@ If you discover a security vulnerability:
    - Air-gapped provisioning bundle generation/apply and trusted local stage-to-device workflow
    - Audit export and security reload actions added to settings
    - Mission Assurance flags placeholder provisioning and degraded posture
+- **v0.2.1**: Overlapping key rotation and durable replay defense
+   - `k1`/`k2` overlapping key slots on firmware and plugin
+   - Persistent nonce cache plus watermark across plugin restart and controller reboot
+   - Controller `CMD:GET_SEC_STATE` reports key-id and ESP32 flash-encryption / secure-boot posture
 - **v0.2.0**: Initial security implementation
    - AES-256-GCM encrypted transport with authenticated integrity
    - Versioned/key-id encrypted envelope format (`ENC:v2:k1:<epoch>:<nonce>:<ciphertext-hex>:<hmac-hex>`)

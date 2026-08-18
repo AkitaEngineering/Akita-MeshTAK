@@ -4,14 +4,23 @@
 
 #include "security.h"
 #include "config.h"
+#include "provisioning_store.h"
 #include <esp_random.h>
 #include <mbedtls/md.h>
 #include <mbedtls/pkcs5.h>
 #include <string.h>
 
-// Security keys (should be provisioned securely - NOT hardcoded in production!)
-static uint8_t g_aes_key[AES_KEY_SIZE];
-static uint8_t g_hmac_key[HMAC_KEY_SIZE];
+#define KEY_ID_STORAGE_LEN 8
+
+struct KeySlot {
+    char key_id[KEY_ID_STORAGE_LEN];
+    uint8_t aes_key[AES_KEY_SIZE];
+    uint8_t hmac_key[HMAC_KEY_SIZE];
+    bool loaded;
+};
+
+static KeySlot g_current_slot = {0};
+static KeySlot g_previous_slot = {0};
 static uint8_t g_auth_token[AUTH_TOKEN_SIZE];
 static SecurityStatus g_security_status = {0};
 static bool g_security_initialized = false;
@@ -85,6 +94,52 @@ static bool deriveProvisionedKey(const String& deviceId,
     return derived;
 }
 
+static void clearKeySlot(KeySlot* slot) {
+    if (slot == nullptr) {
+        return;
+    }
+    memset(slot, 0, sizeof(*slot));
+}
+
+static bool copyKeyId(KeySlot* slot, const String& keyId) {
+    if (slot == nullptr || !isKnownKeyId(keyId) || keyId.length() >= KEY_ID_STORAGE_LEN) {
+        return false;
+    }
+    memset(slot->key_id, 0, sizeof(slot->key_id));
+    keyId.toCharArray(slot->key_id, sizeof(slot->key_id));
+    return true;
+}
+
+static bool loadKeySlot(KeySlot* slot,
+                        const String& deviceId,
+                        const String& sharedSecret,
+                        const String& keyId) {
+    if (slot == nullptr) {
+        return false;
+    }
+    clearKeySlot(slot);
+    if (deviceId.length() == 0 || sharedSecret.length() < 16 || !copyKeyId(slot, keyId)) {
+        return false;
+    }
+    if (!deriveProvisionedKey(deviceId, sharedSecret, "aes", slot->aes_key, sizeof(slot->aes_key))
+            || !deriveProvisionedKey(deviceId, sharedSecret, "hmac", slot->hmac_key, sizeof(slot->hmac_key))) {
+        clearKeySlot(slot);
+        return false;
+    }
+    slot->loaded = true;
+    return true;
+}
+
+static KeySlot* slotForKeyId(const String& keyId) {
+    if (g_current_slot.loaded && keyId == String(g_current_slot.key_id)) {
+        return &g_current_slot;
+    }
+    if (g_previous_slot.loaded && keyId == String(g_previous_slot.key_id)) {
+        return &g_previous_slot;
+    }
+    return nullptr;
+}
+
 bool initSecurity(const uint8_t* aes_key, const uint8_t* hmac_key, uint8_t security_mode) {
     if (aes_key == nullptr || hmac_key == nullptr
             || isAllZero(aes_key, AES_KEY_SIZE)
@@ -92,40 +147,93 @@ bool initSecurity(const uint8_t* aes_key, const uint8_t* hmac_key, uint8_t secur
         return false;
     }
 
-    memcpy(g_aes_key, aes_key, AES_KEY_SIZE);
-    memcpy(g_hmac_key, hmac_key, HMAC_KEY_SIZE);
+    cleanupSecurity();
+    memcpy(g_current_slot.aes_key, aes_key, AES_KEY_SIZE);
+    memcpy(g_current_slot.hmac_key, hmac_key, HMAC_KEY_SIZE);
+    strncpy(g_current_slot.key_id, ENCRYPTED_KEY_ID, sizeof(g_current_slot.key_id) - 1);
+    g_current_slot.loaded = true;
     g_security_status.security_mode = security_mode;
     g_security_status.encryption_enabled = (security_mode != SECURITY_MODE_NONE);
     g_security_status.initialized = true;
     g_security_initialized = true;
 
-    // Generate initial auth token
     generateAuthToken(g_auth_token);
-
     return true;
 }
 
 bool initSecurityFromProvisioning(const String& deviceId, const String& sharedSecret) {
-    if (deviceId.length() == 0 || sharedSecret.length() < 16) {
+    return initSecurityFromKeySlots(deviceId, sharedSecret, String(ENCRYPTED_KEY_ID), "", "");
+}
+
+bool initSecurityFromKeySlots(const String& deviceId,
+                              const String& currentSecret,
+                              const String& currentKeyId,
+                              const String& previousSecret,
+                              const String& previousKeyId) {
+    KeySlot current = {0};
+    KeySlot previous = {0};
+    if (!loadKeySlot(&current, deviceId, currentSecret, currentKeyId)) {
         return false;
     }
-
-    uint8_t aesKey[AES_KEY_SIZE] = {0};
-    uint8_t hmacKey[HMAC_KEY_SIZE] = {0};
-    bool derivedAesKey = deriveProvisionedKey(deviceId, sharedSecret, "aes", aesKey, sizeof(aesKey));
-    bool derivedHmacKey = deriveProvisionedKey(deviceId, sharedSecret, "hmac", hmacKey, sizeof(hmacKey));
-
-    if (!derivedAesKey || !derivedHmacKey) {
-        memset(aesKey, 0, sizeof(aesKey));
-        memset(hmacKey, 0, sizeof(hmacKey));
-        return false;
+    if (previousSecret.length() >= 16 && previousKeyId.length() > 0) {
+        if (!loadKeySlot(&previous, deviceId, previousSecret, previousKeyId)) {
+            clearKeySlot(&current);
+            return false;
+        }
     }
 
     cleanupSecurity();
-    bool initialized = initSecurity(aesKey, hmacKey, SECURITY_MODE_AES256_HMAC);
-    memset(aesKey, 0, sizeof(aesKey));
-    memset(hmacKey, 0, sizeof(hmacKey));
+    g_current_slot = current;
+    g_previous_slot = previous;
+    g_security_status.security_mode = SECURITY_MODE_AES256_HMAC;
+    g_security_status.encryption_enabled = true;
+    g_security_status.initialized = true;
+    g_security_initialized = true;
+    generateAuthToken(g_auth_token);
+    clearKeySlot(&current);
+    clearKeySlot(&previous);
+    return true;
+}
+
+bool initSecurityFromStore() {
+    ProvisioningMaterial material;
+    if (!loadProvisioningMaterial(material)) {
+        return false;
+    }
+    String previousKeyId = material.previousSecret.length() >= 16
+        ? nextKeyId(material.currentKeyId)
+        : String("");
+    bool initialized = initSecurityFromKeySlots(
+        String(DEVICE_ID),
+        material.currentSecret,
+        material.currentKeyId,
+        material.previousSecret,
+        previousKeyId);
+    for (size_t i = 0; i < material.currentSecret.length(); i++) {
+        material.currentSecret.setCharAt(i, '\0');
+    }
+    for (size_t i = 0; i < material.previousSecret.length(); i++) {
+        material.previousSecret.setCharAt(i, '\0');
+    }
     return initialized;
+}
+
+const char* getActiveKeyId() {
+    if (g_current_slot.loaded && g_current_slot.key_id[0] != '\0') {
+        return g_current_slot.key_id;
+    }
+    return ENCRYPTED_KEY_ID;
+}
+
+const char* getPreviousKeyId() {
+    if (g_previous_slot.loaded && g_previous_slot.key_id[0] != '\0') {
+        return g_previous_slot.key_id;
+    }
+    return "";
+}
+
+bool acceptsKeyId(const String& keyId) {
+    return slotForKeyId(keyId) != nullptr;
 }
 
 size_t encryptData(const uint8_t* plaintext, size_t plaintext_len,
@@ -146,7 +254,8 @@ size_t encryptData(const uint8_t* plaintext, size_t plaintext_len,
     mbedtls_gcm_context gcm;
     mbedtls_gcm_init(&gcm);
 
-    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, g_aes_key, 256) != 0) {
+    if (!g_current_slot.loaded
+            || mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, g_current_slot.aes_key, 256) != 0) {
         mbedtls_gcm_free(&gcm);
         return 0;
     }
@@ -181,7 +290,8 @@ size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
     mbedtls_gcm_context gcm;
     mbedtls_gcm_init(&gcm);
 
-    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, g_aes_key, 256) != 0) {
+    if (!g_current_slot.loaded
+            || mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, g_current_slot.aes_key, 256) != 0) {
         mbedtls_gcm_free(&gcm);
         return 0;
     }
@@ -205,12 +315,52 @@ size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
     return dataLen;
 }
 
+size_t decryptDataForKeyId(const String& keyId,
+                           const uint8_t* ciphertext, size_t ciphertext_len,
+                           const uint8_t* iv, uint8_t* plaintext, size_t plaintext_max_len) {
+    KeySlot* slot = slotForKeyId(keyId);
+    if (slot == nullptr || !slot->loaded || ciphertext == nullptr || plaintext == nullptr || iv == nullptr) {
+        return 0;
+    }
+    if (ciphertext_len <= GCM_TAG_SIZE || plaintext_max_len < (ciphertext_len - GCM_TAG_SIZE)) {
+        return 0;
+    }
+
+    mbedtls_gcm_context gcm;
+    mbedtls_gcm_init(&gcm);
+    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, slot->aes_key, 256) != 0) {
+        mbedtls_gcm_free(&gcm);
+        return 0;
+    }
+
+    size_t dataLen = ciphertext_len - GCM_TAG_SIZE;
+    const uint8_t* tag = ciphertext + dataLen;
+    if (mbedtls_gcm_auth_decrypt(&gcm, dataLen,
+                                 iv, IV_SIZE,
+                                 nullptr, 0,
+                                 tag, GCM_TAG_SIZE,
+                                 ciphertext, plaintext) != 0) {
+        mbedtls_gcm_free(&gcm);
+        g_security_status.auth_failures++;
+        return 0;
+    }
+
+    mbedtls_gcm_free(&gcm);
+    g_security_status.messages_decrypted++;
+    return dataLen;
+}
+
 bool generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out) {
+    return generateHMACForKeyId(String(getActiveKeyId()), data, data_len, hmac_out);
+}
+
+bool generateHMACForKeyId(const String& keyId, const uint8_t* data, size_t data_len, uint8_t* hmac_out) {
     if (hmac_out != nullptr) {
         memset(hmac_out, 0, HMAC_KEY_SIZE);
     }
 
-    if (data == nullptr || hmac_out == nullptr || !g_security_initialized) {
+    KeySlot* slot = slotForKeyId(keyId);
+    if (data == nullptr || hmac_out == nullptr || !g_security_initialized || slot == nullptr || !slot->loaded) {
         return false;
     }
 
@@ -224,7 +374,7 @@ bool generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out) {
     }
 
     bool success = true;
-    if (mbedtls_md_hmac_starts(&ctx, g_hmac_key, HMAC_KEY_SIZE) != 0
+    if (mbedtls_md_hmac_starts(&ctx, slot->hmac_key, HMAC_KEY_SIZE) != 0
             || mbedtls_md_hmac_update(&ctx, data, data_len) != 0
             || mbedtls_md_hmac_finish(&ctx, hmac_out) != 0) {
         memset(hmac_out, 0, HMAC_KEY_SIZE);
@@ -235,13 +385,17 @@ bool generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out) {
 }
 
 bool verifyHMAC(const uint8_t* data, size_t data_len, const uint8_t* hmac) {
+    return verifyHMACForKeyId(String(getActiveKeyId()), data, data_len, hmac);
+}
+
+bool verifyHMACForKeyId(const String& keyId, const uint8_t* data, size_t data_len, const uint8_t* hmac) {
     if (data == nullptr || hmac == nullptr || !g_security_initialized) {
         g_security_status.integrity_failures++;
         return false;
     }
 
     uint8_t calculated_hmac[HMAC_KEY_SIZE] = {0};
-    if (!generateHMAC(data, data_len, calculated_hmac)) {
+    if (!generateHMACForKeyId(keyId, data, data_len, calculated_hmac)) {
         g_security_status.integrity_failures++;
         return false;
     }
@@ -291,9 +445,8 @@ SecurityStatus getSecurityStatus() {
 }
 
 void cleanupSecurity() {
-    // Clear sensitive data from memory
-    memset(g_aes_key, 0, AES_KEY_SIZE);
-    memset(g_hmac_key, 0, HMAC_KEY_SIZE);
+    clearKeySlot(&g_current_slot);
+    clearKeySlot(&g_previous_slot);
     memset(g_auth_token, 0, AUTH_TOKEN_SIZE);
     memset(g_iv, 0, IV_SIZE);
     g_security_initialized = false;

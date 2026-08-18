@@ -62,9 +62,21 @@ public class AkitaProvisioningManagerTest {
         AkitaProvisioningManager.setCustomProvisioningSecret(context, "CustomSecret123456");
 
         assertEquals("CustomSecret123456", AkitaProvisioningManager.getActiveProvisioningSecret(context));
+        assertEquals(com.akitaengineering.meshtak.Config.ENCRYPTED_KEY_ID, AkitaProvisioningManager.getActiveKeyId(context));
         assertFalse(preferences.contains(AkitaProvisioningManager.PREF_PROVISIONING_SECRET));
         assertTrue(stateFile.exists());
         assertStoredFileIsEncrypted("CustomSecret123456");
+    }
+
+    @Test
+    public void rotatingSecretFlipsKeyIdAndKeepsPreviousMaterial() {
+        AkitaProvisioningManager.setCustomProvisioningSecret(context, "CustomSecret123456");
+        String rotated = AkitaProvisioningManager.rotateProvisioningSecret(context);
+
+        assertEquals(rotated, AkitaProvisioningManager.getActiveProvisioningSecret(context));
+        assertEquals("CustomSecret123456", AkitaProvisioningManager.getPreviousProvisioningSecret(context));
+        assertEquals(com.akitaengineering.meshtak.Config.ENCRYPTED_KEY_ID_K2, AkitaProvisioningManager.getActiveKeyId(context));
+        assertTrue(AkitaProvisioningManager.getRotationSummary(context).contains("k2"));
     }
 
     @Test

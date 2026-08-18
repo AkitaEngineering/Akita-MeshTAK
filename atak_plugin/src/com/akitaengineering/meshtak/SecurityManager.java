@@ -33,8 +33,20 @@ public class SecurityManager {
     private static final int HMAC_SIZE = 32;
     private static final int MIN_PROVISIONING_SECRET_LENGTH = 16;
 
-    private SecretKey aesKey;
-    private SecretKey hmacKey;
+    private static final class KeySlot {
+        private final String keyId;
+        private final SecretKey aesKey;
+        private final SecretKey hmacKey;
+
+        private KeySlot(String keyId, SecretKey aesKey, SecretKey hmacKey) {
+            this.keyId = keyId;
+            this.aesKey = aesKey;
+            this.hmacKey = hmacKey;
+        }
+    }
+
+    private KeySlot currentSlot;
+    private KeySlot previousSlot;
     private volatile boolean initialized = false;
     private volatile boolean encryptionEnabled = true;
 
@@ -81,8 +93,11 @@ public class SecurityManager {
                 return false;
             }
 
-            aesKey = new SecretKeySpec(aesKeyBytes, "AES");
-            hmacKey = new SecretKeySpec(hmacKeyBytes, HMAC_ALGORITHM);
+            currentSlot = new KeySlot(
+                    Config.ENCRYPTED_KEY_ID,
+                    new SecretKeySpec(aesKeyBytes, "AES"),
+                    new SecretKeySpec(hmacKeyBytes, HMAC_ALGORITHM));
+            previousSlot = null;
             initialized = true;
 
             Log.i(TAG, "Security manager initialized successfully");
@@ -126,30 +141,82 @@ public class SecurityManager {
      * Derive deterministic AES/HMAC keys from provisioning material.
      */
     public synchronized boolean initializeFromProvisioning(String deviceId, String sharedSecret) {
-        if (deviceId == null || deviceId.isEmpty() || sharedSecret == null || sharedSecret.isEmpty()) {
+        return initializeFromProvisioning(deviceId, sharedSecret, Config.ENCRYPTED_KEY_ID, null, null);
+    }
+
+    public synchronized boolean initializeFromProvisioning(String deviceId,
+                                                           String currentSecret,
+                                                           String currentKeyId,
+                                                           String previousSecret,
+                                                           String previousKeyId) {
+        if (deviceId == null || deviceId.isEmpty() || currentSecret == null || currentSecret.isEmpty()) {
             Log.e(TAG, "Provisioning material is missing");
             return false;
         }
-        if (sharedSecret.length() < MIN_PROVISIONING_SECRET_LENGTH) {
+        if (currentSecret.length() < MIN_PROVISIONING_SECRET_LENGTH) {
             Log.e(TAG, "Provisioning secret is too short");
             return false;
         }
+        String normalizedCurrentKeyId = Config.normalizeKeyId(currentKeyId);
+        KeySlot loadedCurrent;
+        KeySlot loadedPrevious = null;
+        try {
+            loadedCurrent = deriveSlot(deviceId, currentSecret, normalizedCurrentKeyId);
+            if (previousSecret != null && previousSecret.length() >= MIN_PROVISIONING_SECRET_LENGTH
+                    && Config.isKnownKeyId(previousKeyId)
+                    && !normalizedCurrentKeyId.equals(previousKeyId)) {
+                loadedPrevious = deriveSlot(deviceId, previousSecret, previousKeyId);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize keys from provisioning", e);
+            return false;
+        }
 
+        currentSlot = loadedCurrent;
+        previousSlot = loadedPrevious;
+        initialized = true;
+        Log.i(TAG, "Security manager initialized with key " + normalizedCurrentKeyId
+                + (loadedPrevious != null ? " and overlap " + loadedPrevious.keyId : ""));
+        return true;
+    }
+
+    private KeySlot deriveSlot(String deviceId, String sharedSecret, String keyId) throws Exception {
         char[] sharedSecretChars = sharedSecret.toCharArray();
         byte[] aesKeyBytes = null;
         byte[] hmacKeyBytes = null;
         try {
             aesKeyBytes = deriveKeyMaterial(deviceId, sharedSecretChars, "aes");
             hmacKeyBytes = deriveKeyMaterial(deviceId, sharedSecretChars, "hmac");
-            return initialize(aesKeyBytes, hmacKeyBytes);
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to initialize keys from provisioning", e);
-            return false;
+            if (isAllZero(aesKeyBytes) || isAllZero(hmacKeyBytes)) {
+                throw new IllegalStateException("Derived key material was zeroed");
+            }
+            return new KeySlot(
+                    keyId,
+                    new SecretKeySpec(aesKeyBytes, "AES"),
+                    new SecretKeySpec(hmacKeyBytes, HMAC_ALGORITHM));
         } finally {
             wipe(sharedSecretChars);
             wipe(aesKeyBytes);
             wipe(hmacKeyBytes);
         }
+    }
+
+    public synchronized String getActiveKeyId() {
+        return currentSlot != null ? currentSlot.keyId : Config.ENCRYPTED_KEY_ID;
+    }
+
+    public synchronized boolean acceptsKeyId(String keyId) {
+        return slotForKeyId(keyId) != null;
+    }
+
+    private KeySlot slotForKeyId(String keyId) {
+        if (currentSlot != null && currentSlot.keyId.equals(keyId)) {
+            return currentSlot;
+        }
+        if (previousSlot != null && previousSlot.keyId.equals(keyId)) {
+            return previousSlot;
+        }
+        return null;
     }
 
     private byte[] deriveKeyMaterial(String deviceId, char[] sharedSecretChars, String purpose) throws Exception {
@@ -192,7 +259,11 @@ public class SecurityManager {
 
             Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
             GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_BITS, iv);
-            cipher.init(Cipher.ENCRYPT_MODE, aesKey, gcmSpec);
+            if (currentSlot == null) {
+                Log.e(TAG, "No current key slot available for encryption");
+                return null;
+            }
+            cipher.init(Cipher.ENCRYPT_MODE, currentSlot.aesKey, gcmSpec);
 
             ciphertext = cipher.doFinal(plaintext);
 
@@ -216,6 +287,10 @@ public class SecurityManager {
      * Decrypt data with AES-256-GCM.
      */
     public synchronized byte[] decrypt(byte[] ciphertext) {
+        return decrypt(ciphertext, getActiveKeyId());
+    }
+
+    public synchronized byte[] decrypt(byte[] ciphertext, String keyId) {
         if (!initialized || ciphertext == null || ciphertext.length < IV_SIZE) {
             Log.e(TAG, "Security not initialized or invalid ciphertext");
             return null;
@@ -223,6 +298,13 @@ public class SecurityManager {
 
         if (!encryptionEnabled) {
             Log.e(TAG, "Encryption is disabled; refusing to decrypt operational traffic");
+            return null;
+        }
+
+        KeySlot slot = slotForKeyId(keyId);
+        if (slot == null) {
+            Log.e(TAG, "No key slot available for decryption");
+            authFailures++;
             return null;
         }
 
@@ -235,7 +317,7 @@ public class SecurityManager {
 
             Cipher cipher = Cipher.getInstance(AES_ALGORITHM);
             GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_BITS, iv);
-            cipher.init(Cipher.DECRYPT_MODE, aesKey, gcmSpec);
+            cipher.init(Cipher.DECRYPT_MODE, slot.aesKey, gcmSpec);
 
             byte[] plaintext = cipher.doFinal(encryptedData);
             messagesDecrypted++;
@@ -254,13 +336,21 @@ public class SecurityManager {
      * Generate HMAC for message integrity.
      */
     public synchronized byte[] generateHMAC(byte[] data) {
+        return generateHMAC(data, getActiveKeyId());
+    }
+
+    public synchronized byte[] generateHMAC(byte[] data, String keyId) {
         if (!initialized || data == null) {
+            return null;
+        }
+        KeySlot slot = slotForKeyId(keyId);
+        if (slot == null) {
             return null;
         }
 
         try {
             javax.crypto.Mac mac = javax.crypto.Mac.getInstance(HMAC_ALGORITHM);
-            mac.init(hmacKey);
+            mac.init(slot.hmacKey);
             return mac.doFinal(data);
         } catch (Exception e) {
             Log.e(TAG, "HMAC generation failed", e);
@@ -272,12 +362,16 @@ public class SecurityManager {
      * Verify HMAC for message integrity.
      */
     public synchronized boolean verifyHMAC(byte[] data, byte[] hmac) {
+        return verifyHMAC(data, hmac, getActiveKeyId());
+    }
+
+    public synchronized boolean verifyHMAC(byte[] data, byte[] hmac, String keyId) {
         if (!initialized || data == null || hmac == null) {
             integrityFailures++;
             return false;
         }
 
-        byte[] calculatedHMAC = generateHMAC(data);
+        byte[] calculatedHMAC = generateHMAC(data, keyId);
         try {
             if (calculatedHMAC == null) {
                 integrityFailures++;
@@ -332,8 +426,8 @@ public class SecurityManager {
     }
 
     public synchronized void reset() {
-        aesKey = null;
-        hmacKey = null;
+        currentSlot = null;
+        previousSlot = null;
         initialized = false;
         encryptionEnabled = true;
     }

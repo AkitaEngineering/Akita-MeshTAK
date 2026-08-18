@@ -11,6 +11,7 @@
 #include "audit_log.h"        // For audit logging
 #include "input_validation.h" // For input validation
 #include "security.h"         // For security operations
+#include "hardware_security.h"
 #include "mailbox_escape.h"   // Shared escape/unescape
 #include <Arduino.h>
 #include <sys/time.h>
@@ -134,6 +135,16 @@ void processIncomingCommand(const String& cmd) {
 
         logAuditEvent(AUDIT_EVENT_COMMAND_EXECUTED, 0, DEVICE_ID,
                      ("Version: " + String(FIRMWARE_VERSION)).c_str(), true);
+    } else if (cmd == CMD_GET_SEC_STATE) {
+        String previousKeyId = String(getPreviousKeyId());
+        if (previousKeyId.length() == 0) {
+            previousKeyId = "none";
+        }
+        String response = String(STATUS_SEC_STATE_PREFIX) + "key=" + String(getActiveKeyId())
+            + ":prev=" + previousKeyId + ":" + formatHardwareSecurityFields();
+        sendStatusToAtak(response);
+        logAuditEvent(AUDIT_EVENT_COMMAND_EXECUTED, 0, DEVICE_ID,
+                     "Security state reported", true);
     } else if (cmd.startsWith(CMD_TIME_SYNC_PREFIX)) {
         String epochText = cmd.substring(strlen(CMD_TIME_SYNC_PREFIX));
         epochText.trim();
@@ -191,9 +202,9 @@ void processIncomingCommand(const String& cmd) {
         bool clockSet = epochSeconds >= 1609459200ULL && epochSeconds <= 4102444800ULL
             && settimeofday(&tv, nullptr) == 0;
         bool staged = clockSet && persistProvisioningSecret(sharedSecret)
-            && initSecurityFromProvisioning(String(DEVICE_ID), sharedSecret);
+            && initSecurityFromStore();
         String responsePrefix = staged ? STATUS_PROVISION_STAGED_PREFIX : STATUS_PROVISION_FAILED_PREFIX;
-        String response = String(responsePrefix) + ENCRYPTED_PAYLOAD_VERSION + ":" + ENCRYPTED_KEY_ID;
+        String response = String(responsePrefix) + ENCRYPTED_PAYLOAD_VERSION + ":" + String(getActiveKeyId());
         sendStatusToAtak(response);
         logAuditEvent(AUDIT_EVENT_CONFIGURATION_CHANGE, staged ? 0 : 2, DEVICE_ID,
                      staged ? "Runtime provisioning staged" : "Runtime provisioning stage failed", staged);

@@ -128,6 +128,8 @@ public class AkitaMeshTAKPlugin implements SharedPreferences.OnSharedPreferenceC
                 .registerOnSharedPreferenceChangeListener(this);
 
         AuditLogger.getInstance().initialize(context.getApplicationContext());
+        ReplayGuard.attach(new java.io.File(
+                context.getApplicationContext().getNoBackupFilesDir(), ReplayGuard.STATE_FILE_NAME));
 
         akitaToolbar = new AkitaToolbar(context);
         connectionStatusOverlay = new ConnectionStatusOverlay(context, view);

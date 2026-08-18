@@ -6,7 +6,16 @@ The format follows Keep a Changelog and the project uses semantic versioning for
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-17
+
+### Added
+- Overlapping `k1`/`k2` key slots so a rotated secret remains readable until the next rotation.
+- Persistent replay defense for authenticated envelopes on both the plugin and controller.
+- Controller security-state command reporting active key-id, previous key-id, flash encryption, and secure boot.
+- Mission Assurance now surfaces flash-encryption posture and the active key-id.
+
 ### Fixed
+- Gradle wrapper URL/SHA mismatch that pointed at Gradle 8.9 while still hashing Gradle 8.7.
 - Android secure provisioning storage now rejects non-file state targets, preserves legacy secrets when migration cannot persist, and surfaces write failures to callers.
 - Firmware builds now exact-pin PlatformIO, the ESP32 platform, and library versions instead of resolving mutable upstream dependencies.
 - Signing-key formats are ignored, release keystores are rejected from inside the checkout, and local signing material was moved out of the repository.

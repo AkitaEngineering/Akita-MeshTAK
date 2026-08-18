@@ -10,9 +10,9 @@ def has_text(value):
 def load_version_name():
     version_file = Path(env["PROJECT_DIR"]).resolve().parent / "version.properties"
     if not version_file.exists():
-        return "0.2.0"
+        return "0.2.1"
 
-    version_name = "0.2.0"
+    version_name = "0.2.1"
     for line in version_file.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "=" not in stripped:

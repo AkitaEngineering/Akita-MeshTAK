@@ -21,8 +21,26 @@ public final class Config {
     /** Envelope protocol version used for encrypted payloads. */
     public static final String ENCRYPTED_PAYLOAD_VERSION = "v2";
 
-    /** Active key identifier for payload encryption; rotate on reprovisioning. */
-    public static final String ENCRYPTED_KEY_ID = "k1";
+    /** First overlapping key slot. */
+    public static final String ENCRYPTED_KEY_ID_K1 = "k1";
+
+    /** Second overlapping key slot. */
+    public static final String ENCRYPTED_KEY_ID_K2 = "k2";
+
+    /** Default key identifier for a newly provisioned device. */
+    public static final String ENCRYPTED_KEY_ID = ENCRYPTED_KEY_ID_K1;
+
+    public static boolean isKnownKeyId(String keyId) {
+        return ENCRYPTED_KEY_ID_K1.equals(keyId) || ENCRYPTED_KEY_ID_K2.equals(keyId);
+    }
+
+    public static String nextKeyId(String keyId) {
+        return ENCRYPTED_KEY_ID_K2.equals(keyId) ? ENCRYPTED_KEY_ID_K1 : ENCRYPTED_KEY_ID_K2;
+    }
+
+    public static String normalizeKeyId(String keyId) {
+        return isKnownKeyId(keyId) ? keyId : ENCRYPTED_KEY_ID;
+    }
 
     // --- BLE (Bluetooth Low Energy) Configuration ---
 
@@ -69,8 +87,14 @@ public final class Config {
     /** Command prefix sent to the firmware to request version. */
     public static final String CMD_GET_VERSION = "CMD:GET_VERSION";
 
+    /** Command sent to request controller key-id and hardware-security posture. */
+    public static final String CMD_GET_SEC_STATE = "CMD:GET_SEC_STATE";
+
     /** Prefix expected in the response string when receiving version. */
     public static final String STATUS_VERSION_PREFIX = "STATUS:VERSION:";
+
+    /** Prefix expected when firmware reports key-id and hardware-security posture. */
+    public static final String STATUS_SEC_STATE_PREFIX = "STATUS:SEC_STATE:";
 
     /** Prefix expected when firmware reports time synchronization status. */
     public static final String STATUS_TIME_SYNC_PREFIX = "STATUS:TIME:SYNC:";

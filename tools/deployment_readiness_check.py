@@ -82,6 +82,45 @@ def main() -> int:
     check("deployment_readiness_check.py" in ci_config and "validate_opentakserver_cot.py" in ci_config,
           "CI runs deployment and CoT static checks", failures)
 
+    wrapper = read_text("atak_plugin/gradle/wrapper/gradle-wrapper.properties")
+    wrapper_url = re.search(r"distributionUrl=.*gradle-([0-9.]+)-bin\.zip", wrapper)
+    wrapper_sha = re.search(r"distributionSha256Sum=([0-9a-f]+)", wrapper)
+    known_wrapper_hashes = {
+        "8.7": "544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d",
+    }
+    check(wrapper_url is not None and wrapper_sha is not None,
+          "Gradle wrapper declares a versioned distribution and SHA-256", failures)
+    if wrapper_url is not None and wrapper_sha is not None:
+        gradle_version = wrapper_url.group(1)
+        expected_sha = known_wrapper_hashes.get(gradle_version)
+        check(expected_sha is not None and wrapper_sha.group(1) == expected_sha,
+              "Gradle wrapper SHA-256 matches the declared distribution", failures)
+
+    plugin_envelope = read_text("atak_plugin/src/com/akitaengineering/meshtak/PayloadEnvelope.java")
+    plugin_replay = read_text("atak_plugin/src/com/akitaengineering/meshtak/ReplayGuard.java")
+    firmware_payload = read_text("firmware/src/payload_codec.cpp")
+    firmware_replay = read_text("firmware/src/replay_guard.cpp")
+    firmware_security = read_text("firmware/src/security.cpp")
+    plugin_security = read_text("atak_plugin/src/com/akitaengineering/meshtak/SecurityManager.java")
+    plugin_config = read_text("atak_plugin/src/com/akitaengineering/meshtak/Config.java")
+    check("ReplayGuard" in plugin_envelope and "attach(" in plugin_replay,
+          "plugin replay defense persists across process restart", failures)
+    check("replayGuardRemember" in firmware_payload and "akita-rpl" in firmware_replay,
+          "firmware replay defense persists across reboot", failures)
+    check("initSecurityFromKeySlots" in firmware_security and "previousSlot" in plugin_security,
+          "firmware and plugin keep an overlapping previous key slot", failures)
+    check("ENCRYPTED_KEY_ID_K2" in plugin_config and "KEY_ID_K2" in firmware_config,
+          "k1/k2 overlapping key identifiers are defined on both sides", failures)
+    check("CMD_GET_SEC_STATE" in firmware_config and "CMD_GET_SEC_STATE" in plugin_config,
+          "controller security-state command is defined on firmware and plugin", failures)
+    check("esp_flash_encryption_enabled" in read_text("firmware/src/hardware_security.cpp"),
+          "firmware reports ESP32 flash-encryption posture", failures)
+
+    version_properties = read_text("version.properties")
+    check("VERSION_NAME=0.2.1" in version_properties, "release metadata is 0.2.1", failures)
+    check("MIN_FIRMWARE_VERSION=0.2.1" in version_properties,
+          "plugin requires firmware 0.2.1 for overlapping keys and durable replay", failures)
+
     docs = [
         "README.md",
         "SECURITY_IMPROVEMENTS.md",

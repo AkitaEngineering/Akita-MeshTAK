@@ -41,6 +41,25 @@ bool initSecurity(const uint8_t* aes_key, const uint8_t* hmac_key, uint8_t secur
 // Initialize security module from runtime provisioning material.
 bool initSecurityFromProvisioning(const String& deviceId, const String& sharedSecret);
 
+// Initialize current and optional previous key slots for overlapping rotation.
+bool initSecurityFromKeySlots(const String& deviceId,
+                              const String& currentSecret,
+                              const String& currentKeyId,
+                              const String& previousSecret,
+                              const String& previousKeyId);
+
+// Load NVS provisioning material and initialize current plus previous slots.
+bool initSecurityFromStore();
+
+// Active outgoing key-id, or ENCRYPTED_KEY_ID when uninitialized.
+const char* getActiveKeyId();
+
+// Previous overlapping key-id, or empty string when none is loaded.
+const char* getPreviousKeyId();
+
+// True when the key-id matches the current or previous loaded slot.
+bool acceptsKeyId(const String& keyId);
+
 // Encrypt data with AES-256-GCM
 // Returns encrypted data length, or 0 on error
 size_t encryptData(const uint8_t* plaintext, size_t plaintext_len,
@@ -52,14 +71,25 @@ size_t encryptData(const uint8_t* plaintext, size_t plaintext_len,
 size_t decryptData(const uint8_t* ciphertext, size_t ciphertext_len,
                    const uint8_t* iv, uint8_t* plaintext, size_t plaintext_max_len);
 
+// Decrypt using the slot matching key_id.
+size_t decryptDataForKeyId(const String& keyId,
+                           const uint8_t* ciphertext, size_t ciphertext_len,
+                           const uint8_t* iv, uint8_t* plaintext, size_t plaintext_max_len);
+
 // Generate HMAC-SHA256 for message integrity
 // Returns false on any cryptographic failure. Callers must not use hmac_out
 // unless this function succeeds.
 bool generateHMAC(const uint8_t* data, size_t data_len, uint8_t* hmac_out);
 
+// Generate HMAC-SHA256 using the slot matching key_id.
+bool generateHMACForKeyId(const String& keyId, const uint8_t* data, size_t data_len, uint8_t* hmac_out);
+
 // Verify HMAC-SHA256 for message integrity
 // Returns true if HMAC is valid
 bool verifyHMAC(const uint8_t* data, size_t data_len, const uint8_t* hmac);
+
+// Verify HMAC-SHA256 using the slot matching key_id.
+bool verifyHMACForKeyId(const String& keyId, const uint8_t* data, size_t data_len, const uint8_t* hmac);
 
 // Generate authentication token
 void generateAuthToken(uint8_t* token_out);

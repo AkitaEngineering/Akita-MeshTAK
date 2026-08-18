@@ -255,29 +255,26 @@ This document summarizes the comprehensive security, accountability, encryption,
 ## Next Steps (Recommended)
 
 1. **Secure Key Provisioning**:
-   - Implement secure key storage
-   - Implement key rotation
-   - Implement secure key exchange
+   - Overlapping `k1`/`k2` rotation is implemented; keep field keystores and NVS flash encryption enabled
+   - Add a signed air-gapped key-exchange receipt if a third party must witness rotation
 
 2. **Enhanced Authentication**:
-   - Implement certificate-based authentication
-   - Implement mutual authentication
-   - Implement session management
+   - Implement certificate-based authentication for a future TLS MQTT/TAK path
+   - Implement mutual authentication for that path
+   - Implement session management for long-lived server links
 
 3. **Replay Protection**:
-   - Add timestamps to messages
-   - Add nonces to prevent replay
-   - Implement message sequence numbers
+   - Timestamps, nonces, and a persistent nonce cache are implemented on both sides
+   - Add persistent monotonic peer counters only if a deployment requires replay defense beyond the persisted cache window
 
 4. **Rate Limiting**:
-   - Implement rate limiting for commands
-   - Prevent DoS attacks
-   - Implement backoff strategies
+   - Command rate limiting is implemented on BLE and Serial
+   - Tune `CMD_RATE_LIMIT_MS` per deployment if flood testing requires it
 
 5. **Secure Boot**:
-   - Implement secure boot verification
-   - Implement firmware signature verification
-   - Implement tamper detection
+   - Firmware now reports flash-encryption and secure-boot posture
+   - Enable ESP32 flash encryption, secure boot, and anti-rollback on field hardware
+   - Keep those hardware features off only on bench images
 
 ---
 

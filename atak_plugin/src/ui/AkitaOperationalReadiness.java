@@ -6,6 +6,8 @@ import android.content.SharedPreferences;
 import androidx.preference.PreferenceManager;
 
 import com.akitaengineering.meshtak.AuditLogger;
+import com.akitaengineering.meshtak.Config;
+import com.akitaengineering.meshtak.DeviceSecurityState;
 
 import java.util.Locale;
 
@@ -33,13 +35,21 @@ public final class AkitaOperationalReadiness {
             return "Encryption disabled by policy";
         }
         if (securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
+            String keySummary = securityManager.getActiveKeyId();
+            if (securityManager.acceptsKeyId(Config.nextKeyId(keySummary))
+                    && !keySummary.equals(Config.nextKeyId(keySummary))) {
+                keySummary = keySummary + "/" + Config.nextKeyId(keySummary);
+            }
+            if (DeviceSecurityState.hasReport() && !DeviceSecurityState.hasFlashEncryption()) {
+                return String.format(Locale.US, "AES/HMAC %s • flash encryption off", keySummary);
+            }
             if (failures > 0) {
-                return String.format(Locale.US, "AES/HMAC active • %d failures", failures);
+                return String.format(Locale.US, "AES/HMAC %s • %d failures", keySummary, failures);
             }
             if (securityManager.getMessagesEncrypted() > 0) {
-                return String.format(Locale.US, "AES/HMAC active • %d frames", securityManager.getMessagesEncrypted());
+                return String.format(Locale.US, "AES/HMAC %s • %d frames", keySummary, securityManager.getMessagesEncrypted());
             }
-            return "AES-256 / HMAC active";
+            return "AES-256 / HMAC " + keySummary + " active";
         }
         if (securityManager.isInitialized()) {
             return "Keys loaded • encryption standby";
@@ -110,7 +120,10 @@ public final class AkitaOperationalReadiness {
         }
         com.akitaengineering.meshtak.SecurityManager securityManager = com.akitaengineering.meshtak.SecurityManager.getInstance();
         if (securityManager.isInitialized() && securityManager.isEncryptionEnabled()) {
-            return "Security: AES/HMAC + audit active";
+            if (DeviceSecurityState.hasReport() && !DeviceSecurityState.hasFlashEncryption()) {
+                return "Security: AES/HMAC • enable flash encryption";
+            }
+            return "Security: AES/HMAC " + securityManager.getActiveKeyId() + " + audit active";
         }
         return transportAttached ? "Security: Provisioning degraded" : "Security: Provisioning pending";
     }
@@ -131,7 +144,12 @@ public final class AkitaOperationalReadiness {
             return profileLabel + " workflows are in simulated assurance mode with crypto, audit, and ATAK interoperability indicators available for dry runs.";
         }
         if (securityManager.isInitialized() && securityManager.isEncryptionEnabled() && transportAttached && mapAvailable) {
-            return profileLabel + " workflows are backed by active encryption, audit logging, and ATAK/partner interoperability.";
+            if (DeviceSecurityState.hasReport() && !DeviceSecurityState.hasFlashEncryption()) {
+                return profileLabel + " workflows have encrypted transport, but the controller does not have flash encryption enabled. Enable ESP32 flash encryption and secure boot before fielding.";
+            }
+            return profileLabel + " workflows are backed by active encryption ("
+                    + securityManager.getActiveKeyId()
+                    + "), audit logging, and ATAK/partner interoperability.";
         }
         if (transportAttached) {
             return profileLabel + " workflows are staged with transport attached. Complete live crypto and interoperability validation before fielding.";

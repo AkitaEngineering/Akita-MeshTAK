@@ -34,6 +34,7 @@ import com.akitaengineering.meshtak.ui.AkitaMissionMarkerRegistry;
 import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.Config;
+import com.akitaengineering.meshtak.DeviceSecurityState;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.PayloadEnvelope;
 import com.akitaengineering.meshtak.SecurityManager;
@@ -204,9 +205,16 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         SharedPreferences preferences = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this);
         String deviceId = preferences.getString("ble_device_name", "AkitaNode01");
         String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(this);
+        String previousSecret = AkitaProvisioningManager.getPreviousProvisioningSecret(this);
+        String keyId = AkitaProvisioningManager.getActiveKeyId(this);
 
         securityManager.reset();
-        if (!securityManager.initializeFromProvisioning(deviceId, provisioningSecret)) {
+        if (!securityManager.initializeFromProvisioning(
+                deviceId,
+                provisioningSecret,
+                keyId,
+                previousSecret,
+                Config.nextKeyId(keyId))) {
             Log.e(TAG, "Failed to initialize security manager");
             auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
                     "SerialService", "Security initialization failed", false);
@@ -503,6 +511,9 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         handler.postDelayed(() ->
                 sendData((Config.CMD_COT_MISSION_PREFIX + missionName + "\n").getBytes(StandardCharsets.UTF_8)),
                 100);
+        handler.postDelayed(() ->
+                sendData((Config.CMD_GET_SEC_STATE + "\n").getBytes(StandardCharsets.UTF_8)),
+                200);
     }
 
     public void sendCriticalAlert() {
@@ -613,6 +624,11 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         }
         if (line.startsWith(Config.STATUS_COT_MISSION_PREFIX)) {
             Log.i(TAG, "Firmware CoT mission status: " + line.substring(Config.STATUS_COT_MISSION_PREFIX.length()));
+            return true;
+        }
+        if (DeviceSecurityState.updateFromStatusLine(line)) {
+            Log.i(TAG, "Firmware security state: " + DeviceSecurityState.getKeySummary()
+                    + " • " + DeviceSecurityState.getHardwareSummary());
             return true;
         }
         return false;

@@ -4,12 +4,50 @@
 from __future__ import annotations
 
 import argparse
+import pathlib
 import re
 import sys
 import xml.etree.ElementTree as ET
 
 
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 ISO8601_Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+REQUIRED_EVENT_ATTRS = ("version", "uid", "type", "how", "time", "start", "stale")
+REQUIRED_POINT_ATTRS = ("lat", "lon", "hae", "ce", "le")
+REQUIRED_TEMPLATE_SNIPPETS = (
+    "<event version='2.0'",
+    "uid='%s'",
+    "how='m-g'",
+    "time='%s'",
+    "start='%s'",
+    "stale='%s'",
+    "<dest mission=",
+    "<point lat=",
+    "<contact callsign=",
+    "<takv ",
+    "<__group ",
+    "<precisionlocation ",
+)
+
+
+def load_version_name() -> str:
+    version_file = ROOT / "version.properties"
+    if not version_file.exists():
+        return "0.2.1"
+    for line in version_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("VERSION_NAME="):
+            return stripped.split("=", 1)[1].strip()
+    return "0.2.1"
+
+
+def validate_firmware_cot_template() -> list[str]:
+    source = (ROOT / "firmware" / "src" / "cot_generation.cpp").read_text(encoding="utf-8")
+    errors: list[str] = []
+    for snippet in REQUIRED_TEMPLATE_SNIPPETS:
+        if snippet not in source:
+            errors.append(f"firmware CoT template missing {snippet}")
+    return errors
 
 
 def build_sample_cot(mission_name: str = "") -> str:
@@ -22,7 +60,7 @@ def build_sample_cot(mission_name: str = "") -> str:
         "<point lat='45.4215000' lon='-75.6972000' hae='70.00' ce='10' le='10'/>"
         "<detail>"
         "<contact callsign='AkitaNode01'/>"
-        "<takv device='Heltec V3' platform='Akita MeshTAK' os='ESP32' version='0.2.0'/>"
+        f"<takv device='Heltec V3' platform='Akita MeshTAK' os='ESP32' version='{load_version_name()}'/>"
         "<__group name='Cyan' role='Team Member'/>"
         "<precisionlocation geopointsrc='GPS' altsrc='GPS'/>"
         "</detail>"
@@ -101,7 +139,8 @@ def main() -> int:
     else:
         xml_text = build_sample_cot(args.mission)
 
-    errors = validate_cot(xml_text, args.mission)
+    errors = validate_firmware_cot_template()
+    errors.extend(validate_cot(xml_text, args.mission))
     if errors:
         for error in errors:
             print(f"FAIL: {error}", file=sys.stderr)

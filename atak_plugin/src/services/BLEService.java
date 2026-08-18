@@ -30,6 +30,7 @@ import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.ui.AkitaMissionMarkerRegistry;
 import com.akitaengineering.meshtak.Config;
+import com.akitaengineering.meshtak.DeviceSecurityState;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.PayloadEnvelope;
 import com.akitaengineering.meshtak.SecurityManager;
@@ -186,9 +187,16 @@ public class BLEService extends Service {
     private void initializeSecurity() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
         String provisioningSecret = AkitaProvisioningManager.getActiveProvisioningSecret(this);
+        String previousSecret = AkitaProvisioningManager.getPreviousProvisioningSecret(this);
+        String keyId = AkitaProvisioningManager.getActiveKeyId(this);
 
         securityManager.reset();
-        if (!securityManager.initializeFromProvisioning(targetDeviceName, provisioningSecret)) {
+        if (!securityManager.initializeFromProvisioning(
+                targetDeviceName,
+                provisioningSecret,
+                keyId,
+                previousSecret,
+                Config.nextKeyId(keyId))) {
             Log.e(TAG, "Failed to initialize security manager");
             auditLogger.log(AuditLogger.EventType.ERROR, AuditLogger.Severity.ERROR,
                     "BLEService", "Security initialization failed", false);
@@ -659,6 +667,9 @@ public class BLEService extends Service {
         handler.postDelayed(() ->
                 sendData((Config.CMD_COT_MISSION_PREFIX + missionName + "\n").getBytes(StandardCharsets.UTF_8)),
                 100);
+        handler.postDelayed(() ->
+                sendData((Config.CMD_GET_SEC_STATE + "\n").getBytes(StandardCharsets.UTF_8)),
+                200);
     }
 
     public void sendCriticalAlert() {
@@ -834,6 +845,11 @@ public class BLEService extends Service {
         }
         if (line.startsWith(Config.STATUS_COT_MISSION_PREFIX)) {
             Log.i(TAG, "Firmware CoT mission status: " + line.substring(Config.STATUS_COT_MISSION_PREFIX.length()));
+            return true;
+        }
+        if (DeviceSecurityState.updateFromStatusLine(line)) {
+            Log.i(TAG, "Firmware security state: " + DeviceSecurityState.getKeySummary()
+                    + " • " + DeviceSecurityState.getHardwareSummary());
             return true;
         }
         return false;
