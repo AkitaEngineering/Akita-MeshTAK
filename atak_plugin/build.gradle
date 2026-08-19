@@ -2,7 +2,7 @@ import java.util.Properties
 import java.util.UUID
 
 plugins {
-    id 'com.android.application' version '8.5.2'
+    id 'com.android.application' version '8.13.2'
 }
 
 def versionProperties = new Properties()
