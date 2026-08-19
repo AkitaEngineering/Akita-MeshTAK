@@ -6,6 +6,9 @@ The format follows Keep a Changelog and the project uses semantic versioning for
 
 ## [Unreleased]
 
+### Changed
+- ATAK plugin builds now use Android Gradle Plugin 9.3.1, Gradle 9.7.0, and build-tools 36.0.0.
+
 ## [0.2.1] - 2026-08-17
 
 ### Added

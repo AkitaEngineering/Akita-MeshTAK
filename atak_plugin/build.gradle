@@ -2,7 +2,7 @@ import java.util.Properties
 import java.util.UUID
 
 plugins {
-    id 'com.android.application' version '8.5.2'
+    id 'com.android.application' version '9.3.1'
 }
 
 def versionProperties = new Properties()
@@ -161,11 +161,14 @@ android {
         }
     }
 
-    buildToolsVersion '35.0.1'
+    buildToolsVersion '36.0.0'
 
     buildFeatures {
         buildConfig true
     }
+
+    // Java-only module: skip built-in Kotlin compilation and the Kotlin stdlib.
+    enableKotlin = false
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

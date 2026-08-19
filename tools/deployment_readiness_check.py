@@ -86,7 +86,7 @@ def main() -> int:
     wrapper_url = re.search(r"distributionUrl=.*gradle-([0-9.]+)-bin\.zip", wrapper)
     wrapper_sha = re.search(r"distributionSha256Sum=([0-9a-f]+)", wrapper)
     known_wrapper_hashes = {
-        "8.7": "544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d",
+        "9.7.0": "84fbba45c7f4c64abc77460e1c00f541e9f960e3c7ed2538f1ede19eacd873ae",
     }
     check(wrapper_url is not None and wrapper_sha is not None,
           "Gradle wrapper declares a versioned distribution and SHA-256", failures)

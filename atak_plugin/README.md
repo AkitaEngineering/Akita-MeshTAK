@@ -43,7 +43,7 @@ To build the Akita MeshTAK ATAK Plugin, you need **Android Studio** or the Andro
 
 ## Prerequisites
 - **Android Studio** (latest version) *or* the Android command-line tools
-- **Android SDK** (platform 35, build-tools 35.0.1)
+- **Android SDK** (platform 35, build-tools 36.0.0)
 - **Java 17 or Java 21** for Gradle/Android builds
 - **ATAK SDK** for release builds only. See `ATAK_SDK_REQUIREMENTS.md`.
 
