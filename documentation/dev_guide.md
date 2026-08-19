@@ -89,7 +89,7 @@ For checkouts hosted on removable or FUSE-backed storage, redirect generated obj
 
 The ATAK plugin is built using **Android Studio** or the Gradle wrapper from the command line.
 
-1. Install Android Studio (or the Android command-line tools) and Android SDK (platform 35, build-tools 35.0.1)
+1. Install Android Studio (or the Android command-line tools) and Android SDK (platform 35, build-tools 36.0.0)
 2. Use Java 17 or 21 for Android builds
 3. For release builds, obtain the official ATAK SDK jar and pass its path with `AKITA_ATAK_SDK_JAR` or `-PakitaAtakSdkJar`
 4. Open `atak_plugin/` in Android Studio — it will create `local.properties` automatically.

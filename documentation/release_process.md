@@ -61,7 +61,7 @@ platformio run -e heltec_v3_ci
 
 ## ATAK Plugin Release Inputs
 
-Release builds require Java 17 or 21, Android SDK platform 35/build-tools 35.0.1, the official ATAK SDK jar, and signing credentials.
+Release builds require Java 17 or 21, Android SDK platform 35/build-tools 36.0.0, the official ATAK SDK jar, and signing credentials.
 
 Set either Gradle properties or matching environment variables for:
 

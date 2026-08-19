@@ -16,8 +16,9 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     ignore:
-      # AGP and Gradle must move together; isolated bumps fail this tree.
+      # Keep AGP 9 and Gradle 9 on a coordinated major-upgrade path.
       - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "gradle"
         update-types: ["version-update:semver-major"]
     groups:
