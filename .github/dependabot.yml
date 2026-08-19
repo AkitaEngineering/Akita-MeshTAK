@@ -16,9 +16,8 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     ignore:
-      # AGP 9 and Gradle 9 must ship together after a dedicated compatibility pass.
+      # AGP and Gradle must move together; isolated bumps fail this tree.
       - dependency-name: "com.android.application"
-        update-types: ["version-update:semver-major"]
       - dependency-name: "gradle"
         update-types: ["version-update:semver-major"]
     groups:
