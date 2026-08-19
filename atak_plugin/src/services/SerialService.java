@@ -347,7 +347,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         if (serialPort != null) {
             stopIoManager();
             ioManager = new SerialInputOutputManager(serialPort, this);
-            executorService.submit(ioManager);
+            ioManager.start();
             Log.i(TAG, "Started IO Manager");
         }
     }

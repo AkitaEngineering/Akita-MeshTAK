@@ -4,8 +4,25 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   - package-ecosystem: "gradle"
     directory: "/atak_plugin"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+    ignore:
+      # AGP 9 and Gradle 9 must ship together after a dedicated compatibility pass.
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "gradle"
+        update-types: ["version-update:semver-major"]
+    groups:
+      gradle-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
