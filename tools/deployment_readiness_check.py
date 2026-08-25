@@ -5,11 +5,73 @@ from __future__ import annotations
 
 import pathlib
 import re
+import subprocess
 import sys
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 EMOJI_RE = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]")
+SKIP_SECRET_SCAN_DIRS = {".git", ".gradle", "build", ".pio", "__pycache__"}
+SIGNING_SUFFIXES = (
+    ".keystore",
+    ".jks",
+    ".bks",
+    ".p12",
+    ".pfx",
+    ".pkcs12",
+    ".pk8",
+    ".pkcs8",
+    ".p8",
+)
+TRACKED_SECRET_SUFFIXES = SIGNING_SUFFIXES + (
+    ".pem",
+    ".key",
+    ".crt",
+    ".cer",
+    ".der",
+    ".p7b",
+    ".p7c",
+    ".ppk",
+    ".ovpn",
+    ".kdbx",
+    ".pcap",
+    ".pcapng",
+)
+TRACKED_SECRET_NAMES = {
+    "local.properties",
+    "key.properties",
+    "keystore.properties",
+    "secrets.properties",
+    "secrets.gradle",
+    "google-services.json",
+    "credentials.json",
+    "auth.json",
+    "akita-provisioning-state.json",
+    "secrets.h",
+    "arduino_secrets.h",
+    "atak-sdk.jar",
+    "secring.gpg",
+    "id_rsa",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+}
+REQUIRED_IGNORED_PATHS = (
+    "release.keystore",
+    "atak_plugin/upload.jks",
+    "certs/client.p12",
+    "certs/tls.pem",
+    "secrets/deploy.key",
+    "key.properties",
+    "atak_plugin/key.properties",
+    "secrets.properties",
+    ".env",
+    "atak_plugin/google-services.json",
+    "akita-provisioning-state.json",
+    "atak_plugin/libs/atak-sdk.jar",
+    "documentation/private/notes.md",
+    "id_rsa",
+)
 
 
 def read_text(path: str) -> str:
@@ -21,6 +83,70 @@ def check(condition: bool, message: str, failures: list[str]) -> None:
     print(f"{status}: {message}")
     if not condition:
         failures.append(message)
+
+
+def path_is_skipped(path: pathlib.Path) -> bool:
+    return any(part in SKIP_SECRET_SCAN_DIRS for part in path.parts)
+
+
+def git_output(args: list[str]) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+    )
+
+
+def git_tracked_files() -> list[str] | None:
+    result = git_output(["ls-files", "-z"])
+    if result.returncode != 0:
+        return None
+    return [entry for entry in result.stdout.decode("utf-8", "replace").split("\0") if entry]
+
+
+def git_ignores(relative_path: str) -> bool | None:
+    result = git_output(["check-ignore", "-q", "--no-index", "--", relative_path])
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    return None
+
+
+PROPERTY_SECRET_KEY_MARKERS = ("password", "secret", "apikey", "api_key", "token", "keystore")
+
+
+def committed_properties_have_no_secrets(text: str) -> bool:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        key = stripped.split("=", 1)[0].strip().lower()
+        if any(marker in key for marker in PROPERTY_SECRET_KEY_MARKERS):
+            return False
+    return True
+
+
+def is_secret_tracked_path(relative_path: str) -> bool:
+    posix_path = relative_path.replace("\\", "/")
+    name = pathlib.PurePosixPath(posix_path).name
+    suffix = pathlib.PurePosixPath(posix_path).suffix.lower()
+    if posix_path.startswith("documentation/private/"):
+        return True
+    if name.endswith("_PRIVATE.md") or name.endswith("_TODO_PRIVATE.md"):
+        return True
+    if name.startswith(".env") and name not in {".env.example", ".env.sample"}:
+        return True
+    if name.startswith("service-account") and name.endswith(".json"):
+        return True
+    if name.endswith("-credentials.json") or name.endswith(".secrets"):
+        return True
+    if name.startswith("audit_log_") and name.endswith(".txt"):
+        return True
+    if suffix in TRACKED_SECRET_SUFFIXES:
+        return True
+    return name in TRACKED_SECRET_NAMES
 
 
 def main() -> int:
@@ -39,10 +165,40 @@ def main() -> int:
     check("*_PRIVATE.md" in gitignore, "private markdown pattern is ignored", failures)
     check("*.keystore" in gitignore and "*.jks" in gitignore and "*.p12" in gitignore,
           "signing material patterns are ignored", failures)
-    signing_material = []
-    for suffix in ("*.keystore", "*.jks", "*.p12", "*.pfx"):
-        signing_material.extend(ROOT.glob(suffix))
+    check(".env" in gitignore and "key.properties" in gitignore and "google-services.json" in gitignore,
+          "env files, key properties, and cloud credential JSON are ignored", failures)
+    check("akita-provisioning-state.json" in gitignore, "provisioning-state exports are ignored", failures)
+    check("*.pem" in gitignore and "*.key" in gitignore, "PEM and private-key files are ignored", failures)
+    check("!atak_plugin/gradle/wrapper/gradle-wrapper.jar" in gitignore,
+          "Gradle wrapper jar remains committable", failures)
+    signing_material = [
+        path for path in ROOT.rglob("*")
+        if path.is_file()
+        and not path_is_skipped(path)
+        and path.suffix.lower() in SIGNING_SUFFIXES
+    ]
     check(not signing_material, "signing material is stored outside the repository root", failures)
+    ignore_misses = []
+    ignore_probe_available = True
+    for relative_path in REQUIRED_IGNORED_PATHS:
+        ignored = git_ignores(relative_path)
+        if ignored is None:
+            ignore_probe_available = False
+            break
+        if not ignored:
+            ignore_misses.append(relative_path)
+    if ignore_probe_available:
+        check(not ignore_misses, "gitignore covers signing keys, env files, and credential exports", failures)
+        if ignore_misses:
+            print("    missed: " + ", ".join(ignore_misses))
+    tracked_files = git_tracked_files()
+    if tracked_files is not None:
+        tracked_secrets = [path for path in tracked_files if is_secret_tracked_path(path)]
+        check(not tracked_secrets, "git is not tracking secret or credential files", failures)
+        if tracked_secrets:
+            print("    tracked: " + ", ".join(tracked_secrets[:12]))
+    check(committed_properties_have_no_secrets(read_text("atak_plugin/gradle.properties")),
+          "committed Gradle properties contain no secret keys", failures)
     check("platformio/espressif32@6.12.0" in platformio_config,
           "firmware platform is exact-pinned", failures)
     pinned_libraries = [

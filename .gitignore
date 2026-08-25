@@ -2,8 +2,11 @@
 build/
 *.apk
 *.aab
+*.ap_
 *.dex
 *.class
+*.elf
+firmware.bin
 
 # Gradle
 .gradle/
@@ -12,7 +15,7 @@ atak_plugin/build/
 atak_plugin/gradle-8.6-bin.zip
 atak_plugin/gradle-8.6/
 
-# Local properties (contains SDK path, etc.)
+# Local machine / SDK paths (never commit)
 local.properties
 atak_plugin/local.properties
 
@@ -32,16 +35,70 @@ documentation/private/
 compile_commands.json
 firmware/.pio/
 
+# Python
+__pycache__/
+*.py[cod]
+
 # OS files
 .DS_Store
 Thumbs.db
+*~
+*.swp
+*.swo
 
-# Large binaries
+# Large binaries. Keep the Gradle wrapper jar; do not publish the proprietary ATAK SDK.
 *.jar
-!atak_plugin/libs/*.jar
+!atak_plugin/gradle/wrapper/gradle-wrapper.jar
 
-# Signing keys and certificates (must remain outside the checkout)
+# Signing keys, certificates, and private key material (must stay outside the checkout)
 *.keystore
 *.jks
+*.bks
 *.p12
 *.pfx
+*.pkcs12
+*.pk8
+*.pkcs8
+*.p8
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.p7b
+*.p7c
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+secring.gpg
+
+# Env files and local secret property files
+.env
+.env.*
+!.env.example
+!.env.sample
+key.properties
+keystore.properties
+secrets.properties
+secrets.gradle
+*.secrets
+*.secret
+secrets.h
+arduino_secrets.h
+gradle.properties.local
+*.gradle.local
+
+# Cloud / service credentials and operator exports
+google-services.json
+credentials.json
+service-account*.json
+*-credentials.json
+auth.json
+akita-provisioning-state.json
+audit_log_*.txt
+*.pcap
+*.pcapng
+*.kdbx
+*.ovpn
