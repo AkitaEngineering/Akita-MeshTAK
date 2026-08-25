@@ -6,6 +6,9 @@ The format follows Keep a Changelog and the project uses semantic versioning for
 
 ## [Unreleased]
 
+### Security
+- Expanded `.gitignore` and the deployment-readiness check so signing keys, env files, credential JSON, provisioning-state exports, and the proprietary ATAK SDK jar cannot be committed.
+
 ### Changed
 - ATAK plugin builds now use Android Gradle Plugin 9.3.2, Gradle 9.7.1, and build-tools 36.0.0.
 
