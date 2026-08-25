@@ -14,6 +14,13 @@ This document defines the release and versioning process for coordinated firmwar
 
 ## Release Preconditions
 
+There are two checkpoints:
+
+- **Software snapshot**: `main` is clean, CI is green, changelog/docs match `version.properties`, and `python3 tools/deployment_readiness_check.py` passes. This does **not** produce shippable firmware or a signed plugin.
+- **Field shipment**: the software snapshot plus the external inputs below. Run `python3 tools/release_preflight.py` on the release host; it must pass before `heltec_v3` or `assembleRelease`.
+
+Copy `.env.example` to a file **outside this checkout**, fill in real values, and `source` it for the release shell. Do not copy completed env files or keystores into the repository.
+
 Release is a no-go unless every item below is satisfied:
 
 1. The worktree is clean and `CHANGELOG.md` is updated for the target version.
@@ -122,8 +129,10 @@ apksigner verify --verbose --print-certs atak_plugin/build/outputs/apk/release/*
 Use annotated Git tags matching the version number:
 
 ```bash
-git tag -a v0.2.0 -m "Akita MeshTAK 0.2.0"
+git tag -a v0.2.1 -m "Akita MeshTAK 0.2.1"
 ```
+
+Tag only the commit that passed `tools/release_preflight.py` and hardware acceptance. GitHub source archives from the tag are not a substitute for the signed APK and `heltec_v3` firmware binary.
 
 ## Rollback
 

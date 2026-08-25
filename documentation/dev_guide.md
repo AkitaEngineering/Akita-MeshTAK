@@ -127,7 +127,7 @@ Stages runtime provisioning material to the connected device over a trusted loca
 - `STATUS:BATT:XX%`
 Response to battery query (e.g., `STATUS:BATT:85%`)
 - `STATUS:VERSION:X.Y.Z`
-Response to version query (e.g., `STATUS:VERSION:0.2.0`)
+Response to version query (e.g., `STATUS:VERSION:0.2.1`)
 - `STATUS:MAILBOX:ACK:<messageId>:IN_FLIGHT|FAILED`
 Local acknowledgement that a mailbox frame was accepted for relay or failed locally
 - `STATUS:MAILBOX:ACK:<messageId>:DELIVERED:<peerNode>`

@@ -137,8 +137,8 @@ No live traffic is authorized until Mission Assurance shows operational encrypti
 
 ## VERSION INFORMATION
 
-**Firmware**: 0.2.0
-**Plugin**: 0.2.0
+**Firmware**: 0.2.1
+**Plugin**: 0.2.1
 **Document**: QR-AKITA-MESHTAK-001 Rev 1.4
 
 ---
