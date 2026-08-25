@@ -168,6 +168,9 @@ def main() -> int:
     check(".env" in gitignore and "key.properties" in gitignore and "google-services.json" in gitignore,
           "env files, key properties, and cloud credential JSON are ignored", failures)
     check("akita-provisioning-state.json" in gitignore, "provisioning-state exports are ignored", failures)
+    env_example = read_text(".env.example")
+    check("AKITA_RELEASE_KEYSTORE_FILE=" in env_example and "AKITA_ATAK_SDK_JAR=" in env_example,
+          "env example documents field-shipment inputs", failures)
     check("*.pem" in gitignore and "*.key" in gitignore, "PEM and private-key files are ignored", failures)
     check("!atak_plugin/gradle/wrapper/gradle-wrapper.jar" in gitignore,
           "Gradle wrapper jar remains committable", failures)

@@ -136,12 +136,12 @@ The Akita MeshTAK System is a secure communication and situational awareness pla
 
 #### 3.2.2 Software Components
 1. **Akita MeshTAK Firmware**
-   - Version: 0.2.0
+   - Version: 0.2.1
    - Platform: ESP32 (Arduino framework)
    - Build System: PlatformIO
 
 2. **Akita MeshTAK Android Plugin**
-   - Version: 0.2.0
+   - Version: 0.2.1
    - Platform: Android
    - Build System: Gradle/Android Studio
    - Minimum SDK: API 24 (Android 7.0)
@@ -384,7 +384,7 @@ Mission Control inside the plugin persists mailbox queue records, replay checkpo
 1. Open serial monitor: `pio device monitor`
 2. Verify device boots and displays:
    ```
-   Akita MeshTAK Firmware v0.2.0 Starting...
+   Akita MeshTAK Firmware v0.2.1 Starting...
    Device ID: [your device ID]
    Initializing Meshtastic...
    Meshtastic Started. My Node ID: [node ID]

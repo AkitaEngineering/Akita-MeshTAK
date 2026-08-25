@@ -11,9 +11,9 @@ The current operator workflow also includes mission profiles, a mission-assuranc
 # System Requirements
 
 - Android device with ATAK installed
-- ESP32/Heltec companion controller running Akita MeshTAK firmware (v0.2.0)
+- ESP32/Heltec companion controller running Akita MeshTAK firmware (v0.2.1)
 - Separate Meshtastic-compatible radio node running official Meshtastic firmware, connected to the controller by UART
-- Akita MeshTAK Plugin (compiled `.apk` file, v0.2.0)
+- Akita MeshTAK Plugin (compiled `.apk` file, v0.2.1)
 
 ---
 

@@ -6,19 +6,20 @@ The format follows Keep a Changelog and the project uses semantic versioning for
 
 ## [Unreleased]
 
-### Security
-- Expanded `.gitignore` and the deployment-readiness check so signing keys, env files, credential JSON, provisioning-state exports, and the proprietary ATAK SDK jar cannot be committed.
-
-### Changed
-- ATAK plugin builds now use Android Gradle Plugin 9.3.2, Gradle 9.7.1, and build-tools 36.0.0.
-
-## [0.2.1] - 2026-08-17
+## [0.2.1] - 2026-08-25
 
 ### Added
 - Overlapping `k1`/`k2` key slots so a rotated secret remains readable until the next rotation.
 - Persistent replay defense for authenticated envelopes on both the plugin and controller.
 - Controller security-state command reporting active key-id, previous key-id, flash encryption, and secure boot.
 - Mission Assurance now surfaces flash-encryption posture and the active key-id.
+
+### Changed
+- ATAK plugin builds now use Android Gradle Plugin 9.3.2, Gradle 9.7.1, and build-tools 36.0.0.
+- Local `tools/release_preflight.py` reports missing field-shipment inputs without printing secret values.
+
+### Security
+- Expanded `.gitignore` and the deployment-readiness check so signing keys, env files, credential JSON, provisioning-state exports, and the proprietary ATAK SDK jar cannot be committed.
 
 ### Fixed
 - Gradle wrapper URL/SHA mismatch that pointed at Gradle 8.9 while still hashing Gradle 8.7.
