@@ -43,6 +43,10 @@ By harnessing the power of Meshtastic's decentralized, low-power radio networks,
 - **Tactical ATAK Map Layer**: Adds route-health context, mission geofences, search sectors, and stale-marker callouts directly to the ATAK map.
 - **Operational Themes**: Dark Ops, Light Ops, strict monochrome Night Red, and strict monochrome Night Green modes are available for different field environments.
 - **No-Hardware Rehearsal Mode**: Mock transport mode, mission replay, and the static UI preview allow workflow validation without a radio on hand.
+- **Native OpenTAKServer Streaming**: Optional TCP/SSL CoT client with PKCS#12 import. SSL without a client certificate is fail-closed.
+- **GeoChat and Operator Identity**: Compose room or direct GeoChat, and push callsign/team/role/stale settings onto controller CoT.
+- **Meshtastic ATAK Plugin Interop**: Optional TAKPacket protobuf on port 72, NodeInfo-aligned CoT, and OpenTAKServer Meshtastic MQTT JSON mapping.
+- **Data Package Handoff**: Queue a hashed package reference over the mesh and emit TAK fileshare CoT; the binary stays on ATAK/OpenTAKServer.
 
 **Versatile Connectivity Options**:
 - Bluetooth Low Energy (BLE)

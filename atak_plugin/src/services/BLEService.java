@@ -30,7 +30,8 @@ import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.ui.AkitaMissionMarkerRegistry;
 import com.akitaengineering.meshtak.Config;
-import com.akitaengineering.meshtak.DeviceSecurityState;
+import com.akitaengineering.meshtak.CotEventFactory;
+import com.akitaengineering.meshtak.FirmwareRuntimeSync;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.PayloadEnvelope;
 import com.akitaengineering.meshtak.SecurityManager;
@@ -643,7 +644,8 @@ public class BLEService extends Service {
                     callsign != null ? callsign : uid,
                     geoPoint.getLatitude(),
                     geoPoint.getLongitude(),
-                    "BLE");
+                    "BLE",
+                    CotEventFactory.parseStaleEpochMillis(cleanData));
         } catch (Exception e) {
             Log.e(TAG, "Error processing CoT data: " + e.getMessage(), e);
         }
@@ -659,17 +661,10 @@ public class BLEService extends Service {
         if (!isReadyForTraffic()) {
             return;
         }
-        long epochSeconds = System.currentTimeMillis() / 1000L;
-        sendData((Config.CMD_TIME_SYNC_PREFIX + epochSeconds + "\n").getBytes(StandardCharsets.UTF_8));
-
-        String missionName = sanitizeMissionName(PreferenceManager.getDefaultSharedPreferences(this)
-                .getString("opentakserver_mission_name", ""));
-        handler.postDelayed(() ->
-                sendData((Config.CMD_COT_MISSION_PREFIX + missionName + "\n").getBytes(StandardCharsets.UTF_8)),
-                100);
-        handler.postDelayed(() ->
-                sendData((Config.CMD_GET_SEC_STATE + "\n").getBytes(StandardCharsets.UTF_8)),
-                200);
+        FirmwareRuntimeSync.sendCommands(
+                handler,
+                PreferenceManager.getDefaultSharedPreferences(this),
+                this::sendData);
     }
 
     public void sendCriticalAlert() {
@@ -836,37 +831,7 @@ public class BLEService extends Service {
     }
 
     private boolean consumeRuntimeStatus(String line) {
-        if (line == null) {
-            return false;
-        }
-        if (line.startsWith(Config.STATUS_TIME_SYNC_PREFIX)) {
-            Log.i(TAG, "Firmware time sync status: " + line.substring(Config.STATUS_TIME_SYNC_PREFIX.length()));
-            return true;
-        }
-        if (line.startsWith(Config.STATUS_COT_MISSION_PREFIX)) {
-            Log.i(TAG, "Firmware CoT mission status: " + line.substring(Config.STATUS_COT_MISSION_PREFIX.length()));
-            return true;
-        }
-        if (DeviceSecurityState.updateFromStatusLine(line)) {
-            Log.i(TAG, "Firmware security state: " + DeviceSecurityState.getKeySummary()
-                    + " • " + DeviceSecurityState.getHardwareSummary());
-            return true;
-        }
-        return false;
-    }
-
-    private static String sanitizeMissionName(String missionName) {
-        if (missionName == null) {
-            return "";
-        }
-        StringBuilder sanitized = new StringBuilder();
-        for (int index = 0; index < missionName.length() && sanitized.length() < 64; index++) {
-            char c = missionName.charAt(index);
-            if (Character.isLetterOrDigit(c) || c == '-' || c == '_' || c == ' ' || c == '.') {
-                sanitized.append(c);
-            }
-        }
-        return sanitized.toString().trim();
+        return FirmwareRuntimeSync.consumeStatus(line);
     }
 
     private byte[] encodeEncryptedPayloadBytes(byte[] plaintext) {

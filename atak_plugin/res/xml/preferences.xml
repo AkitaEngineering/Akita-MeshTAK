@@ -23,12 +23,128 @@
         android:defaultValue="search_rescue" />
 
     <PreferenceCategory
+        android:title="@string/operator_identity_category_title">
+
+        <EditTextPreference
+            android:key="operator_callsign"
+            android:title="@string/operator_callsign_title"
+            android:defaultValue="" />
+
+        <ListPreference
+            android:key="operator_team"
+            android:title="@string/operator_team_title"
+            android:entries="@array/operator_team_entries"
+            android:entryValues="@array/operator_team_values"
+            android:defaultValue="Cyan" />
+
+        <ListPreference
+            android:key="operator_role"
+            android:title="@string/operator_role_title"
+            android:entries="@array/operator_role_entries"
+            android:entryValues="@array/operator_role_values"
+            android:defaultValue="Team Member" />
+
+        <EditTextPreference
+            android:key="cot_stale_seconds"
+            android:title="@string/cot_stale_seconds_title"
+            android:defaultValue="120" />
+
+        <EditTextPreference
+            android:key="geochat_chatroom"
+            android:title="@string/geochat_chatroom_title"
+            android:defaultValue="All Chat Rooms" />
+
+        <EditTextPreference
+            android:key="geochat_direct_callsign"
+            android:title="@string/geochat_direct_callsign_title"
+            android:defaultValue="" />
+
+        <SwitchPreference
+            android:key="meshtastic_atak_plugin"
+            android:title="@string/meshtastic_atak_plugin_title"
+            android:defaultValue="false" />
+
+        <EditTextPreference
+            android:key="meshtastic_mqtt_root"
+            android:title="@string/meshtastic_mqtt_root_title"
+            android:defaultValue="msh/2/json" />
+
+        <EditTextPreference
+            android:key="meshtastic_mqtt_channel"
+            android:title="@string/meshtastic_mqtt_channel_title"
+            android:defaultValue="LongFast" />
+
+        <EditTextPreference
+            android:key="data_package_name"
+            android:title="@string/data_package_name_title"
+            android:defaultValue="" />
+
+        <EditTextPreference
+            android:key="data_package_sha256"
+            android:title="@string/data_package_sha256_title"
+            android:defaultValue="" />
+
+        <EditTextPreference
+            android:key="data_package_size"
+            android:title="@string/data_package_size_title"
+            android:defaultValue="0" />
+
+        <EditTextPreference
+            android:key="data_package_url"
+            android:title="@string/data_package_url_title"
+            android:defaultValue="" />
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:title="@string/opentakserver_category_title">
+
+        <SwitchPreference
+            android:key="opentakserver_enabled"
+            android:title="@string/opentakserver_enabled_title"
+            android:defaultValue="false" />
+
+        <EditTextPreference
+            android:key="opentakserver_host"
+            android:title="@string/opentakserver_host_title"
+            android:defaultValue="" />
+
+        <EditTextPreference
+            android:key="opentakserver_port"
+            android:title="@string/opentakserver_port_title"
+            android:defaultValue="8088" />
+
+        <SwitchPreference
+            android:key="opentakserver_ssl"
+            android:title="@string/opentakserver_ssl_title"
+            android:defaultValue="false" />
+
+        <EditTextPreference
+            android:key="opentakserver_client_p12_path"
+            android:title="@string/opentakserver_p12_path_title"
+            android:defaultValue="" />
+
+        <EditTextPreference
+            android:key="opentakserver_client_p12_password"
+            android:title="@string/opentakserver_p12_password_title"
+            android:persistent="false"
+            android:defaultValue="" />
+
+        <Preference
+            android:key="opentakserver_import_certificate"
+            android:title="@string/opentakserver_import_certificate_title" />
 
         <EditTextPreference
             android:key="opentakserver_mission_name"
             android:title="@string/opentakserver_mission_name_title"
             android:defaultValue="" />
+
+        <Preference
+            android:key="opentakserver_send_test_cot"
+            android:title="@string/opentakserver_send_test_cot_title" />
+
+        <Preference
+            android:key="opentakserver_export_diagnostics"
+            android:title="@string/opentakserver_export_diagnostics_title" />
     </PreferenceCategory>
 
     <PreferenceCategory

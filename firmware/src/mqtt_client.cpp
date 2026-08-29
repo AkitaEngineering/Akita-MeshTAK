@@ -6,6 +6,7 @@
 #include "audit_log.h"        // For audit logging
 #include "security.h"         // For security operations
 #include "input_validation.h" // For input validation
+#include <Meshtastic.h>
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -101,12 +102,21 @@ void loopMQTT() {
     connectMQTT();
   }
   client.loop();
-  //  Publish CoT data
   static unsigned long lastPublishTime = 0;
-  if (millis() - lastPublishTime > 5000) {
-    String currentCot = generateLocationCoT(DEVICE_ID, 0.0, 0.0, 0.0); // Replace with actual data
-    publishMQTT("cot", currentCot.c_str());
+  if (millis() - lastPublishTime > 15000) {
     lastPublishTime = millis();
+    uint32_t nodeNum = my_node_num;
+    char sender[12];
+    snprintf(sender, sizeof(sender), "!%08lx", (unsigned long)nodeNum);
+    char topic[96];
+    snprintf(topic, sizeof(topic), "msh/2/json/LongFast/%s", sender);
+    char payload[256];
+    snprintf(payload, sizeof(payload),
+             "{\"channel\":0,\"from\":%lu,\"id\":%lu,\"payload\":{\"id\":\"%s\",\"longname\":\"%s\",\"shortname\":\"%s\"},"
+             "\"sender\":\"%s\",\"timestamp\":%lu,\"type\":\"nodeinfo\"}",
+             (unsigned long)nodeNum, (unsigned long)(millis() / 1000UL), sender, DEVICE_ID,
+             DEVICE_ID, sender, (unsigned long)(millis() / 1000UL));
+    publishMQTT(topic, payload);
   }
 }
 
@@ -125,14 +135,19 @@ void publishMQTT(const char* topic, const char* payload) {
   
   // Validate payload content
   ValidationResult validation = validateCoTXml(payloadStr);
-  if (validation != VALIDATION_OK && !payloadStr.startsWith("STATUS:")) {
+  bool mqttJson = payloadStr.startsWith("{") && payloadStr.indexOf("\"type\"") >= 0;
+  if (validation != VALIDATION_OK && !payloadStr.startsWith("STATUS:") && !mqttJson) {
     logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 2, "MQTT",
                  "Invalid payload - validation failed", false);
     return;
   }
   
-  char fullTopic[128];
-  snprintf(fullTopic, sizeof(fullTopic), "%s%s", MQTT_TOPIC_PREFIX, topic);
+  char fullTopic[160];
+  if (strncmp(topic, "msh/", 4) == 0) {
+    snprintf(fullTopic, sizeof(fullTopic), "%s", topic);
+  } else {
+    snprintf(fullTopic, sizeof(fullTopic), "%s%s", MQTT_TOPIC_PREFIX, topic);
+  }
   
   if (strlen(fullTopic) >= sizeof(fullTopic)) {
     logAuditEvent(AUDIT_EVENT_ERROR, 1, "MQTT", "Publish failed - topic too long", false);

@@ -4,7 +4,7 @@ The **Akita MeshTAK Plugin** allows your ATAK device to connect to Meshtastic ne
 
 > **Hardware architecture:** the Akita firmware runs on a companion ESP32/Heltec controller. That controller connects over UART to a separate node running official Meshtastic firmware; it does not replace Meshtastic firmware or operate the companion board's onboard LoRa radio.
 
-The current operator workflow also includes mission profiles, a mission-assurance dashboard, a acknowledgement-tracked mailbox, air-gapped provisioning ceremony controls, tactical ATAK overlay concepts, incident-board role packs, mock transport rehearsal mode, digital-twin replay, and Dark Ops / Light Ops / Night Red / Night Green presentation themes.
+The current operator workflow also includes mission profiles, a mission-assurance dashboard, a acknowledgement-tracked mailbox, air-gapped provisioning ceremony controls, tactical ATAK overlay concepts, incident-board role packs, mock transport rehearsal mode, digital-twin replay, operator callsign/team/role settings, GeoChat compose, optional native OpenTAKServer streaming, and Dark Ops / Light Ops / Night Red / Night Green presentation themes.
 
 ---
 

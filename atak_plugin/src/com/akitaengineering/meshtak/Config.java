@@ -78,6 +78,15 @@ public final class Config {
     /** Command prefix used to tag firmware CoT with an OpenTAKServer mission name. */
     public static final String CMD_COT_MISSION_PREFIX = "CMD:COT:MISSION:";
 
+    /** Command prefix used to set firmware CoT callsign, team, and role. */
+    public static final String CMD_COT_IDENTITY_PREFIX = "CMD:COT:IDENTITY:";
+
+    /** Command prefix used to set firmware CoT stale seconds. */
+    public static final String CMD_COT_STALE_PREFIX = "CMD:COT:STALE:";
+
+    /** Command prefix used to enable Meshtastic ATAK_PLUGIN protobuf on the controller. */
+    public static final String CMD_MESH_ATAK_PREFIX = "CMD:MESH:ATAK:";
+
     /** Command prefix used to stage provisioning material onto a connected device. */
     public static final String CMD_PROVISION_STAGE_PREFIX = "CMD:PROV:STAGE:";
 
@@ -101,6 +110,15 @@ public final class Config {
 
     /** Prefix expected when firmware reports the active CoT mission tag. */
     public static final String STATUS_COT_MISSION_PREFIX = "STATUS:COT:MISSION:";
+
+    /** Prefix expected when firmware reports the active CoT identity. */
+    public static final String STATUS_COT_IDENTITY_PREFIX = "STATUS:COT:IDENTITY:";
+
+    /** Prefix expected when firmware reports the active CoT stale interval. */
+    public static final String STATUS_COT_STALE_PREFIX = "STATUS:COT:STALE:";
+
+    /** Prefix expected when firmware reports ATAK_PLUGIN protobuf mode. */
+    public static final String STATUS_MESH_ATAK_PREFIX = "STATUS:MESH:ATAK:";
 
     /** Prefix expected when the device acknowledges a mailbox message. */
     public static final String STATUS_MAILBOX_ACK_PREFIX = "STATUS:MAILBOX:ACK:";

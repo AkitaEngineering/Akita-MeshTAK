@@ -26,6 +26,13 @@ import androidx.preference.PreferenceManager;
 
 import com.atakmap.android.maps.MapView;
 import com.akitaengineering.meshtak.AkitaMissionControl;
+import com.akitaengineering.meshtak.CotEventFactory;
+import com.akitaengineering.meshtak.DataPackageHandoff;
+import com.akitaengineering.meshtak.DeploymentReadinessReport;
+import com.akitaengineering.meshtak.FieldDiagnosticsExporter;
+import com.akitaengineering.meshtak.OpenTakCertificateStore;
+import com.akitaengineering.meshtak.OpenTakStreamingClient;
+import com.akitaengineering.meshtak.OperatorIdentity;
 import com.akitaengineering.meshtak.R;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
@@ -135,6 +142,15 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
     private String connectionMethod;
     private Button retryMailboxButton;
     private Button replayMissionButton;
+    private Button sendTestCotButton;
+    private Button exportDiagnosticsButton;
+    private TextView serverHealthSummaryTextView;
+    private TextView serverEndpointValueTextView;
+    private TextView serverReadinessValueTextView;
+    private TextView serverIdentitySummaryTextView;
+    private View serverHealthCard;
+    private View serverEndpointCard;
+    private View serverReadinessCard;
     private final List<String> commandHistory = new ArrayList<>();
     private final List<Integer> recentPayloadSizes = new ArrayList<>();
     private final List<String> dataFormats = new ArrayList<>();
@@ -283,6 +299,15 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         customLegendDot = findViewById(R.id.custom_legend_dot);
         retryMailboxButton = findViewById(R.id.retry_mailbox_button);
         replayMissionButton = findViewById(R.id.replay_mission_button);
+        sendTestCotButton = findViewById(R.id.send_test_cot_button);
+        exportDiagnosticsButton = findViewById(R.id.export_diagnostics_button);
+        serverHealthSummaryTextView = findViewById(R.id.server_health_summary);
+        serverEndpointValueTextView = findViewById(R.id.server_endpoint_value);
+        serverReadinessValueTextView = findViewById(R.id.server_readiness_value);
+        serverIdentitySummaryTextView = findViewById(R.id.server_identity_summary);
+        serverHealthCard = findViewById(R.id.server_health_card);
+        serverEndpointCard = findViewById(R.id.server_endpoint_card);
+        serverReadinessCard = findViewById(R.id.server_readiness_card);
     }
 
     private void setupFormatSpinner() {
@@ -361,6 +386,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         sendButton.setOnClickListener(v -> sendCurrentPayload());
         retryMailboxButton.setOnClickListener(v -> flushPendingMailbox(true));
         replayMissionButton.setOnClickListener(v -> toggleReplay());
+        sendTestCotButton.setOnClickListener(v -> sendTestCot());
+        exportDiagnosticsButton.setOnClickListener(v -> exportDiagnostics());
     }
 
     @Override
@@ -397,7 +424,18 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)
                 || "ble_device_name".equals(key)
                 || "serial_baud_rate".equals(key)
-                || "serial_port_path".equals(key)) {
+                || "serial_port_path".equals(key)
+                || OperatorIdentity.PREF_CALLSIGN.equals(key)
+                || OperatorIdentity.PREF_TEAM.equals(key)
+                || OperatorIdentity.PREF_ROLE.equals(key)
+                || OperatorIdentity.PREF_STALE_SECONDS.equals(key)
+                || OperatorIdentity.PREF_GEOCHAT_ROOM.equals(key)
+                || OperatorIdentity.PREF_GEOCHAT_DIRECT.equals(key)
+                || OperatorIdentity.PREF_OPENTAKSERVER_MISSION_NAME.equals(key)
+                || OpenTakStreamingClient.PREF_ENABLED.equals(key)
+                || OpenTakStreamingClient.PREF_HOST.equals(key)
+                || OpenTakStreamingClient.PREF_PORT.equals(key)
+                || OpenTakStreamingClient.PREF_SSL.equals(key)) {
             refreshMissionTemplates();
             refreshRoleActions();
             refreshDashboard();
@@ -456,6 +494,14 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
 
         String selectedFormat = getSelectedFormat();
         String payload = new String(formatData(selectedFormat, data), StandardCharsets.UTF_8);
+        if ("GeoChat".equals(selectedFormat)) {
+            sendGeoChat(payload);
+            return;
+        }
+        if ("Data Package".equals(selectedFormat)) {
+            sendDataPackageReference();
+            return;
+        }
         int preparedBytes = AkitaMissionControl.getPreparedMailboxCommandBytes(selectedFormat, payload);
         if (preparedBytes > MAX_PAYLOAD_BYTES) {
             recordFailedSend();
@@ -486,6 +532,123 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
 
         Toast.makeText(context, dispatchResult.summary, Toast.LENGTH_SHORT).show();
         refreshDashboard();
+    }
+
+    private void sendDataPackageReference() {
+        DataPackageHandoff.Reference reference = new DataPackageHandoff.Reference(
+                preferences.getString(DataPackageHandoff.PREF_NAME, ""),
+                preferences.getString(DataPackageHandoff.PREF_SHA256, ""),
+                parseLongOrZero(preferences.getString(DataPackageHandoff.PREF_SIZE, "0")),
+                preferences.getString(DataPackageHandoff.PREF_URL, ""),
+                OperatorIdentity.getMissionName(preferences));
+        if (!reference.isComplete()) {
+            Toast.makeText(context, "Set data package name and SHA-256 before queueing a handoff.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        String json;
+        try {
+            json = DataPackageHandoff.mailboxJson(reference);
+        } catch (org.json.JSONException exception) {
+            Toast.makeText(context, "Unable to encode data package reference.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        AkitaMissionMarkerRegistry.TrackedMarker anchor = AkitaMissionMarkerRegistry.getInstance().getMostRecentMarker();
+        double latitude = anchor == null ? 0.0d : anchor.latitude;
+        double longitude = anchor == null ? 0.0d : anchor.longitude;
+        String cot = DataPackageHandoff.fileShareCoT(
+                reference,
+                OperatorIdentity.getCallsign(preferences),
+                OperatorIdentity.getTeam(preferences),
+                OperatorIdentity.getRole(preferences),
+                latitude,
+                longitude,
+                System.currentTimeMillis(),
+                OperatorIdentity.getStaleSeconds(preferences));
+        OpenTakStreamingClient.getInstance().publish(cot);
+        try {
+            missionControl.queueMessage("JSON", json, connectionMethod);
+            AkitaMissionControl.DispatchBatchResult result = flushPendingMailbox(false);
+            addToCommandHistory(reference.name);
+            Toast.makeText(context, result.summary, Toast.LENGTH_SHORT).show();
+        } catch (IllegalStateException exception) {
+            Toast.makeText(context, exception.getMessage(), Toast.LENGTH_LONG).show();
+        }
+        refreshDashboard();
+    }
+
+    private static long parseLongOrZero(String value) {
+        try {
+            return Long.parseLong(value == null ? "0" : value.trim());
+        } catch (NumberFormatException exception) {
+            return 0L;
+        }
+    }
+
+    private void sendGeoChat(String message) {
+        String direct = OperatorIdentity.getDirectCallsign(preferences);
+        boolean directMessage = !TextUtils.isEmpty(direct);
+        String destination = directMessage ? direct : OperatorIdentity.getChatRoom(preferences);
+        String compact = CotEventFactory.toMailboxChatPayload(destination, message, directMessage);
+        int preparedBytes = AkitaMissionControl.getPreparedMailboxCommandBytes("Plain Text", compact);
+        if (preparedBytes > MAX_PAYLOAD_BYTES) {
+            recordFailedSend();
+            Toast.makeText(context, "GeoChat payload too large for the mesh mailbox.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        AkitaMissionMarkerRegistry.TrackedMarker anchor = AkitaMissionMarkerRegistry.getInstance().getMostRecentMarker();
+        double latitude = anchor == null ? 0.0d : anchor.latitude;
+        double longitude = anchor == null ? 0.0d : anchor.longitude;
+        String xml = CotEventFactory.geoChatEvent(
+                OperatorIdentity.getCallsign(preferences),
+                destination,
+                message,
+                directMessage,
+                OperatorIdentity.getMissionName(preferences),
+                latitude,
+                longitude,
+                System.currentTimeMillis(),
+                OperatorIdentity.getStaleSeconds(preferences));
+        OpenTakStreamingClient.getInstance().publish(xml);
+
+        AkitaMissionControl.DispatchBatchResult dispatchResult;
+        try {
+            missionControl.queueMessage("Plain Text", compact, connectionMethod);
+            dispatchResult = flushPendingMailbox(false);
+        } catch (IllegalStateException exception) {
+            recordFailedSend();
+            Toast.makeText(context, exception.getMessage(), Toast.LENGTH_LONG).show();
+            refreshDashboard();
+            return;
+        }
+        addToCommandHistory(message);
+        dataToSendEditText.getText().clear();
+        if (dispatchResult.dispatchedCount > 0) {
+            recordSuccessfulSend("GeoChat", preparedBytes, dispatchResult.lastRoute);
+        }
+        Toast.makeText(context, dispatchResult.summary, Toast.LENGTH_SHORT).show();
+        refreshDashboard();
+    }
+
+    private void sendTestCot() {
+        String xml = CotEventFactory.testLocationEvent(
+                OperatorIdentity.getCallsign(preferences),
+                OperatorIdentity.getTeam(preferences),
+                OperatorIdentity.getRole(preferences),
+                OperatorIdentity.getMissionName(preferences),
+                System.currentTimeMillis(),
+                OperatorIdentity.getStaleSeconds(preferences));
+        boolean published = OpenTakStreamingClient.getInstance().publish(xml);
+        if (!published && !OpenTakStreamingClient.isEnabled(preferences) && !AkitaMockSettings.isEnabled(preferences)) {
+            Toast.makeText(context, "Enable native OpenTAKServer streaming or mock mode to send a test CoT.", Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(context, published ? "Test CoT queued to OpenTAKServer." : "Test CoT was not accepted.", Toast.LENGTH_SHORT).show();
+        }
+        refreshDashboard();
+    }
+
+    private void exportDiagnostics() {
+        String path = FieldDiagnosticsExporter.export(context);
+        Toast.makeText(context, path == null ? "Diagnostics export failed." : "Diagnostics exported to " + path, Toast.LENGTH_LONG).show();
     }
 
     private void recordSuccessfulSend(String format, int payloadBytes, String routeUsed) {
@@ -548,6 +711,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
             AkitaOperationalReadiness.getInteroperabilityStatus(context, isActiveTransportAttached(), mapView != null));
         setAssuranceStatus(provisioningStatusValueTextView,
             AkitaOperationalReadiness.getProvisioningStatus(context));
+        refreshServerHealthCard();
 
         plainLegendTextView.setText(String.format(Locale.US, "Plain Text %d", getDisplayPlainTextCount()));
         jsonLegendTextView.setText(String.format(Locale.US, "JSON %d", getDisplayJsonCount()));
@@ -836,6 +1000,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
 
         applyPanel(summaryCard, AkitaTheme.createAccentPanelDrawable(context, palette));
         applyPanel(assuranceCard, AkitaTheme.createPanelDrawable(context, palette, true));
+        applyPanel(serverHealthCard, AkitaTheme.createPanelDrawable(context, palette, true));
         applyPanel(mailboxCard, AkitaTheme.createPanelDrawable(context, palette, true));
         applyPanel(incidentBoardCard, AkitaTheme.createPanelDrawable(context, palette, true));
         applyPanel(trendCard, AkitaTheme.createPanelDrawable(context, palette, true));
@@ -851,6 +1016,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         applyPanel(assuranceAuditCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(assuranceInteroperabilityCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(assuranceProvisioningCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(serverEndpointCard, AkitaTheme.createStatTileDrawable(context, palette));
+        applyPanel(serverReadinessCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(mailboxPendingCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(mailboxInFlightCard, AkitaTheme.createStatTileDrawable(context, palette));
         applyPanel(mailboxDeliveredCard, AkitaTheme.createStatTileDrawable(context, palette));
@@ -878,6 +1045,10 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
         retryMailboxButton.setTextColor(palette.textPrimary);
         replayMissionButton.setBackground(AkitaTheme.createAccentButtonDrawable(context, palette));
         replayMissionButton.setTextColor(palette.white);
+        sendTestCotButton.setBackground(AkitaTheme.createAccentButtonDrawable(context, palette));
+        sendTestCotButton.setTextColor(palette.white);
+        exportDiagnosticsButton.setBackground(AkitaTheme.createStatTileDrawable(context, palette));
+        exportDiagnosticsButton.setTextColor(palette.textPrimary);
 
         dataToSendEditText.setBackground(AkitaTheme.createInputDrawable(context, palette));
         dataToSendEditText.setTextColor(palette.textPrimary);
@@ -903,6 +1074,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.dashboard_title,
                 R.id.summary_card_title,
                 R.id.assurance_card_title,
+                R.id.server_health_title,
             R.id.mailbox_card_title,
                 R.id.incident_board_title,
                 R.id.stat_active_route_value,
@@ -913,6 +1085,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.assurance_audit_value,
                 R.id.assurance_interop_value,
                 R.id.assurance_provisioning_value,
+                R.id.server_endpoint_value,
+                R.id.server_readiness_value,
             R.id.mailbox_pending_value,
             R.id.mailbox_in_flight_value,
             R.id.mailbox_delivered_value,
@@ -932,6 +1106,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.operational_summary,
                 R.id.payload_summary,
                 R.id.assurance_summary,
+                R.id.server_health_summary,
+                R.id.server_identity_summary,
             R.id.mailbox_summary,
                 R.id.incident_board_summary,
                 R.id.last_operation_text,
@@ -953,6 +1129,8 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 R.id.assurance_audit_label,
                 R.id.assurance_interop_label,
                 R.id.assurance_provisioning_label,
+                R.id.server_endpoint_label,
+                R.id.server_readiness_label,
                 R.id.mailbox_pending_label,
                 R.id.mailbox_in_flight_label,
                 R.id.mailbox_delivered_label,
@@ -1072,6 +1250,16 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
             Toast.makeText(context, result.summary, Toast.LENGTH_SHORT).show();
         }
         return result;
+    }
+
+    private void refreshServerHealthCard() {
+        OpenTakStreamingClient.HealthSnapshot health = OpenTakStreamingClient.getInstance().getHealth(preferences);
+        DeploymentReadinessReport.Report report = DeploymentReadinessReport.evaluate(context);
+        serverHealthSummaryTextView.setText(health.detail);
+        serverEndpointValueTextView.setText(health.endpointLabel());
+        serverReadinessValueTextView.setText(report.headline());
+        serverIdentitySummaryTextView.setText(OperatorIdentity.summarize(preferences)
+                + " • " + OpenTakCertificateStore.describe(context));
     }
 
     private void refreshMailboxCard(AkitaMissionControl.QueueSnapshot snapshot) {

@@ -12,6 +12,7 @@ import android.view.View;
 import androidx.preference.PreferenceManager;
 
 import com.atakmap.android.maps.MapView;
+import com.akitaengineering.meshtak.OperatorIdentity;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -19,8 +20,6 @@ import java.util.List;
 import java.util.Locale;
 
 public class MissionMapOverlay extends View {
-
-    private static final long STALE_THRESHOLD_MILLIS = 5L * 60L * 1000L;
 
     private final Context context;
     private final Paint framePaint;
@@ -92,7 +91,8 @@ public class MissionMapOverlay extends View {
 
         AkitaIncidentBoard.IncidentState incidentState = AkitaIncidentBoard.getState(preferences);
         AkitaMissionMarkerRegistry registry = AkitaMissionMarkerRegistry.getInstance();
-        List<AkitaMissionMarkerRegistry.TrackedMarker> staleMarkers = registry.getStaleMarkers(STALE_THRESHOLD_MILLIS);
+        long staleThresholdMillis = OperatorIdentity.getStaleThresholdMillis(preferences);
+        List<AkitaMissionMarkerRegistry.TrackedMarker> staleMarkers = registry.getStaleMarkers(staleThresholdMillis);
         AkitaMissionMarkerRegistry.TrackedMarker anchorMarker = registry.getMostRecentMarker();
 
         PointF anchor = resolveAnchorPoint(mapView, anchorMarker, getWidth(), getHeight());

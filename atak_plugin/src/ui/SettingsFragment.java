@@ -25,11 +25,17 @@ import androidx.preference.SwitchPreferenceCompat;
 import com.atakmap.android.maps.MapView;
 import com.akitaengineering.meshtak.AkitaMissionControl;
 import com.akitaengineering.meshtak.AuditLogger;
+import com.akitaengineering.meshtak.CotEventFactory;
+import com.akitaengineering.meshtak.FieldDiagnosticsExporter;
+import com.akitaengineering.meshtak.OpenTakCertificateStore;
+import com.akitaengineering.meshtak.OpenTakStreamingClient;
+import com.akitaengineering.meshtak.OperatorIdentity;
 import com.akitaengineering.meshtak.R;
 import com.akitaengineering.meshtak.services.BLEService;
 import com.akitaengineering.meshtak.services.SerialService;
 import com.akitaengineering.meshtak.ui.AkitaTheme;
 
+import java.io.File;
 import java.util.Arrays;
 
 public class SettingsFragment extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener, android.content.SharedPreferences.OnSharedPreferenceChangeListener {
@@ -91,6 +97,21 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         ListPreference connectionMethodPref = findPreference("connection_method");
         ListPreference uiThemePref = findPreference(AkitaTheme.PREF_UI_THEME);
         ListPreference missionProfilePref = findPreference(AkitaMissionProfile.PREF_MISSION_PROFILE);
+        EditTextPreference operatorCallsignPref = findPreference(OperatorIdentity.PREF_CALLSIGN);
+        ListPreference operatorTeamPref = findPreference(OperatorIdentity.PREF_TEAM);
+        ListPreference operatorRolePref = findPreference(OperatorIdentity.PREF_ROLE);
+        EditTextPreference staleSecondsPref = findPreference(OperatorIdentity.PREF_STALE_SECONDS);
+        EditTextPreference geoChatRoomPref = findPreference(OperatorIdentity.PREF_GEOCHAT_ROOM);
+        EditTextPreference geoChatDirectPref = findPreference(OperatorIdentity.PREF_GEOCHAT_DIRECT);
+        SwitchPreferenceCompat openTakEnabledPref = findPreference(OpenTakStreamingClient.PREF_ENABLED);
+        EditTextPreference openTakHostPref = findPreference(OpenTakStreamingClient.PREF_HOST);
+        EditTextPreference openTakPortPref = findPreference(OpenTakStreamingClient.PREF_PORT);
+        SwitchPreferenceCompat openTakSslPref = findPreference(OpenTakStreamingClient.PREF_SSL);
+        EditTextPreference openTakP12PathPref = findPreference(OpenTakCertificateStore.PREF_P12_PATH);
+        EditTextPreference openTakP12PasswordPref = findPreference(OpenTakCertificateStore.PREF_P12_PASSWORD);
+        Preference importCertificatePref = findPreference("opentakserver_import_certificate");
+        Preference sendTestCotPref = findPreference("opentakserver_send_test_cot");
+        Preference exportDiagnosticsPref = findPreference("opentakserver_export_diagnostics");
         EditTextPreference openTakMissionNamePref = findPreference(PREF_OPENTAKSERVER_MISSION_NAME);
         SwitchPreferenceCompat autoFailoverPref = findPreference(AkitaMissionControl.PREF_AUTO_FAILOVER);
         SwitchPreferenceCompat encryptionEnabledPref = findPreference(AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED);
@@ -118,6 +139,48 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
         if (uiThemePref != null) uiThemePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
         if (missionProfilePref != null) missionProfilePref.setOnPreferenceChangeListener(this);
         if (missionProfilePref != null) missionProfilePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (operatorCallsignPref != null) operatorCallsignPref.setOnPreferenceChangeListener(this);
+        if (operatorCallsignPref != null) operatorCallsignPref.setSummaryProvider(EditTextPreference.SimpleSummaryProvider.getInstance());
+        if (operatorTeamPref != null) operatorTeamPref.setOnPreferenceChangeListener(this);
+        if (operatorTeamPref != null) operatorTeamPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (operatorRolePref != null) operatorRolePref.setOnPreferenceChangeListener(this);
+        if (operatorRolePref != null) operatorRolePref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        if (staleSecondsPref != null) staleSecondsPref.setOnPreferenceChangeListener(this);
+        if (staleSecondsPref != null) staleSecondsPref.setSummaryProvider(EditTextPreference.SimpleSummaryProvider.getInstance());
+        if (staleSecondsPref != null) staleSecondsPref.setOnBindEditTextListener(editText ->
+            editText.setInputType(InputType.TYPE_CLASS_NUMBER));
+        if (geoChatRoomPref != null) geoChatRoomPref.setOnPreferenceChangeListener(this);
+        if (geoChatDirectPref != null) geoChatDirectPref.setOnPreferenceChangeListener(this);
+        if (openTakEnabledPref != null) openTakEnabledPref.setOnPreferenceChangeListener(this);
+        if (openTakHostPref != null) openTakHostPref.setOnPreferenceChangeListener(this);
+        if (openTakHostPref != null) openTakHostPref.setSummaryProvider(EditTextPreference.SimpleSummaryProvider.getInstance());
+        if (openTakPortPref != null) openTakPortPref.setOnPreferenceChangeListener(this);
+        if (openTakPortPref != null) openTakPortPref.setSummaryProvider(EditTextPreference.SimpleSummaryProvider.getInstance());
+        if (openTakSslPref != null) openTakSslPref.setOnPreferenceChangeListener(this);
+        if (openTakP12PathPref != null) openTakP12PathPref.setOnPreferenceChangeListener(this);
+        if (openTakP12PasswordPref != null) openTakP12PasswordPref.setOnPreferenceChangeListener(this);
+        if (openTakP12PasswordPref != null) openTakP12PasswordPref.setOnBindEditTextListener(editText ->
+            editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD));
+        if (importCertificatePref != null) {
+            importCertificatePref.setSummary(OpenTakCertificateStore.describe(requireContext()));
+            importCertificatePref.setOnPreferenceClickListener(preference -> {
+                importOpenTakCertificate();
+                return true;
+            });
+        }
+        if (sendTestCotPref != null) {
+            sendTestCotPref.setOnPreferenceClickListener(preference -> {
+                sendTestCotToServer();
+                return true;
+            });
+        }
+        if (exportDiagnosticsPref != null) {
+            exportDiagnosticsPref.setOnPreferenceClickListener(preference -> {
+                String exportPath = FieldDiagnosticsExporter.export(requireContext());
+                Toast.makeText(getActivity(), exportPath == null ? "Diagnostics export failed." : "Diagnostics exported to " + exportPath, Toast.LENGTH_LONG).show();
+                return true;
+            });
+        }
         if (openTakMissionNamePref != null) openTakMissionNamePref.setOnPreferenceChangeListener(this);
         if (openTakMissionNamePref != null) openTakMissionNamePref.setSummaryProvider(EditTextPreference.SimpleSummaryProvider.getInstance());
         if (autoFailoverPref != null) autoFailoverPref.setOnPreferenceChangeListener(this);
@@ -349,8 +412,18 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                     || AkitaProvisioningManager.PREF_ENCRYPTION_ENABLED.equals(key)) {
                 new Handler(Looper.getMainLooper()).post(this::reloadBoundServiceSecurity);
             }
-        } else if (PREF_OPENTAKSERVER_MISSION_NAME.equals(key)) {
+        } else if (PREF_OPENTAKSERVER_MISSION_NAME.equals(key)
+                || OperatorIdentity.PREF_CALLSIGN.equals(key)
+                || OperatorIdentity.PREF_TEAM.equals(key)
+                || OperatorIdentity.PREF_ROLE.equals(key)
+                || OperatorIdentity.PREF_STALE_SECONDS.equals(key)
+                || com.akitaengineering.meshtak.MeshtasticMqttCodec.PREF_ATAK_PLUGIN.equals(key)) {
             new Handler(Looper.getMainLooper()).post(this::syncBoundRuntimeState);
+        } else if (OpenTakStreamingClient.PREF_ENABLED.equals(key)
+                || OpenTakStreamingClient.PREF_HOST.equals(key)
+                || OpenTakStreamingClient.PREF_PORT.equals(key)
+                || OpenTakStreamingClient.PREF_SSL.equals(key)) {
+            new Handler(Looper.getMainLooper()).post(() -> OpenTakStreamingClient.getInstance().applyPreferences());
         } else if ("ble_device_name".equals(key)) {
             new Handler(Looper.getMainLooper()).post(() -> {
                 String deviceName = sharedPreferences.getString("ble_device_name", "AkitaNode01");
@@ -440,8 +513,85 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                 Toast.makeText(getActivity(), "Mission name may contain letters, numbers, spaces, dash, underscore, and period.", Toast.LENGTH_SHORT).show();
                 return false;
             }
+        } else if (OperatorIdentity.PREF_CALLSIGN.equals(key) || OperatorIdentity.PREF_GEOCHAT_DIRECT.equals(key)
+                || OperatorIdentity.PREF_GEOCHAT_ROOM.equals(key)) {
+            String sanitized = OperatorIdentity.sanitizeToken(String.valueOf(newValue),
+                    OperatorIdentity.PREF_GEOCHAT_ROOM.equals(key)
+                            ? OperatorIdentity.MAX_CHATROOM_LENGTH
+                            : OperatorIdentity.MAX_CALLSIGN_LENGTH);
+            if (!sanitized.equals(String.valueOf(newValue).trim())) {
+                Toast.makeText(getActivity(), "Use letters, numbers, spaces, dash, underscore, or period.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+        } else if (OperatorIdentity.PREF_STALE_SECONDS.equals(key)) {
+            if (!OperatorIdentity.isValidStaleSeconds(String.valueOf(newValue))) {
+                Toast.makeText(getActivity(), "Stale seconds must be between 30 and 3600.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+        } else if (OpenTakStreamingClient.PREF_HOST.equals(key)) {
+            String host = String.valueOf(newValue).trim();
+            if (!host.isEmpty() && !OpenTakStreamingClient.isValidHost(host)) {
+                Toast.makeText(getActivity(), "Server host is not valid.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+        } else if (OpenTakStreamingClient.PREF_PORT.equals(key)) {
+            if (!OpenTakStreamingClient.isValidPort(String.valueOf(newValue))) {
+                Toast.makeText(getActivity(), "Port must be 1-65535.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+        } else if (OpenTakStreamingClient.PREF_SSL.equals(key) && Boolean.TRUE.equals(newValue)
+                && getContext() != null && !OpenTakCertificateStore.hasImportedCertificate(getContext())) {
+            Toast.makeText(getActivity(), "Import a client PKCS#12 before enabling OpenTAKServer SSL.", Toast.LENGTH_LONG).show();
+            return false;
         }
         return true;
+    }
+
+    private void importOpenTakCertificate() {
+        if (getContext() == null) {
+            return;
+        }
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getContext());
+        String path = preferences.getString(OpenTakCertificateStore.PREF_P12_PATH, "");
+        EditTextPreference passwordPref = findPreference(OpenTakCertificateStore.PREF_P12_PASSWORD);
+        String password = passwordPref == null ? "" : String.valueOf(passwordPref.getText());
+        if (path == null || path.trim().isEmpty() || password.isEmpty()) {
+            Toast.makeText(getActivity(), "Set the PKCS#12 path and password before importing.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        char[] passwordChars = password.toCharArray();
+        try {
+            OpenTakCertificateStore.CertificateMetadata metadata = OpenTakCertificateStore.importPkcs12(
+                    getContext(), new File(path.trim()), passwordChars);
+            Preference importPref = findPreference("opentakserver_import_certificate");
+            if (importPref != null) {
+                importPref.setSummary(metadata.summary());
+            }
+            Toast.makeText(getActivity(), "Client certificate imported: " + metadata.summary(), Toast.LENGTH_LONG).show();
+        } catch (Exception exception) {
+            Toast.makeText(getActivity(), exception.getMessage(), Toast.LENGTH_LONG).show();
+        } finally {
+            Arrays.fill(passwordChars, '\0');
+            if (passwordPref != null) {
+                passwordPref.setText("");
+            }
+        }
+    }
+
+    private void sendTestCotToServer() {
+        if (getContext() == null) {
+            return;
+        }
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getContext());
+        String xml = CotEventFactory.testLocationEvent(
+                OperatorIdentity.getCallsign(preferences),
+                OperatorIdentity.getTeam(preferences),
+                OperatorIdentity.getRole(preferences),
+                OperatorIdentity.getMissionName(preferences),
+                System.currentTimeMillis(),
+                OperatorIdentity.getStaleSeconds(preferences));
+        boolean published = OpenTakStreamingClient.getInstance().publish(xml);
+        Toast.makeText(getActivity(), published ? "Test CoT queued to OpenTAKServer." : "Test CoT was not accepted.", Toast.LENGTH_SHORT).show();
     }
 
     private void syncBoundRuntimeState() {

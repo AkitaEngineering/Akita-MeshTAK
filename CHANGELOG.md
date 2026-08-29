@@ -6,6 +6,20 @@ The format follows Keep a Changelog and the project uses semantic versioning for
 
 ## [Unreleased]
 
+### Added
+- Optional Meshtastic ATAK_PLUGIN protobuf path (port 72) for PLI and GeoChat, with NodeInfo-aligned CoT callsign/battery/track fields.
+- OpenTAKServer Meshtastic MQTT JSON/topic mapping for position, nodeinfo, and mailbox text.
+- Data-package handoff that queues a sha256 reference on the mesh and emits TAK fileshare CoT; binaries stay on ATAK/OpenTAKServer.
+- Operator callsign, team, role, and CoT stale-interval settings synchronized to the controller.
+- Plugin-generated GeoChat CoT for rooms and direct messages, with compact mailbox chat frames for the mesh.
+- Native OpenTAKServer TCP/SSL streaming client, PKCS#12 import with certificate metadata, and fail-closed SSL without a client certificate.
+- Deployment readiness report, redacted field-diagnostics export, Send Test CoT, and an OpenTAKServer health panel.
+- Mission-API name parser for OpenTAKServer Marti mission listings.
+- Map stale-marker warnings now honor CoT `stale` timestamps when present.
+
+### Security
+- Release and preflight gates reject OpenTAKServer SSL builds that do not supply a client PKCS#12.
+
 ## [0.2.1] - 2026-08-25
 
 ### Added

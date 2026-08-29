@@ -32,6 +32,16 @@ public class AkitaPreferenceFragment extends PluginPreferenceFragment implements
         bindPreferenceSummary("serial_port_path");
         bindPreferenceSummary("serial_baud_rate");
         bindPreferenceSummary("opentakserver_mission_name");
+        bindPreferenceSummary(com.akitaengineering.meshtak.OperatorIdentity.PREF_CALLSIGN);
+        bindPreferenceSummary(com.akitaengineering.meshtak.OperatorIdentity.PREF_TEAM);
+        bindPreferenceSummary(com.akitaengineering.meshtak.OperatorIdentity.PREF_ROLE);
+        bindPreferenceSummary(com.akitaengineering.meshtak.OperatorIdentity.PREF_STALE_SECONDS);
+        bindPreferenceSummary(com.akitaengineering.meshtak.OperatorIdentity.PREF_GEOCHAT_ROOM);
+        bindPreferenceSummary(com.akitaengineering.meshtak.OpenTakStreamingClient.PREF_HOST);
+        bindPreferenceSummary(com.akitaengineering.meshtak.OpenTakStreamingClient.PREF_PORT);
+        bindPreferenceSummary(com.akitaengineering.meshtak.MeshtasticMqttCodec.PREF_ROOT);
+        bindPreferenceSummary(com.akitaengineering.meshtak.MeshtasticMqttCodec.PREF_CHANNEL_NAME);
+        bindPreferenceSummary(com.akitaengineering.meshtak.DataPackageHandoff.PREF_NAME);
         bindPreferenceSummary(AkitaMockSettings.PREF_MOCK_BLE_STATUS);
         bindPreferenceSummary(AkitaMockSettings.PREF_MOCK_SERIAL_STATUS);
         bindPreferenceSummary(AkitaMockSettings.PREF_MOCK_BATTERY_LEVEL);

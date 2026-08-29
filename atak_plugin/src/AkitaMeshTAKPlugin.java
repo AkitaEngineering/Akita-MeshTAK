@@ -130,6 +130,23 @@ public class AkitaMeshTAKPlugin implements SharedPreferences.OnSharedPreferenceC
         AuditLogger.getInstance().initialize(context.getApplicationContext());
         ReplayGuard.attach(new java.io.File(
                 context.getApplicationContext().getNoBackupFilesDir(), ReplayGuard.STATE_FILE_NAME));
+        OpenTakStreamingClient.getInstance().attach(context.getApplicationContext());
+        OpenTakStreamingClient.getInstance().applyPreferences();
+        AkitaMissionControl.getInstance(context).setInboundChatListener((originNode, payload, preferences) -> {
+            OpenTakStreamingClient.getInstance().publishInboundChat(originNode, payload, preferences);
+            DataPackageHandoff.Reference reference = DataPackageHandoff.parseMailboxJson(payload);
+            if (reference != null && reference.isComplete()) {
+                OpenTakStreamingClient.getInstance().publish(DataPackageHandoff.fileShareCoT(
+                        reference,
+                        OperatorIdentity.getCallsign(preferences),
+                        OperatorIdentity.getTeam(preferences),
+                        OperatorIdentity.getRole(preferences),
+                        0.0d,
+                        0.0d,
+                        System.currentTimeMillis(),
+                        OperatorIdentity.getStaleSeconds(preferences)));
+            }
+        });
 
         akitaToolbar = new AkitaToolbar(context);
         connectionStatusOverlay = new ConnectionStatusOverlay(context, view);
@@ -149,6 +166,10 @@ public class AkitaMeshTAKPlugin implements SharedPreferences.OnSharedPreferenceC
                 .unregisterOnSharedPreferenceChangeListener(this);
 
         stopAndUnbindServices();
+        if (pluginContext != null) {
+            AkitaMissionControl.getInstance(pluginContext).setInboundChatListener(null);
+        }
+        OpenTakStreamingClient.getInstance().shutdown();
     }
 
     /** Starts/Binds both services */
@@ -268,6 +289,11 @@ public class AkitaMeshTAKPlugin implements SharedPreferences.OnSharedPreferenceC
             if (mapView != null) {
                 mapView.invalidate();
             }
+        } else if (OpenTakStreamingClient.PREF_ENABLED.equals(key)
+                || OpenTakStreamingClient.PREF_HOST.equals(key)
+                || OpenTakStreamingClient.PREF_PORT.equals(key)
+                || OpenTakStreamingClient.PREF_SSL.equals(key)) {
+            OpenTakStreamingClient.getInstance().applyPreferences();
         } else if ("ble_device_name".equals(key)) {
             String deviceName = sharedPreferences.getString("ble_device_name", "AkitaNode01");
             if (bleService != null) bleService.setTargetDeviceName(deviceName);

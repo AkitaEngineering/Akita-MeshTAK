@@ -50,16 +50,23 @@ public class CotEvent {
     }
 
     private static String readAttribute(String xml, String name) {
-        if (xml == null) {
+        if (xml == null || name == null) {
             return null;
         }
-        String prefix = name + "=\"";
-        int start = xml.indexOf(prefix);
+        String doubleQuoted = name + "=\"";
+        int start = xml.indexOf(doubleQuoted);
+        if (start >= 0) {
+            start += doubleQuoted.length();
+            int end = xml.indexOf('"', start);
+            return end > start ? xml.substring(start, end) : null;
+        }
+        String singleQuoted = name + "='";
+        start = xml.indexOf(singleQuoted);
         if (start < 0) {
             return null;
         }
-        start += prefix.length();
-        int end = xml.indexOf('"', start);
+        start += singleQuoted.length();
+        int end = xml.indexOf('\'', start);
         return end > start ? xml.substring(start, end) : null;
     }
 

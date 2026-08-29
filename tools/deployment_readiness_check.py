@@ -232,7 +232,37 @@ def main() -> int:
           "time sync command is defined on firmware and plugin", failures)
     check("CMD_COT_MISSION_PREFIX" in firmware_config and "CMD_COT_MISSION_PREFIX" in plugin_config,
           "mission sync command is defined on firmware and plugin", failures)
+    check("CMD_COT_IDENTITY_PREFIX" in firmware_config and "CMD_COT_IDENTITY_PREFIX" in plugin_config,
+          "CoT identity command is defined on firmware and plugin", failures)
+    check("CMD_COT_STALE_PREFIX" in firmware_config and "CMD_COT_STALE_PREFIX" in plugin_config,
+          "CoT stale command is defined on firmware and plugin", failures)
+    check("CMD_MESH_ATAK_PREFIX" in firmware_config and "CMD_MESH_ATAK_PREFIX" in plugin_config,
+          "ATAK_PLUGIN protobuf command is defined on firmware and plugin", failures)
+    check("meshtastic_PortNum_ATAK_PLUGIN" in read_text("firmware/src/atak_plugin_codec.cpp"),
+          "firmware can send Meshtastic ATAK_PLUGIN packets", failures)
+    check("PORTNUM = 72" in read_text("atak_plugin/src/com/akitaengineering/meshtak/AtakPluginPacket.java"),
+          "plugin ATAK_PLUGIN codec uses port 72", failures)
+    check("msh/2/json" in read_text("atak_plugin/src/com/akitaengineering/meshtak/MeshtasticMqttCodec.java"),
+          "plugin maps OpenTAKServer Meshtastic MQTT topics", failures)
+    check("b-f-t-file" in read_text("atak_plugin/src/com/akitaengineering/meshtak/DataPackageHandoff.java"),
+          "plugin data-package handoff emits fileshare CoT", failures)
+    check("AKITA_ATAK_PLUGIN_HOOK" in read_text("firmware/tools/patch_meshtastic_atak.py"),
+          "firmware patches Meshtastic-arduino for ATAK_PLUGIN receive", failures)
+    check("<status battery=" in cot_generation,
+          "firmware CoT can emit NodeInfo battery status", failures)
     check("<dest mission='" in cot_generation, "firmware can emit OpenTAKServer mission dest tags", failures)
+    check("__group name='%s' role='%s'" in cot_generation, "firmware CoT group identity is configurable", failures)
+    plugin_cot = read_text("atak_plugin/src/com/akitaengineering/meshtak/CotEventFactory.java")
+    plugin_stream = read_text("atak_plugin/src/com/akitaengineering/meshtak/OpenTakStreamingClient.java")
+    plugin_readiness = read_text("atak_plugin/src/com/akitaengineering/meshtak/DeploymentReadinessReport.java")
+    check("GEOCHAT_TYPE" in plugin_cot and "b-t-f" in plugin_cot,
+          "plugin can generate GeoChat CoT", failures)
+    check("OpenTAKServer SSL requires an imported client PKCS#12" in plugin_stream,
+          "native OpenTAKServer SSL is fail-closed without a client certificate", failures)
+    check("Placeholder or missing secret" in plugin_readiness,
+          "plugin deployment readiness report covers placeholder secrets", failures)
+    check("android.permission.INTERNET" in read_text("atak_plugin/AndroidManifest.xml"),
+          "plugin declares INTERNET for native OpenTAKServer streaming", failures)
     check("settimeofday" in power_management, "firmware accepts trusted time sync", failures)
     check("STATUS_TIME_SYNC_PREFIX" in power_management, "firmware reports time sync status", failures)
     check("STATUS_COT_MISSION_PREFIX" in power_management, "firmware reports mission tag status", failures)

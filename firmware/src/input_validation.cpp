@@ -63,6 +63,62 @@ ValidationResult validateCommand(const String& command) {
         return VALIDATION_OK;
     }
 
+    if (command.startsWith(CMD_COT_IDENTITY_PREFIX)) {
+        String body = command.substring(strlen(CMD_COT_IDENTITY_PREFIX));
+        int firstSep = body.indexOf('|');
+        int secondSep = firstSep < 0 ? -1 : body.indexOf('|', firstSep + 1);
+        if (firstSep <= 0 || secondSep <= firstSep || secondSep + 1 >= (int)body.length()) {
+            return VALIDATION_ERROR_MALFORMED;
+        }
+        String callsign = body.substring(0, firstSep);
+        String team = body.substring(firstSep + 1, secondSep);
+        String role = body.substring(secondSep + 1);
+        if (validateCallsign(callsign) != VALIDATION_OK) {
+            return VALIDATION_ERROR_INVALID_CHARS;
+        }
+        if (team.length() == 0 || team.length() > 24 || role.length() == 0 || role.length() > 24) {
+            return VALIDATION_ERROR_MALFORMED;
+        }
+        for (size_t i = 0; i < team.length(); i++) {
+            char c = team.charAt(i);
+            if (!isalnum(c) && c != '-' && c != '_' && c != ' ' && c != '.') {
+                return VALIDATION_ERROR_INVALID_CHARS;
+            }
+        }
+        for (size_t i = 0; i < role.length(); i++) {
+            char c = role.charAt(i);
+            if (!isalnum(c) && c != '-' && c != '_' && c != ' ' && c != '.') {
+                return VALIDATION_ERROR_INVALID_CHARS;
+            }
+        }
+        return VALIDATION_OK;
+    }
+
+    if (command.startsWith(CMD_MESH_ATAK_PREFIX)) {
+        String value = command.substring(strlen(CMD_MESH_ATAK_PREFIX));
+        if (value != "0" && value != "1") {
+            return VALIDATION_ERROR_MALFORMED;
+        }
+        return VALIDATION_OK;
+    }
+
+    if (command.startsWith(CMD_COT_STALE_PREFIX)) {
+        String value = command.substring(strlen(CMD_COT_STALE_PREFIX));
+        if (value.length() == 0 || value.length() > 4) {
+            return VALIDATION_ERROR_MALFORMED;
+        }
+        for (size_t i = 0; i < value.length(); i++) {
+            if (!isdigit(value.charAt(i))) {
+                return VALIDATION_ERROR_INVALID_CHARS;
+            }
+        }
+        int staleSeconds = value.toInt();
+        if (staleSeconds < 30 || staleSeconds > 3600) {
+            return VALIDATION_ERROR_MALFORMED;
+        }
+        return VALIDATION_OK;
+    }
+
     if (command.startsWith(CMD_PROVISION_STAGE_PREFIX)) {
         String value = command.substring(strlen(CMD_PROVISION_STAGE_PREFIX));
         int separator = value.lastIndexOf(':');

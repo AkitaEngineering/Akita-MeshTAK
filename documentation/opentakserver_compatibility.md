@@ -11,7 +11,7 @@ Akita MeshTAK is compatible with OpenTAKServer when traffic reaches the server a
 - OpenTAKServer UDP defaults: `8087`.
 - OpenTAKServer Marti HTTP/HTTPS API defaults: `8080` and `8443`.
 
-Akita MeshTAK does not currently embed OpenTAKServer account, certificate-enrollment, mission API, data-package, or plugin-repository clients. Those remain handled by ATAK/OpenTAKServer themselves.
+The plugin can optionally open a native OpenTAKServer TCP (`8088`) or SSL (`8089`) streaming socket and publish location, test, and GeoChat CoT directly. SSL is fail-closed unless a client PKCS#12 has been imported. ATAK's own TAK server connection remains the default ingest path. Account enrollment, data packages, and the plugin repository stay with ATAK/OpenTAKServer. The plugin can parse Marti mission-list JSON when an SSL client certificate is available; live mission subscribe/content APIs remain ATAK-owned.
 
 ## CoT Fields Emitted By Firmware
 
@@ -21,9 +21,10 @@ Firmware-generated location events now include the fields OpenTAKServer parses d
 - `<point>` attributes: `lat`, `lon`, `hae`, `ce`, and `le`.
 - `<detail><contact callsign="..."/>` for OpenTAKServer EUD/callsign tracking.
 - `<detail><takv .../>` for device, platform, OS, and firmware version.
-- `<detail><__group .../>` for team and role association.
+- `<detail><__group .../>` for team and role association. Callsign, team, role, and stale seconds are operator settings pushed to the controller.
 - `<detail><precisionlocation geopointsrc="GPS" altsrc="GPS"/>` for location source.
 - Optional root-level `<dest mission="..."/>` when an OpenTAKServer mission name is configured in plugin settings.
+- Plugin-generated GeoChat events (`type="b-t-f"`) for rooms and direct messages, including `__chat`, `remarks`, and `marti/dest`.
 
 OpenTAKServer stores these as CoT records and point records, can show the sender as an EUD, and can use the metadata for its web UI and group/mission routing once ATAK forwards the event.
 
@@ -39,10 +40,14 @@ The plugin now synchronizes firmware time from the ATAK device clock after BLE o
 | Team/group metadata | Supported through `__group` |
 | Mission CoT tagging | Supported through configured `<dest mission="..."/>` |
 | ATAK server sync | Supported through ATAK's TAK server connection |
-| SSL client certificate enrollment | Handled by ATAK/OpenTAKServer, not the Akita plugin |
-| Mission API / Data Sync | Handled by ATAK/OpenTAKServer, not the Akita plugin |
+| SSL client certificate enrollment | ATAK enrollment remains primary; the plugin can import an existing client PKCS#12 for native SSL streaming |
+| Native TCP/SSL CoT streaming | Optional plugin client; SSL requires an imported PKCS#12 |
+| GeoChat CoT | Plugin-generated room and direct messages |
+| Mission API / Data Sync | Mission-list JSON parse supported; subscribe/content routing remains ATAK/OpenTAKServer |
 | Data packages | Handled by ATAK/OpenTAKServer, not the Akita plugin |
-| Native OpenTAKServer Meshtastic MQTT bridge | Not implemented in Akita firmware; production uses BLE/serial, while Akita's plaintext MQTT path is isolated-bench only |
+| Native OpenTAKServer Meshtastic MQTT bridge | JSON/topic codec implemented (`msh/2/json/{channel}/!{node}`). Firmware MQTT remains plaintext and production-blocked; bench builds can publish nodeinfo JSON on those topics |
+| Meshtastic ATAK_PLUGIN protobuf | Optional PLI and GeoChat on port 72 for official Meshtastic ATAK plugin peers |
+| Data packages | Mesh carries sha256/fileshare CoT references; binary transfer remains ATAK/OpenTAKServer |
 
 ## Validation Checklist
 

@@ -13,6 +13,7 @@
 #include "security.h"         // For security operations
 #include "hardware_security.h"
 #include "mailbox_escape.h"   // Shared escape/unescape
+#include "atak_plugin_codec.h"
 #include <Arduino.h>
 #include <sys/time.h>
 
@@ -174,6 +175,50 @@ void processIncomingCommand(const String& cmd) {
         sendStatusToAtak(response);
         logAuditEvent(AUDIT_EVENT_CONFIGURATION_CHANGE, 0, DEVICE_ID,
                      activeMission.length() > 0 ? "CoT mission tag updated" : "CoT mission tag cleared", true);
+    } else if (cmd.startsWith(CMD_COT_IDENTITY_PREFIX)) {
+        String body = cmd.substring(strlen(CMD_COT_IDENTITY_PREFIX));
+        body.trim();
+        int firstSep = body.indexOf('|');
+        int secondSep = firstSep < 0 ? -1 : body.indexOf('|', firstSep + 1);
+        if (firstSep > 0 && secondSep > firstSep) {
+            String callsign = body.substring(0, firstSep);
+            String team = body.substring(firstSep + 1, secondSep);
+            String role = body.substring(secondSep + 1);
+            setCotIdentity(callsign, team, role);
+            String response = String(STATUS_COT_IDENTITY_PREFIX) + getCotCallsign() + "|"
+                + getCotTeam() + "|" + getCotRole();
+            sendStatusToAtak(response);
+            logAuditEvent(AUDIT_EVENT_CONFIGURATION_CHANGE, 0, DEVICE_ID,
+                         "CoT identity updated", true);
+        } else {
+            sendStatusToAtak(String(STATUS_COT_IDENTITY_PREFIX) + "FAILED:INVALID");
+            logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 1, DEVICE_ID,
+                         "Rejected invalid CoT identity command", false);
+        }
+    } else if (cmd.startsWith(CMD_MESH_ATAK_PREFIX)) {
+        String enabledText = cmd.substring(strlen(CMD_MESH_ATAK_PREFIX));
+        enabledText.trim();
+        bool enabled = enabledText == "1";
+        setAtakPluginEnabled(enabled);
+        String response = String(STATUS_MESH_ATAK_PREFIX) + (enabled ? "1" : "0");
+        sendStatusToAtak(response);
+        logAuditEvent(AUDIT_EVENT_CONFIGURATION_CHANGE, 0, DEVICE_ID,
+                     enabled ? "ATAK_PLUGIN protobuf enabled" : "ATAK_PLUGIN protobuf disabled", true);
+    } else if (cmd.startsWith(CMD_COT_STALE_PREFIX)) {
+        String staleText = cmd.substring(strlen(CMD_COT_STALE_PREFIX));
+        staleText.trim();
+        int staleSeconds = staleText.toInt();
+        if (staleSeconds >= 30 && staleSeconds <= 3600) {
+            setCotStaleSeconds(staleSeconds);
+            String response = String(STATUS_COT_STALE_PREFIX) + String(getCotStaleSeconds());
+            sendStatusToAtak(response);
+            logAuditEvent(AUDIT_EVENT_CONFIGURATION_CHANGE, 0, DEVICE_ID,
+                         "CoT stale interval updated", true);
+        } else {
+            sendStatusToAtak(String(STATUS_COT_STALE_PREFIX) + "FAILED:INVALID");
+            logAuditEvent(AUDIT_EVENT_SECURITY_VIOLATION, 1, DEVICE_ID,
+                         "Rejected invalid CoT stale command", false);
+        }
     } else if (cmd.startsWith(CMD_MAILBOX_PUT_PREFIX)) {
         String messageId = "";
         String format = "";

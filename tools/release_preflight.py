@@ -129,6 +129,13 @@ def main() -> int:
         report(sdk_jar is not None, "official ATAK SDK jar exists at AKITA_ATAK_SDK_JAR", failures)
 
     keystore_path = env_value("AKITA_RELEASE_KEYSTORE_FILE")
+    if is_truthy("AKITA_OTS_SSL"):
+        cert_path = env_value("AKITA_OTS_CLIENT_P12")
+        cert = pathlib.Path(cert_path).expanduser() if cert_path else None
+        report(cert is not None and cert.is_file(),
+               "AKITA_OTS_CLIENT_P12 exists because AKITA_OTS_SSL is enabled",
+               failures)
+
     if keystore_path:
         keystore = pathlib.Path(keystore_path).expanduser().resolve()
         report(keystore.is_file(), "release keystore file exists", failures)

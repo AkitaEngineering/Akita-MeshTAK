@@ -82,6 +82,7 @@ Set either Gradle properties or matching environment variables for:
 - `akitaReleaseStorePassword` / `AKITA_RELEASE_STORE_PASSWORD`
 - `akitaReleaseKeyAlias` / `AKITA_RELEASE_KEY_ALIAS`
 - `akitaReleaseKeyPassword` / `AKITA_RELEASE_KEY_PASSWORD`
+- `akitaOpenTakSsl` / `AKITA_OTS_SSL` (optional; if true, `akitaOpenTakClientP12` / `AKITA_OTS_CLIENT_P12` must point at a client PKCS#12)
 
 Release plugin command:
 

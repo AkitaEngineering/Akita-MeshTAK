@@ -241,6 +241,14 @@ def verifyReleaseInputs = tasks.register('verifyReleaseInputs') {
             throw new RuntimeException('Release builds require deployment BLE UUIDs via AKITA_BLE_SERVICE_UUID, '
                     + 'AKITA_BLE_COT_CHARACTERISTIC_UUID, and AKITA_BLE_WRITE_CHARACTERISTIC_UUID.')
         }
+        def otsSslEnabled = Boolean.parseBoolean(resolveConfig('akitaOpenTakSsl', 'AKITA_OTS_SSL', 'false'))
+        def otsClientP12 = resolveConfig('akitaOpenTakClientP12', 'AKITA_OTS_CLIENT_P12', '')
+        if (otsSslEnabled) {
+            def certFile = hasText(otsClientP12) ? file(otsClientP12) : null
+            if (certFile == null || !certFile.isFile()) {
+                throw new RuntimeException('OpenTAKServer SSL release builds require a client PKCS#12 via AKITA_OTS_CLIENT_P12 or -PakitaOpenTakClientP12.')
+            }
+        }
     }
 }
 

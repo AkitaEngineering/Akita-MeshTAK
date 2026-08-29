@@ -34,7 +34,8 @@ import com.akitaengineering.meshtak.ui.AkitaMissionMarkerRegistry;
 import com.akitaengineering.meshtak.ui.AkitaProvisioningManager;
 import com.akitaengineering.meshtak.ui.AkitaToolbar;
 import com.akitaengineering.meshtak.Config;
-import com.akitaengineering.meshtak.DeviceSecurityState;
+import com.akitaengineering.meshtak.CotEventFactory;
+import com.akitaengineering.meshtak.FirmwareRuntimeSync;
 import com.akitaengineering.meshtak.AuditLogger;
 import com.akitaengineering.meshtak.PayloadEnvelope;
 import com.akitaengineering.meshtak.SecurityManager;
@@ -487,7 +488,8 @@ public class SerialService extends Service implements SerialInputOutputManager.L
                     callsign != null ? callsign : uid,
                     geoPoint.getLatitude(),
                     geoPoint.getLongitude(),
-                    "Serial");
+                    "Serial",
+                    CotEventFactory.parseStaleEpochMillis(cleanData));
         } catch (Exception e) {
             Log.e(TAG, "Error parsing CoT data from serial: " + e.getMessage(), e);
         }
@@ -503,17 +505,10 @@ public class SerialService extends Service implements SerialInputOutputManager.L
         if (!isReadyForTraffic()) {
             return;
         }
-        long epochSeconds = System.currentTimeMillis() / 1000L;
-        sendData((Config.CMD_TIME_SYNC_PREFIX + epochSeconds + "\n").getBytes(StandardCharsets.UTF_8));
-
-        String missionName = sanitizeMissionName(androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-                .getString("opentakserver_mission_name", ""));
-        handler.postDelayed(() ->
-                sendData((Config.CMD_COT_MISSION_PREFIX + missionName + "\n").getBytes(StandardCharsets.UTF_8)),
-                100);
-        handler.postDelayed(() ->
-                sendData((Config.CMD_GET_SEC_STATE + "\n").getBytes(StandardCharsets.UTF_8)),
-                200);
+        FirmwareRuntimeSync.sendCommands(
+                handler,
+                androidx.preference.PreferenceManager.getDefaultSharedPreferences(this),
+                this::sendData);
     }
 
     public void sendCriticalAlert() {
@@ -615,37 +610,7 @@ public class SerialService extends Service implements SerialInputOutputManager.L
     public void setMapView(MapView view) { this.mapView = view; }
 
     private boolean consumeRuntimeStatus(String line) {
-        if (line == null) {
-            return false;
-        }
-        if (line.startsWith(Config.STATUS_TIME_SYNC_PREFIX)) {
-            Log.i(TAG, "Firmware time sync status: " + line.substring(Config.STATUS_TIME_SYNC_PREFIX.length()));
-            return true;
-        }
-        if (line.startsWith(Config.STATUS_COT_MISSION_PREFIX)) {
-            Log.i(TAG, "Firmware CoT mission status: " + line.substring(Config.STATUS_COT_MISSION_PREFIX.length()));
-            return true;
-        }
-        if (DeviceSecurityState.updateFromStatusLine(line)) {
-            Log.i(TAG, "Firmware security state: " + DeviceSecurityState.getKeySummary()
-                    + " • " + DeviceSecurityState.getHardwareSummary());
-            return true;
-        }
-        return false;
-    }
-
-    private static String sanitizeMissionName(String missionName) {
-        if (missionName == null) {
-            return "";
-        }
-        StringBuilder sanitized = new StringBuilder();
-        for (int index = 0; index < missionName.length() && sanitized.length() < 64; index++) {
-            char c = missionName.charAt(index);
-            if (Character.isLetterOrDigit(c) || c == '-' || c == '_' || c == ' ' || c == '.') {
-                sanitized.append(c);
-            }
-        }
-        return sanitized.toString().trim();
+        return FirmwareRuntimeSync.consumeStatus(line);
     }
 
     private byte[] encodeEncryptedPayloadBytes(byte[] plaintext) {

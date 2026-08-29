@@ -25,7 +25,7 @@ REQUIRED_TEMPLATE_SNIPPETS = (
     "<point lat=",
     "<contact callsign=",
     "<takv ",
-    "<__group ",
+    "<__group name='%s' role='%s'/>",
     "<precisionlocation ",
 )
 

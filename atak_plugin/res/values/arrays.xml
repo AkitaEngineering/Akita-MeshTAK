@@ -12,6 +12,60 @@
         <item>Plain Text</item>
         <item>JSON</item>
         <item>Custom</item>
+        <item>GeoChat</item>
+        <item>Data Package</item>
+    </string-array>
+    <string-array name="operator_team_entries">
+        <item>White</item>
+        <item>Yellow</item>
+        <item>Orange</item>
+        <item>Magenta</item>
+        <item>Red</item>
+        <item>Maroon</item>
+        <item>Purple</item>
+        <item>Dark Blue</item>
+        <item>Blue</item>
+        <item>Cyan</item>
+        <item>Teal</item>
+        <item>Green</item>
+        <item>Dark Green</item>
+        <item>Brown</item>
+    </string-array>
+    <string-array name="operator_team_values">
+        <item>White</item>
+        <item>Yellow</item>
+        <item>Orange</item>
+        <item>Magenta</item>
+        <item>Red</item>
+        <item>Maroon</item>
+        <item>Purple</item>
+        <item>Dark Blue</item>
+        <item>Blue</item>
+        <item>Cyan</item>
+        <item>Teal</item>
+        <item>Green</item>
+        <item>Dark Green</item>
+        <item>Brown</item>
+    </string-array>
+    <string-array name="operator_role_entries">
+        <item>Team Member</item>
+        <item>Team Lead</item>
+        <item>HQ</item>
+        <item>Sniper</item>
+        <item>Medic</item>
+        <item>Forward Observer</item>
+        <item>RTO</item>
+        <item>K9</item>
+    </string-array>
+    <string-array name="operator_role_values">
+        <item>Team Member</item>
+        <item>Team Lead</item>
+        <item>HQ</item>
+        <item>Sniper</item>
+        <item>Medic</item>
+        <item>Forward Observer</item>
+        <item>RTO</item>
+        <item>K9</item>
     </string-array>
     <string-array name="ui_theme_entries">
         <item>Dark</item>

@@ -29,10 +29,19 @@ public final class AkitaMissionMarkerRegistry {
                                           double latitude,
                                           double longitude,
                                           String source) {
+        recordMarker(uid, title, latitude, longitude, source, 0L);
+    }
+
+    public synchronized void recordMarker(String uid,
+                                          String title,
+                                          double latitude,
+                                          double longitude,
+                                          String source,
+                                          long staleAtMillis) {
         if (uid == null || uid.trim().isEmpty()) {
             return;
         }
-        trackedMarkers.put(uid, new TrackedMarker(uid, title, latitude, longitude, source, System.currentTimeMillis()));
+        trackedMarkers.put(uid, new TrackedMarker(uid, title, latitude, longitude, source, System.currentTimeMillis(), staleAtMillis));
         trimToMaxSize();
     }
 
@@ -46,7 +55,8 @@ public final class AkitaMissionMarkerRegistry {
         List<TrackedMarker> staleMarkers = new ArrayList<>();
         long now = System.currentTimeMillis();
         for (TrackedMarker marker : trackedMarkers.values()) {
-            if (now - marker.lastUpdatedAt >= thresholdMillis) {
+            long staleAt = marker.staleAtMillis > 0L ? marker.staleAtMillis : marker.lastUpdatedAt + thresholdMillis;
+            if (now >= staleAt) {
                 staleMarkers.add(marker);
             }
         }
@@ -68,6 +78,10 @@ public final class AkitaMissionMarkerRegistry {
         return trackedMarkers.size();
     }
 
+    public synchronized void resetForTests() {
+        trackedMarkers.clear();
+    }
+
     private void trimToMaxSize() {
         while (trackedMarkers.size() > MAX_MARKERS) {
             String firstKey = trackedMarkers.keySet().iterator().next();
@@ -82,19 +96,22 @@ public final class AkitaMissionMarkerRegistry {
         public final double longitude;
         public final String source;
         public final long lastUpdatedAt;
+        public final long staleAtMillis;
 
         private TrackedMarker(String uid,
                               String title,
                               double latitude,
                               double longitude,
                               String source,
-                              long lastUpdatedAt) {
+                              long lastUpdatedAt,
+                              long staleAtMillis) {
             this.uid = uid;
             this.title = title;
             this.latitude = latitude;
             this.longitude = longitude;
             this.source = source;
             this.lastUpdatedAt = lastUpdatedAt;
+            this.staleAtMillis = staleAtMillis;
         }
     }
 }

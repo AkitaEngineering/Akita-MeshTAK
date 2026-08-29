@@ -51,6 +51,7 @@ public final class AkitaMissionControl {
 
     private final SharedPreferences preferences;
     private final MissionStateStore stateStore;
+    private InboundChatListener inboundChatListener;
 
     private AkitaMissionControl(Context context) {
         preferences = PreferenceManager.getDefaultSharedPreferences(context.getApplicationContext());
@@ -68,6 +69,21 @@ public final class AkitaMissionControl {
         boolean isRouteAvailable(String route);
 
         boolean send(String route, byte[] data);
+    }
+
+    public interface InboundChatListener {
+        void onInboundChat(String originNode, String payload, SharedPreferences preferences);
+    }
+
+    public synchronized void setInboundChatListener(InboundChatListener listener) {
+        inboundChatListener = listener;
+    }
+
+    private void notifyInboundChat(String originNode, String payload) {
+        InboundChatListener listener = inboundChatListener;
+        if (listener != null) {
+            listener.onInboundChat(originNode, payload, preferences);
+        }
     }
 
     public static final class MailboxRecord {
@@ -372,6 +388,7 @@ public final class AkitaMissionControl {
                             : "Inbound mission traffic from " + inboundStatus.nodeId + " • " + inboundStatus.messageId));
             trimReplayEvents(events);
             persistReplayEvents(events);
+            notifyInboundChat(inboundStatus.nodeId, inboundStatus.payload);
             return true;
         }
 

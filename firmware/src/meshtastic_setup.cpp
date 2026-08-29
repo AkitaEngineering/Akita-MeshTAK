@@ -9,6 +9,10 @@
 #include "input_validation.h"
 #include "audit_log.h"
 #include "mailbox_escape.h" // Shared escape/unescape
+#include "atak_plugin_codec.h"
+
+extern void set_decoded_packet_callback(void (*callback)(uint32_t from, uint32_t to, uint8_t channel,
+                                                         uint32_t portnum, const uint8_t *payload, size_t length));
 
 static const char* MESH_MAILBOX_FRAGMENT_PREFIX = "AKITA:MBX:FRG:";
 static const char* MESH_MAILBOX_ACK_PREFIX = "AKITA:MBX:ACK:";
@@ -171,14 +175,30 @@ static void onNodeReport(mt_node_t* node, mt_nr_progress_t progress) {
     return;
   }
   String nodeId = getNodeId(node->node_num);
-  String cot = generateLocationCoT(nodeId, (float)node->latitude, (float)node->longitude, (float)node->altitude);
+  String callsign = "";
+  if (node->has_user && node->long_name[0] != '\0') {
+    callsign = String(node->long_name);
+  } else if (node->has_user && node->short_name[0] != '\0') {
+    callsign = String(node->short_name);
+  }
+  String cot = generateLocationCoT(nodeId, callsign, (float)node->latitude, (float)node->longitude,
+      (float)node->altitude, node->battery_level, node->ground_speed, 0);
   if (cot.length() == 0) return;
+  String pliCallsign = callsign.length() > 0 ? callsign : nodeId;
+  sendAtakPluginPli(pliCallsign, nodeId, (float)node->latitude, (float)node->longitude,
+      (float)node->altitude, node->ground_speed, 0, node->battery_level);
 #if defined(ENABLE_SERIAL) && ENABLE_SERIAL
   sendDataSerial((const uint8_t*)cot.c_str(), cot.length());
 #endif
 #if defined(ENABLE_BLE) && ENABLE_BLE
   sendDataBLE((const uint8_t*)cot.c_str(), cot.length());
 #endif
+}
+
+static void onDecodedPacket(uint32_t from, uint32_t to, uint8_t channel, uint32_t portnum,
+                            const uint8_t *payload, size_t length) {
+  (void)portnum;
+  handleAtakPluginPayload(from, to, channel, payload, length);
 }
 
 // Callback for when a Meshtastic text message is received
@@ -283,6 +303,7 @@ bool setupMeshtastic() {
   mt_set_debug(false);
   mt_serial_init(MESH_SERIAL_RX_PIN, MESH_SERIAL_TX_PIN, MESH_SERIAL_BAUD);
   set_text_message_callback(onTextMessage);
+  set_decoded_packet_callback(onDecodedPacket);
 
   return true;
 }
@@ -318,6 +339,24 @@ bool sendMailboxPayloadOverMesh(const String& messageId, const String& format, c
         + encodeMailboxFormat(format) + ":" + String(index) + ":" + String(count) + ":"
         + escaped.substring(start, end);
     if (frame.length() > 230 || !mt_send_text(frame.c_str(), BROADCAST_ADDR, 0)) return false;
+  }
+  if (format.equalsIgnoreCase("Plain Text") || format == "TEXT") {
+    String chat = payload;
+    String dest = "";
+    String toCallsign = "";
+    if (payload.startsWith("CHATDM|") || payload.startsWith("CHAT|")) {
+      int first = payload.indexOf('|');
+      int second = payload.indexOf('|', first + 1);
+      if (first > 0 && second > first) {
+        dest = payload.substring(first + 1, second);
+        chat = payload.substring(second + 1);
+        if (payload.startsWith("CHATDM|")) {
+          toCallsign = dest;
+        }
+      }
+    }
+    sendAtakPluginChat(getCotCallsign().length() > 0 ? getCotCallsign() : getLocalNodeId(),
+                       chat, dest, toCallsign);
   }
   return true;
 }

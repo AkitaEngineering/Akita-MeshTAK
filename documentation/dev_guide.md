@@ -120,6 +120,18 @@ Requests firmware version
 Triggers SOS alert broadcast
 - `CMD:MAILBOX:PUT:<messageId>:<format>:<payload>`
 Queues acknowledgement-tracked mission traffic for relay by the firmware
+- `CMD:TIME:SYNC:<epoch-seconds>`
+Synchronizes controller wall-clock used in CoT timestamps
+- `CMD:COT:MISSION:<mission-name>`
+Sets or clears the OpenTAKServer mission dest tag on firmware location CoT
+- `CMD:COT:IDENTITY:<callsign>|<team>|<role>`
+Sets CoT callsign, team, and role
+- `CMD:COT:STALE:<seconds>`
+Sets CoT stale interval (30-3600 seconds)
+- `CMD:GET_SEC_STATE`
+Requests controller key-id and flash-encryption posture
+- `CMD:MESH:ATAK:0|1`
+Enables or disables Meshtastic ATAK_PLUGIN protobuf (port 72)
 - `CMD:PROV:STAGE:<secret>:<epoch-seconds>` (physical-presence provisioning only)
 Stages runtime provisioning material to the connected device over a trusted local bearer
 
@@ -134,6 +146,16 @@ Local acknowledgement that a mailbox frame was accepted for relay or failed loca
 Peer mailbox receipt confirming end-to-end delivery across the mesh
 - `STATUS:MAILBOX:RX:<originNode>:<messageId>:<format>:<payload>`
 Inbound mission traffic received from the mesh
+- `STATUS:TIME:SYNC:OK:<epoch>` / `STATUS:TIME:SYNC:FAILED:...`
+Time synchronization result
+- `STATUS:COT:MISSION:<name>|CLEARED`
+Active mission dest tag
+- `STATUS:COT:IDENTITY:<callsign>|<team>|<role>`
+Active CoT identity
+- `STATUS:COT:STALE:<seconds>`
+Active CoT stale interval
+- `STATUS:SEC_STATE:key=<id>:prev=<id>:flash=...`
+Controller security posture
 - `STATUS:PROV:STAGED:<version>:<key-id>` / `STATUS:PROV:FAILED:<version>:<key-id>`
 Runtime provisioning stage result returned by firmware
 
