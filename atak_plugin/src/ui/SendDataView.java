@@ -564,7 +564,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 longitude,
                 System.currentTimeMillis(),
                 OperatorIdentity.getStaleSeconds(preferences));
-        OpenTakStreamingClient.getInstance().publish(cot);
+        OpenTakStreamingClient.getInstance().publishAsync(cot);
         try {
             missionControl.queueMessage("JSON", json, connectionMethod);
             AkitaMissionControl.DispatchBatchResult result = flushPendingMailbox(false);
@@ -608,7 +608,7 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 longitude,
                 System.currentTimeMillis(),
                 OperatorIdentity.getStaleSeconds(preferences));
-        OpenTakStreamingClient.getInstance().publish(xml);
+        OpenTakStreamingClient.getInstance().publishAsync(xml);
 
         AkitaMissionControl.DispatchBatchResult dispatchResult;
         try {
@@ -637,13 +637,14 @@ public class SendDataView extends LinearLayout implements SharedPreferences.OnSh
                 OperatorIdentity.getMissionName(preferences),
                 System.currentTimeMillis(),
                 OperatorIdentity.getStaleSeconds(preferences));
-        boolean published = OpenTakStreamingClient.getInstance().publish(xml);
-        if (!published && !OpenTakStreamingClient.isEnabled(preferences) && !AkitaMockSettings.isEnabled(preferences)) {
-            Toast.makeText(context, "Enable native OpenTAKServer streaming or mock mode to send a test CoT.", Toast.LENGTH_LONG).show();
-        } else {
-            Toast.makeText(context, published ? "Test CoT queued to OpenTAKServer." : "Test CoT was not accepted.", Toast.LENGTH_SHORT).show();
-        }
-        refreshDashboard();
+        OpenTakStreamingClient.getInstance().publishAsync(xml, published -> {
+            if (!published && !OpenTakStreamingClient.isEnabled(preferences) && !AkitaMockSettings.isEnabled(preferences)) {
+                Toast.makeText(context, "Enable native OpenTAKServer streaming or mock mode to send a test CoT.", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(context, published ? "Test CoT sent to OpenTAKServer." : "Test CoT was not accepted.", Toast.LENGTH_SHORT).show();
+            }
+            refreshDashboard();
+        });
     }
 
     private void exportDiagnostics() {

@@ -133,10 +133,10 @@ public class AkitaMeshTAKPlugin implements SharedPreferences.OnSharedPreferenceC
         OpenTakStreamingClient.getInstance().attach(context.getApplicationContext());
         OpenTakStreamingClient.getInstance().applyPreferences();
         AkitaMissionControl.getInstance(context).setInboundChatListener((originNode, payload, preferences) -> {
-            OpenTakStreamingClient.getInstance().publishInboundChat(originNode, payload, preferences);
+            OpenTakStreamingClient.getInstance().publishInboundChatAsync(originNode, payload, preferences);
             DataPackageHandoff.Reference reference = DataPackageHandoff.parseMailboxJson(payload);
             if (reference != null && reference.isComplete()) {
-                OpenTakStreamingClient.getInstance().publish(DataPackageHandoff.fileShareCoT(
+                OpenTakStreamingClient.getInstance().publishAsync(DataPackageHandoff.fileShareCoT(
                         reference,
                         OperatorIdentity.getCallsign(preferences),
                         OperatorIdentity.getTeam(preferences),

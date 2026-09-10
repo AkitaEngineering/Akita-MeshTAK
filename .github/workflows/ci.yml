@@ -35,6 +35,7 @@ jobs:
 
   atak-plugin:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -58,7 +59,7 @@ jobs:
         working-directory: atak_plugin
         run: |
           chmod +x ./gradlew
-          ./gradlew --no-daemon test -PakitaUseAtakStub=true
+          ./gradlew --no-daemon testDebugUnitTest -PakitaUseAtakStub=true
 
       - name: Run Android lint with ATAK stubs
         working-directory: atak_plugin
@@ -67,3 +68,22 @@ jobs:
       - name: Build plugin debug artifact with ATAK stubs
         working-directory: atak_plugin
         run: ./gradlew --no-daemon assembleDebug -PakitaUseAtakStub=true
+
+      - name: Upload debug APK (ATAK stubs, development only)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: AkitaMeshTAK-debug-stub-${{ github.run_number }}
+          path: atak_plugin/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload test and lint reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: AkitaMeshTAK-reports-${{ github.run_number }}
+          path: |
+            atak_plugin/build/reports/tests/testDebugUnitTest/
+            atak_plugin/build/test-results/testDebugUnitTest/*.xml
+            atak_plugin/build/reports/lint-results-debug.*
+          retention-days: 14

@@ -48,9 +48,9 @@ public final class MeshtasticNodeInfo {
     public String uid() {
         String id = nodeId.isEmpty() ? callsign() : nodeId;
         if (id.startsWith("!")) {
-            return id.substring(1).toUpperCase();
+            return id.substring(1).toUpperCase(java.util.Locale.ROOT);
         }
-        return id.toUpperCase();
+        return id.toUpperCase(java.util.Locale.ROOT);
     }
 
     public String locationCoT(String team, String role, String missionName, long epochMillis, int staleSeconds) {

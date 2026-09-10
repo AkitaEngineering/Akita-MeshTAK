@@ -590,8 +590,11 @@ public class SettingsFragment extends PreferenceFragmentCompat implements Prefer
                 OperatorIdentity.getMissionName(preferences),
                 System.currentTimeMillis(),
                 OperatorIdentity.getStaleSeconds(preferences));
-        boolean published = OpenTakStreamingClient.getInstance().publish(xml);
-        Toast.makeText(getActivity(), published ? "Test CoT queued to OpenTAKServer." : "Test CoT was not accepted.", Toast.LENGTH_SHORT).show();
+        OpenTakStreamingClient.getInstance().publishAsync(xml, published -> {
+            if (getActivity() != null) {
+                Toast.makeText(getActivity(), published ? "Test CoT sent to OpenTAKServer." : "Test CoT was not accepted.", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void syncBoundRuntimeState() {

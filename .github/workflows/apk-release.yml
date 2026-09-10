@@ -1,0 +1,91 @@
+name: Build signed APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    env:
+      AKITA_BLE_SERVICE_UUID: ${{ vars.AKITA_BLE_SERVICE_UUID }}
+      AKITA_BLE_COT_CHARACTERISTIC_UUID: ${{ vars.AKITA_BLE_COT_CHARACTERISTIC_UUID }}
+      AKITA_BLE_WRITE_CHARACTERISTIC_UUID: ${{ vars.AKITA_BLE_WRITE_CHARACTERISTIC_UUID }}
+      AKITA_HELTEC_VENDOR_ID: ${{ vars.AKITA_HELTEC_VENDOR_ID }}
+      AKITA_HELTEC_PRODUCT_ID: ${{ vars.AKITA_HELTEC_PRODUCT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+
+      - name: Install Android platform requirements
+        run: sdkmanager "platforms;android-35" "build-tools;36.0.0"
+
+      - name: Prepare SDK and signing key outside checkout
+        env:
+          AKITA_ATAK_SDK_JAR: ${{ runner.temp }}/akita-release/main.jar
+          AKITA_RELEASE_KEYSTORE_FILE: ${{ runner.temp }}/akita-release/release.keystore
+          SDK_URL: ${{ secrets.AKITA_ATAK_SDK_URL }}
+          SDK_SHA256: ${{ vars.AKITA_ATAK_SDK_SHA256 }}
+          KEYSTORE_BASE64: ${{ secrets.AKITA_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          : "${SDK_URL:?Set the AKITA_ATAK_SDK_URL secret to an HTTPS download of the official main.jar}"
+          : "${KEYSTORE_BASE64:?Set the AKITA_RELEASE_KEYSTORE_BASE64 secret}"
+          [[ "$SDK_SHA256" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "Set AKITA_ATAK_SDK_SHA256 to the official jar checksum"; exit 1; }
+          umask 077
+          mkdir -p "$RUNNER_TEMP/akita-release"
+          curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 --max-time 300 \
+            --proto '=https' --proto-redir '=https' "$SDK_URL" --output "$AKITA_ATAK_SDK_JAR"
+          printf '%s  %s\n' "$SDK_SHA256" "$AKITA_ATAK_SDK_JAR" | sha256sum --check --status
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$AKITA_RELEASE_KEYSTORE_FILE"
+          printf 'AKITA_ATAK_SDK_JAR=%s\nAKITA_RELEASE_KEYSTORE_FILE=%s\n' \
+            "$AKITA_ATAK_SDK_JAR" "$AKITA_RELEASE_KEYSTORE_FILE" >> "$GITHUB_ENV"
+
+      - name: Test plugin with ATAK stubs
+        working-directory: atak_plugin
+        run: bash ./gradlew --no-daemon testDebugUnitTest -PakitaUseAtakStub=true
+
+      - name: Validate inputs and build signed APK against official SDK
+        working-directory: atak_plugin
+        env:
+          AKITA_RELEASE_STORE_PASSWORD: ${{ secrets.AKITA_RELEASE_STORE_PASSWORD }}
+          AKITA_RELEASE_KEY_ALIAS: ${{ secrets.AKITA_RELEASE_KEY_ALIAS }}
+          AKITA_RELEASE_KEY_PASSWORD: ${{ secrets.AKITA_RELEASE_KEY_PASSWORD }}
+        run: |
+          bash ./gradlew --no-daemon verifyReleaseInputs
+          bash ./gradlew --no-daemon lintRelease assembleRelease -PakitaUseAtakStub=false
+
+      - name: Verify APK signature and create checksum
+        working-directory: atak_plugin/build/outputs/apk/release
+        run: |
+          for apk in *.apk; do
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk"
+          done
+          sha256sum -- *.apk > SHA256SUMS
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: AkitaMeshTAK-release-${{ github.run_number }}
+          path: |
+            atak_plugin/build/outputs/apk/release/*.apk
+            atak_plugin/build/outputs/apk/release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove temporary SDK and signing key
+        if: ${{ always() }}
+        run: rm -rf -- "$RUNNER_TEMP/akita-release"

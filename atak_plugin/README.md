@@ -122,6 +122,12 @@ cd atak_plugin
 ```
 The output APK will be in `build/outputs/apk/debug/`.
 
+**GitHub Actions:** Open **Actions → CI → Run workflow**. Once the Android job
+passes, download `AkitaMeshTAK-debug-stub-<run number>` from **Artifacts**. This
+APK uses test stubs and is for development only. For a signed APK using the
+official ATAK SDK, use **Build signed APK** after configuring the inputs in
+[the release process](../documentation/release_process.md#github-actions-apk-downloads).
+
 ### 6. Build a Signed Release APK
 
 ```bash

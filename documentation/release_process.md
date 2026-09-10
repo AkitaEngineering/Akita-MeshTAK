@@ -108,6 +108,41 @@ cd atak_plugin
 
 ## Release Artifacts
 
+### GitHub Actions APK downloads
+
+The **CI** workflow runs on pull requests, pushes to `main`, and manual dispatch.
+After tests and lint pass, download `AkitaMeshTAK-debug-stub-<run number>` from
+the run's **Artifacts** section. It contains a debug-signed APK built with ATAK
+stubs for development only; it cannot establish compatibility with the ATAK host.
+Test and lint reports are uploaded separately, including when checks fail.
+
+For an APK compiled against the official SDK, configure the `release` GitHub
+environment and run **Build signed APK** manually on the intended branch or tag.
+Configure these environment secrets:
+
+- `AKITA_ATAK_SDK_URL`: HTTPS URL (optionally time-limited) downloading the official
+  SDK's `main.jar` directly, not an SDK ZIP or HTML page.
+- `AKITA_RELEASE_KEYSTORE_BASE64`: base64 encoding of your signing keystore.
+- `AKITA_RELEASE_STORE_PASSWORD`, `AKITA_RELEASE_KEY_ALIAS`, and
+  `AKITA_RELEASE_KEY_PASSWORD`: matching signing credentials.
+
+Configure these environment variables:
+
+- `AKITA_ATAK_SDK_SHA256`: independently verified SHA-256 of that `main.jar`.
+- `AKITA_BLE_SERVICE_UUID`, `AKITA_BLE_COT_CHARACTERISTIC_UUID`, and
+  `AKITA_BLE_WRITE_CHARACTERISTIC_UUID`: deployment UUIDs matching the controller.
+- Optionally `AKITA_HELTEC_VENDOR_ID` and `AKITA_HELTEC_PRODUCT_ID` as decimal IDs.
+
+The workflow checks the SDK checksum, tests using stubs, then runs release lint
+and builds against the official SDK with release signing. It verifies the APK
+signature and uploads `AkitaMeshTAK-release-<run number>` with `SHA256SUMS`.
+SDK and signing files stay in the runner's temporary directory and are removed
+afterward. Configure environment branch restrictions and reviewers to match your
+release policy. This workflow builds the Android plugin; coordinated firmware
+shipment and hardware acceptance still follow the preconditions above.
+
+### Shipment contents
+
 Produce and retain:
 
 - Signed ATAK plugin release APK/AAB

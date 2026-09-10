@@ -2,6 +2,8 @@ package com.akitaengineering.meshtak;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -16,12 +18,19 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 
 /**
@@ -44,12 +53,18 @@ public final class OpenTakStreamingClient {
     private static final OpenTakStreamingClient INSTANCE = new OpenTakStreamingClient();
 
     private final Object lock = new Object();
+    private final ExecutorService worker = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "Akita-OpenTAK");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final AtomicInteger generation = new AtomicInteger();
     private final AtomicReference<String> status = new AtomicReference<>("Idle");
     private final AtomicReference<String> lastError = new AtomicReference<>("");
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final AtomicInteger publishedCount = new AtomicInteger();
     private final AtomicLong lastPublishAt = new AtomicLong();
-    private Context appContext;
+    private volatile Context appContext;
     private Socket socket;
     private OutputStream outputStream;
     private Connector connector = new DefaultConnector();
@@ -70,7 +85,12 @@ public final class OpenTakStreamingClient {
     }
 
     public synchronized void resetForTests() {
-        disconnectLocked();
+        generation.incrementAndGet();
+        try {
+            worker.submit(this::disconnect).get(5, TimeUnit.SECONDS);
+        } catch (Exception exception) {
+            throw new IllegalStateException("OpenTAK worker did not stop", exception);
+        }
         status.set("Idle");
         lastError.set("");
         connected.set(false);
@@ -153,6 +173,31 @@ public final class OpenTakStreamingClient {
         }
     }
 
+    /** Queues network work and delivers the actual send result on the UI thread. */
+    public void publishAsync(String cotXml, Consumer<Boolean> callback) {
+        int submittedGeneration = generation.get();
+        worker.execute(() -> {
+            if (submittedGeneration != generation.get()) return;
+            boolean published = publish(cotXml);
+            if (callback != null) {
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    if (submittedGeneration == generation.get()) callback.accept(published);
+                });
+            }
+        });
+    }
+
+    public void publishAsync(String cotXml) {
+        publishAsync(cotXml, null);
+    }
+
+    public void publishInboundChatAsync(String originNode, String payload, SharedPreferences preferences) {
+        int submittedGeneration = generation.get();
+        worker.execute(() -> {
+            if (submittedGeneration == generation.get()) publishInboundChat(originNode, payload, preferences);
+        });
+    }
+
     public boolean publishInboundChat(String originNode, String payload, SharedPreferences preferences) {
         CotEventFactory.ChatPayload chat = CotEventFactory.parseMailboxChat(payload);
         String sender = OperatorIdentity.sanitizeToken(originNode, OperatorIdentity.MAX_CALLSIGN_LENGTH);
@@ -187,6 +232,13 @@ public final class OpenTakStreamingClient {
     }
 
     public void applyPreferences() {
+        int submittedGeneration = generation.get();
+        worker.execute(() -> {
+            if (submittedGeneration == generation.get()) applyPreferencesInBackground();
+        });
+    }
+
+    private void applyPreferencesInBackground() {
         SharedPreferences preferences = currentPreferences();
         if (preferences == null) {
             return;
@@ -206,8 +258,11 @@ public final class OpenTakStreamingClient {
     }
 
     public void shutdown() {
-        disconnect();
-        status.set("Idle");
+        generation.incrementAndGet();
+        worker.execute(() -> {
+            disconnect();
+            status.set("Idle");
+        });
     }
 
     public static boolean isEnabled(SharedPreferences preferences) {
@@ -279,10 +334,21 @@ public final class OpenTakStreamingClient {
         int port = getPort(preferences);
         SSLContext sslContext = ssl ? OpenTakCertificateStore.createSslContext(appContext) : null;
         Socket newSocket = connector.connect(host, port, ssl, sslContext);
+        OutputStream newOutput;
+        try {
+            newOutput = newSocket.getOutputStream();
+        } catch (IOException exception) {
+            try {
+                newSocket.close();
+            } catch (IOException closeFailure) {
+                exception.addSuppressed(closeFailure);
+            }
+            throw exception;
+        }
         synchronized (lock) {
             disconnectLocked();
             socket = newSocket;
-            outputStream = newSocket.getOutputStream();
+            outputStream = newOutput;
             connected.set(true);
             status.set("Connected");
             lastError.set("");
@@ -371,21 +437,40 @@ public final class OpenTakStreamingClient {
         Socket connect(String host, int port, boolean ssl, SSLContext sslContext) throws IOException;
     }
 
+    static void configureTls(SSLSocket socket) {
+        List<String> protocols = new ArrayList<>();
+        for (String protocol : socket.getSupportedProtocols()) {
+            if ("TLSv1.2".equals(protocol) || "TLSv1.3".equals(protocol)) protocols.add(protocol);
+        }
+        socket.setEnabledProtocols(protocols.toArray(new String[0]));
+        SSLParameters parameters = socket.getSSLParameters();
+        parameters.setEndpointIdentificationAlgorithm("HTTPS");
+        socket.setSSLParameters(parameters);
+    }
+
     private static final class DefaultConnector implements Connector {
         @Override
         public Socket connect(String host, int port, boolean ssl, SSLContext sslContext) throws IOException {
-            if (ssl) {
-                SSLSocket sslSocket = (SSLSocket) sslContext.getSocketFactory().createSocket();
-                sslSocket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
-                sslSocket.setSoTimeout(SOCKET_TIMEOUT_MS);
-                sslSocket.setEnabledProtocols(new String[] {"TLSv1.2", "TLSv1.3"});
-                sslSocket.startHandshake();
-                return sslSocket;
-            }
             Socket socket = new Socket();
-            socket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
-            socket.setSoTimeout(SOCKET_TIMEOUT_MS);
-            return socket;
+            try {
+                socket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
+                socket.setSoTimeout(SOCKET_TIMEOUT_MS);
+                if (ssl) {
+                    // Layer over the connected socket to retain the peer hostname for verification/SNI.
+                    socket = sslContext.getSocketFactory().createSocket(socket, host, port, true);
+                    socket.setSoTimeout(SOCKET_TIMEOUT_MS);
+                    configureTls((SSLSocket) socket);
+                    ((SSLSocket) socket).startHandshake();
+                }
+                return socket;
+            } catch (IOException | RuntimeException exception) {
+                try {
+                    socket.close();
+                } catch (IOException closeFailure) {
+                    exception.addSuppressed(closeFailure);
+                }
+                throw exception;
+            }
         }
     }
 }
