@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   firmware:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,8 +34,10 @@ jobs:
         run: platformio run -d firmware -e heltec_v3_ci
 
   atak-plugin:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      AKITA_USE_ATAK_STUB: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,8 +54,12 @@ jobs:
 
       - name: Install Android platform requirements
         run: |
+          set -euo pipefail
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;36.0.0"
+          sdkmanager --install "platforms;android-35" "build-tools;36.0.0"
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/36.0.0/aapt2"
 
       - name: Run plugin JVM tests with ATAK stubs
         working-directory: atak_plugin
@@ -65,15 +71,36 @@ jobs:
         working-directory: atak_plugin
         run: ./gradlew --no-daemon lintDebug -PakitaUseAtakStub=true
 
-      - name: Build plugin debug artifact with ATAK stubs
+      - name: Build plugin debug APK with ATAK stubs
         working-directory: atak_plugin
         run: ./gradlew --no-daemon assembleDebug -PakitaUseAtakStub=true
+
+      - name: Verify debug APK
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(atak_plugin/build/outputs/apk/debug/*.apk)
+          if [[ ${#apks[@]} -ne 1 ]]; then
+            echo "Expected exactly one debug APK, found ${#apks[@]}"
+            printf '%s\n' "${apks[@]:-}"
+            exit 1
+          fi
+          apk="${apks[0]}"
+          bt="$ANDROID_HOME/build-tools/36.0.0"
+          "$bt/apksigner" verify --verbose --print-certs "$apk"
+          "$bt/aapt2" dump badging "$apk" | tee /tmp/apk-badging.txt
+          grep -F "package: name='com.akitaengineering.meshtak'" /tmp/apk-badging.txt
+          grep -E "versionName='[^']+'" /tmp/apk-badging.txt
+          sha256sum -- "$apk" | tee atak_plugin/build/outputs/apk/debug/SHA256SUMS
+          echo "Verified APK: $apk"
 
       - name: Upload debug APK (ATAK stubs, development only)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: AkitaMeshTAK-debug-stub-${{ github.run_number }}
-          path: atak_plugin/build/outputs/apk/debug/*.apk
+          path: |
+            atak_plugin/build/outputs/apk/debug/*.apk
+            atak_plugin/build/outputs/apk/debug/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
 

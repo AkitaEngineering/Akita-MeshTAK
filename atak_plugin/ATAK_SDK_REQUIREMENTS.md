@@ -16,6 +16,7 @@ This project intentionally does not ship the proprietary ATAK SDK jar.
 
 - If the jar is absent, the Gradle build automatically falls back to compile-time ATAK stubs for debug and JVM tests.
 - You can force the stub path with `-PakitaUseAtakStub=true`.
+- Stub classes are compileOnly (and test-scoped) so they are not dexed into the APK. ATAK provides the real classes at runtime.
 - Stub builds are only for local development, CI, and unit testing. They are not valid release artifacts.
 
 ## Why This Exists

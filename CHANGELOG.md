@@ -6,6 +6,9 @@ The format follows Keep a Changelog and the project uses semantic versioning for
 
 ## [Unreleased]
 
+### Fixed
+- GitHub Actions now verifies the debug plugin APK (signature, package name, checksum) and compiles ATAK stubs as compile-only so they are not packaged into the CI artifact.
+
 ### Added
 - Optional Meshtastic ATAK_PLUGIN protobuf path (port 72) for PLI and GeoChat, with NodeInfo-aligned CoT callsign/battery/track fields.
 - OpenTAKServer Meshtastic MQTT JSON/topic mapping for position, nodeinfo, and mailbox text.
