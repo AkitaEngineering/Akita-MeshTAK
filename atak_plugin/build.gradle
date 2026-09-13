@@ -194,9 +194,6 @@ android {
     sourceSets {
         main {
             java.srcDirs = ['src']
-            if (useAtakStub) {
-                java.srcDirs += ['stubs']
-            }
             res.srcDirs = ['res']
             manifest.srcFile 'AndroidManifest.xml'
             assets.srcDirs = ['assets']
@@ -207,6 +204,54 @@ android {
     }
 }
 
+def resolveAndroidSdkDirectory = {
+    def localPropsFile = file('local.properties')
+    if (localPropsFile.exists() && localPropsFile.length() > 0) {
+        def localProps = new Properties()
+        localPropsFile.withInputStream { stream -> localProps.load(stream) }
+        def sdkDir = localProps.getProperty('sdk.dir')
+        if (hasText(sdkDir)) {
+            return file(sdkDir)
+        }
+    }
+    def envHome = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT')
+    if (hasText(envHome)) {
+        return file(envHome)
+    }
+    throw new GradleException('Android SDK not found. Set sdk.dir in local.properties or ANDROID_HOME.')
+}
+
+def atakStubJar = null
+if (useAtakStub) {
+    def androidJarFile = new File(resolveAndroidSdkDirectory(), "platforms/android-${android.compileSdk}/android.jar")
+    def compileAtakStubs = tasks.register('compileAtakStubs', JavaCompile) {
+        group = 'build'
+        description = 'Compile ATAK API stubs for debug/CI builds without the official SDK.'
+        source = fileTree('stubs') { include '**/*.java' }
+        destinationDirectory = layout.buildDirectory.dir('atak-stubs/classes')
+        classpath = files(androidJarFile)
+        sourceCompatibility = JavaVersion.VERSION_17.toString()
+        targetCompatibility = JavaVersion.VERSION_17.toString()
+        options.encoding = 'UTF-8'
+        doFirst {
+            if (!androidJarFile.isFile()) {
+                throw new GradleException(
+                        "Android platform jar not found at ${androidJarFile}. Install platforms;android-${android.compileSdk}.")
+            }
+        }
+    }
+
+    atakStubJar = tasks.register('jarAtakStubs', Jar) {
+        group = 'build'
+        description = 'Package ATAK API stubs as a compileOnly/test jar so they are not dexed into the APK.'
+        dependsOn compileAtakStubs
+        from compileAtakStubs.flatMap { it.destinationDirectory }
+        archiveFileName = 'atak-stubs.jar'
+        destinationDirectory = layout.buildDirectory.dir('atak-stubs')
+        duplicatesStrategy = DuplicatesStrategy.FAIL
+    }
+}
+
 dependencies {
     implementation 'androidx.preference:preference:1.2.1'
     implementation 'com.github.mik3y:usb-serial-for-android:3.11.0'
@@ -214,7 +259,10 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.16.1'
 
-    if (!useAtakStub) {
+    if (useAtakStub) {
+        compileOnly files(atakStubJar)
+        testImplementation files(atakStubJar)
+    } else {
         compileOnly files(atakSdkJarFile)
     }
 }
