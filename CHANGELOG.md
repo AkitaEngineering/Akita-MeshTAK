@@ -6,6 +6,9 @@ The format follows Keep a Changelog and the project uses semantic versioning for
 
 ## [Unreleased]
 
+### Changed
+- ATAK plugin builds now use Android Gradle Plugin 9.4.0.
+
 ### Fixed
 - GitHub Actions now verifies the debug plugin APK (signature, package name, checksum) and compiles ATAK stubs as compile-only so they are not packaged into the CI artifact.
 
