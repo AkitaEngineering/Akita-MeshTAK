@@ -277,6 +277,7 @@ def main() -> int:
     known_wrapper_hashes = {
         "9.7.0": "84fbba45c7f4c64abc77460e1c00f541e9f960e3c7ed2538f1ede19eacd873ae",
         "9.7.1": "acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a",
+        "9.8.0": "bafd5ce9cfaea0fbccfdc8439a1ac42fbd4cd9c89dc9a988228d8a2639a58e6c",
     }
     check(wrapper_url is not None and wrapper_sha is not None,
           "Gradle wrapper declares a versioned distribution and SHA-256", failures)
